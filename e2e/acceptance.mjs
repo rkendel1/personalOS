@@ -35,6 +35,7 @@ const MODEL_B = "openai/gpt-4o-mini";
 const APP_PORT = 5190;
 const RESOLVER_PORT = 4390;
 const log = (...a) => console.log("✓", ...a);
+const conversationUrlOf = (page) => page.url();
 const children = [];
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(VITE_)?FELTDB_|^FELTKIT_CREDENTIAL_|^OPENAI_API_KEY$|^AI_GATEWAY_API_KEY$/.test(k)));
 
@@ -160,9 +161,18 @@ try {
   });
   assert.equal(tasksNow.some((t) => /john/i.test(t.title)), false, "the reminder does not exist before approval");
 
-  // 2. Approve in the app.
-  await card.getByRole("button", { name: "Approve" }).click();
+  // 2. Approve in the app, from another session (a second device): this page updates live, without a reload.
+  const second = await (await browser.newContext({ timezoneId: "America/New_York" })).newPage();
+  await second.goto(conversationUrlOf(page));
+  const secondCard = second.getByTestId("proposal").last();
+  await secondCard.waitFor({ timeout: 30_000 });
+  const navigations = [];
+  page.on("framenavigated", (f) => f === page.mainFrame() && navigations.push(f.url()));
+  await secondCard.getByRole("button", { name: "Approve" }).click();
   await card.getByText(/^Done$/).waitFor({ timeout: 30_000 });
+  assert.equal(navigations.length, 0, "the first page was not reloaded");
+  log("live: approved in a second session; the first page's card turned Done without a reload");
+  await second.context().close();
   const done = await card.innerText();
   assert.match(done, /Created: .*John/i);
   assert.match(done, /approved by ada/);

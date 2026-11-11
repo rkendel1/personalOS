@@ -49,9 +49,9 @@ test("real model: the acceptance conversation", { skip: REAL ? false : "no AI_GA
 
     const records = JSON.stringify(await t.runtime.agent.generations(create!.taskId, ada)) + JSON.stringify(await t.runtime.agent.get(create!.taskId, ada)) + JSON.stringify(reply);
     assert.equal(records.includes(REAL!.key!), false, "the key is in no record");
-    const receipt = (await t.runtime.agent.generations(create!.taskId, ada))[0]!.content as { receipt: { provider: string; model: string; usage: { outputTokens: number } } };
-    assert.deepEqual([receipt.receipt.provider, receipt.receipt.model], [REAL!.selection.provider, REAL!.selection.model]);
-    assert.ok(receipt.receipt.usage.outputTokens > 0);
+    const record = (await t.runtime.agent.generations(create!.taskId, ada))[0]!.content;
+    assert.deepEqual([record.state, record.model!.provider, record.model!.model], ["completed", REAL!.selection.provider, REAL!.selection.model]);
+    assert.ok(record.usage!.outputTokens! > 0);
   } finally {
     await t.close();
     delete process.env[REAL!.variable];
