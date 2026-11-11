@@ -17,13 +17,14 @@
     "e2e:model": "node e2e/model.mjs",
     "extension:build": "vite build -c vite.extension.config.ts",
     "e2e:extension": "npm run extension:build && node e2e/extension.mjs",
-    "measure": "node scripts/measure.mjs"
+    "measure": "feltkit measure",
+    "measure:doc": "node scripts/measure-doc.mjs"
   },
   "dependencies": {
-    "@feltdb/feltkit": "0.3.24",
-    "@stack-ui/core": "file:vendor/stack-ui/core",
-    "@stack-ui/react": "file:vendor/stack-ui/react",
-    "@stack-ui/tokens": "file:vendor/stack-ui/tokens",
+    "@feltdb/feltkit": "0.3.25",
+    "@stack-ui/core": "0.8.1",
+    "@stack-ui/react": "0.8.1",
+    "@stack-ui/tokens": "0.8.1",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
