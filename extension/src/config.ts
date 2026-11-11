@@ -1,8 +1,10 @@
 /**
  * What the extension remembers: which PersonalOS instance it is connected to, and the session
  * FeltKit issued when the person signed in to their account. Both live in chrome.storage.local,
- * which only this extension can read. The session is a bearer token the server can revoke
- * (Settings → sessions, or sign out), exactly like a session on another device.
+ * locked to the extension's trusted pages (side panel, service worker): by default Chrome also lets
+ * the extension's content scripts, which run inside web pages, read it, and they must never see the
+ * session. The session is a bearer token the server can revoke (Settings → sessions, or sign out),
+ * exactly like a session on another device.
  */
 import type { TokenStore } from "@feltdb/feltkit/client";
 
@@ -14,7 +16,17 @@ export interface Connection {
   token: string | null;
 }
 
+/**
+ * Keep chrome.storage.local away from content scripts. Called by every trusted context before it
+ * reads or writes the session (the setting persists, but an update or a fresh profile must not leave
+ * a window where it is open).
+ */
+export async function lockStorage(): Promise<void> {
+  await chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+}
+
 export async function loadConnection(): Promise<Connection> {
+  await lockStorage();
   const got = await chrome.storage.local.get([URL_KEY, TOKEN_KEY]);
   return { url: (got[URL_KEY] as string | undefined) ?? null, token: (got[TOKEN_KEY] as string | undefined) ?? null };
 }
