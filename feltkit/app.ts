@@ -19,6 +19,10 @@ const OWNER = [
   "jobs.create", "jobs.execute", "notifications.send",
   // The model proposes through FeltKit's agent; the owner approves in the app (FeltKit M1).
   "feltkit.agent.*",
+  // Documents: files the owner keeps, stored by AppPort Services Files (feltkit/documents.ts).
+  "documents.*", "files.read", "files.write", "files.delete",
+  // Outbound events (task.completed, reminder.fired) to endpoints the operator registers.
+  "webhooks.emit",
 ];
 
 export const app = feltkit({
@@ -27,7 +31,7 @@ export const app = feltkit({
   roles: {
     owner: OWNER,
     // Read-only access (used to prove refusals in tests; useful for a shared view later).
-    viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read"],
+    viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read", "documents.read"],
     // Operators configure the model and services in Studio. Never granted to the assistant itself.
     admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "feltkit.operations.*"],
   },
@@ -44,14 +48,38 @@ export const app = feltkit({
   // Development may name one too (PERSONALOS_MODEL_REF, with RESOLVER_URL / RESOLVER_API_KEY), to switch models live.
   agent: { model: { production: "ref://prod/personalos/model", ...(process.env.PERSONALOS_MODEL_REF ? { development: process.env.PERSONALOS_MODEL_REF as `ref://${string}` } : {}) } },
   services: {
-    notifications: { types: ["reminder.due", "checkin.daily"] },
+    notifications: { types: ["reminder.due", "checkin.daily", "review.weekly"] },
     configuration: true,
-    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire" } },
+    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire" } },
+    // Recurring jobs an operator sets up in Studio. Per-person recurrence (reminders, check-ins) is a
+    // job chain owned by the person, so it runs as them (feltkit/checkins.ts).
+    schedules: true,
+    // Documents the owner keeps (feltkit/documents.ts). 10 MB each.
+    files: { maxBytes: 10 * 1024 * 1024 },
+    // Signed outbound events to endpoints an operator registers (Studio → Webhooks).
+    webhooks: { events: ["task.completed", "reminder.fired", "document.added"] },
     intelligence: true,
   },
 });
 
 const owner = s.string({ minLength: 1 });
+
+/** A file the owner keeps. The bytes live in AppPort Services Files (`fileId`); this record says whose and what for. */
+export const documents = app.collection(
+  "documents",
+  {
+    owner,
+    fileId: s.string(),
+    name: s.string({ minLength: 1, maxLength: 200 }),
+    contentType: s.optional(s.string({ maxLength: 120 })),
+    size: s.number(),
+    note: s.optional(s.string({ maxLength: 500 })),
+    projectId: s.optional(s.string()),
+    taskId: s.optional(s.string()),
+    createdAt: s.number(),
+  },
+  { indexes: [{ fields: ["owner"] }, { fields: ["fileId"] }], search: ["name", "note"] },
+);
 
 export const conversations = app.collection(
   "conversations",
@@ -209,6 +237,12 @@ export const settings = app.collection(
     tzOffset: s.optional(s.number()),
     checkinAt: s.optional(s.number()),
     checkinConversationId: s.optional(s.string()),
+    /** Weekly review: day of week (0 = Sunday), local time, the client's UTC offset, the next due instant, and its thread. */
+    reviewDay: s.optional(s.number()),
+    reviewTime: s.optional(s.string()),
+    reviewTzOffset: s.optional(s.number()),
+    reviewAt: s.optional(s.number()),
+    reviewConversationId: s.optional(s.string()),
     updatedAt: s.number(),
   },
   { unique: [{ fields: ["owner"] }] },

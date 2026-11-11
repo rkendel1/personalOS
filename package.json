@@ -12,10 +12,11 @@
     "deploy": "feltkit deploy",
     "typecheck": "tsc --noEmit",
     "e2e:ui": "node e2e/ui.mjs",
-    "e2e:model": "node e2e/model.mjs"
+    "e2e:model": "node e2e/model.mjs",
+    "extension:build": "vite build -c vite.extension.config.ts"
   },
   "dependencies": {
-    "@feltdb/feltkit": "file:../feltkit/packages/sdk",
+    "@feltdb/feltkit": "0.3.23",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -25,7 +26,8 @@
     "@types/react-dom": "19.2.2",
     "@vitejs/plugin-react": "5.1.0",
     "typescript": "5.9.3",
-    "vite": "7.3.7"
+    "vite": "7.3.7",
+    "@types/chrome": "0.0.304"
   },
   "description": "A personal assistant on FeltKit: durable conversations, memory, tasks, reminders, daily briefing and an auditable action log."
 }

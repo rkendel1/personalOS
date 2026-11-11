@@ -75,7 +75,10 @@ const EXAMPLES = [
   "Add renew passport to my list, it's urgent",
 ];
 
-export function Chat({ conversationId, onConversation, onError, name }: { conversationId: string | null; onConversation: (id: string | null) => void; onError: (e: unknown) => void; name: string | null }) {
+/** Text another surface (the browser extension) asks Chat to send as a new turn. `nonce` makes the same text sendable twice. */
+export type Compose = { text: string; nonce: number };
+
+export function Chat({ conversationId, onConversation, onError, name, compose }: { conversationId: string | null; onConversation: (id: string | null) => void; onError: (e: unknown) => void; name: string | null; compose?: Compose | null }) {
   const conversations = useQuery(api.conversations.list) ?? [];
   const messages = useQuery(api.conversations.messagesOf, conversationId ? { conversationId } : "skip") ?? [];
   const actions = (useQuery(api.actions.list, { limit: 500 }) ?? []) as Action[];
@@ -121,6 +124,12 @@ export function Chat({ conversationId, onConversation, onError, name }: { conver
       input.current?.focus();
     }
   };
+  const sentCompose = useRef(0);
+  useEffect(() => {
+    if (!compose || compose.nonce === sentCompose.current) return;
+    sentCompose.current = compose.nonce;
+    void submit(compose.text);
+  }, [compose?.nonce]);
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();

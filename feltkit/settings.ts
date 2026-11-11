@@ -6,7 +6,7 @@ export const get = app.query({
   access: "settings.read",
   handler: async (ctx) => {
     const row = (await ctx.db.find(settings, { owner: me(ctx) }))[0];
-    return { name: row?.name ?? null, modelAssist: row?.modelAssist ?? true, checkinTime: row?.checkinTime ?? null, checkinAt: row?.checkinAt ?? null, canUseModel: ctx.auth.has("feltkit.agent.write") };
+    return { name: row?.name ?? null, modelAssist: row?.modelAssist ?? true, checkinTime: row?.checkinTime ?? null, checkinAt: row?.checkinAt ?? null, reviewDay: row?.reviewDay ?? null, reviewTime: row?.reviewTime ?? null, reviewAt: row?.reviewAt ?? null, canUseModel: ctx.auth.has("feltkit.agent.write") };
   },
 });
 

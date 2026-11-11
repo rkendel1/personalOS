@@ -89,6 +89,7 @@ const paths: Record<string, ReactNode> = {
   more: <><circle cx="5.5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="18.5" cy="12" r="1.3" /></>,
   activity: <path d="M3 12h4l2.5-6 5 12 2.5-6h4" />,
   projects: <><path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" /></>,
+  files: <><path d="M7 3.5h7l4 4v13H7Z" /><path d="M14 3.5v4h4M9.5 12h5M9.5 15.5h5" /></>,
   settings: <><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
   send: <path d="M5 12h13M13 6l6 6-6 6" />,
   plus: <path d="M12 5v14M5 12h14" />,

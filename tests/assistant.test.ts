@@ -255,3 +255,61 @@ test("scheduled check-in: a real job posts the briefing into its own thread, not
     await t.close();
   }
 });
+
+test("Files: upload through a link, attach to a project, download, isolation, delete", async () => {
+  const t = await createTestApp();
+  try {
+    const ada = t.as("ada");
+    const project = await ada.mutation(api.projects.create, { name: "Taxes" });
+    const target = await ada.mutation(api.documents.prepareUpload, { name: "w2.txt", contentType: "text/plain" });
+    const token = (url: string) => url.split("/").pop()!;
+    const bytes = new TextEncoder().encode("wages 100");
+    // What `PUT /api/files/<token>` does with the link the browser was given.
+    const { id: fileId } = await t.runtime.services.redeemUpload(token(target.url), async () => bytes, { name: "w2.txt", contentType: "text/plain" });
+    const doc = await ada.mutation(api.documents.attach, { fileId, projectId: project.id, note: "2025" });
+    assert.deepEqual([doc.name, doc.size, doc.projectId], ["w2.txt", 9, project.id]);
+    await assert.rejects(ada.mutation(api.documents.attach, { fileId }), /already saved/);
+    await t.restart();
+    assert.equal((await t.as("ada").query(api.documents.list, { projectId: project.id })).length, 1);
+    assert.equal((await t.as("grace").query(api.documents.list)).length, 0);
+    await assert.rejects(t.as("grace").mutation(api.documents.link, { id: doc.id }), /NOT_FOUND|No document/);
+    await assert.rejects(t.as("grace").mutation(api.documents.attach, { fileId }), /No file|NOT_FOUND/);
+    const l = await t.as("ada").mutation(api.documents.link, { id: doc.id });
+    assert.equal(new TextDecoder().decode((await t.runtime.services.redeemDownload(token(l.url))).bytes), "wages 100");
+    await assert.rejects(t.as("guest").mutation(api.documents.remove, { id: doc.id }), /FORBIDDEN|permission|access/i);
+    await t.as("ada").mutation(api.documents.remove, { id: doc.id });
+    assert.equal((await t.as("ada").query(api.documents.list)).length, 0);
+  } finally {
+    await t.close();
+  }
+});
+
+test("weekly review: a real job posts the look back and ahead into its own thread, notifies, and re-arms for next week", async () => {
+  const t = await createTestApp();
+  try {
+    const ada = t.as("ada");
+    await ada.mutation(api.tasks.create, { title: "Ship the release", due: "2020-01-01" });
+    const done = await ada.mutation(api.tasks.create, { title: "File expenses" });
+    await ada.mutation(api.tasks.complete, { id: done.id });
+    const { reviewAt } = await ada.mutation(api.weekly.configure, { day: 0, time: "18:00", tzOffset: TZ });
+    assert.ok(reviewAt! > Date.now() && reviewAt! - Date.now() <= 7 * 86_400_000);
+    assert.equal(new Date(reviewAt! - TZ * 60_000).getUTCDay(), 0, "a Sunday in the owner's calendar");
+    await t.runtime.runServices();
+    const jobs = (t.runtime.services as any).jobs;
+    const job = (await jobs.listJobs("personalos")).find((j: any) => j.type === "review.fire");
+    assert.deepEqual([job.status, job.runAt, job.principal.principalId], ["scheduled", new Date(reviewAt!).toISOString(), "ada"]);
+    assert.equal(await jobs.executeJob("personalos", job.id, "test-worker"), true);
+    const [conversation] = await ada.query(api.conversations.list);
+    assert.equal(conversation!.title, "Weekly review");
+    const [msg] = await ada.query(api.conversations.messagesOf, { conversationId: conversation!.id });
+    assert.match(msg!.text, /Done this week \(1\)[\s\S]*File expenses/);
+    assert.match(msg!.text, /Ship the release/);
+    assert.deepEqual((await ada.query(api.inbox.list, {})).map((n) => n.type), ["review.weekly"]);
+    const next = (await jobs.listJobs("personalos")).filter((j: any) => j.type === "review.fire" && j.status === "scheduled");
+    assert.deepEqual(next.map((j: any) => j.runAt), [new Date(reviewAt! + 7 * 86_400_000).toISOString()]);
+    await ada.mutation(api.weekly.configure, { day: null, time: "18:00", tzOffset: TZ });
+    assert.deepEqual(await ada.mutation(api.weekly.fire, { reviewAt: reviewAt! + 7 * 86_400_000 }), { sent: false });
+  } finally {
+    await t.close();
+  }
+});

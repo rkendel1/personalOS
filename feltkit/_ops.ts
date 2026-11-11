@@ -6,7 +6,7 @@
  */
 import { fail } from "@feltdb/feltkit";
 import type { MutationCtx } from "@feltdb/feltkit";
-import { actions, memories, projects, tasks } from "./app.js";
+import { actions, documents, memories, projects, tasks } from "./app.js";
 import { instant, nextOccurrence, type Day } from "./_dates.js";
 import type { MemoryKind } from "./_interpret.js";
 
@@ -123,6 +123,7 @@ export async function completeTask(ctx: MutationCtx, id: string, meta: Meta) {
   await ctx.db.patch(tasks, id, { status: "done", completedAt: Date.now(), updatedAt: Date.now() });
   const evidence = await verify(ctx, tasks, id, { status: "done" });
   const actionId = await record(ctx, { kind: "task.complete", summary: `Completed: ${task.title}`, status: "succeeded", input: { id }, evidence }, meta);
+  ctx.afterCommit.webhooks.emit("task.completed", { taskId: id, title: task.title, completedAt: Date.now() });
   // A recurring task comes back: the next occurrence is a new record, so history stays intact.
   let next: any = null;
   if (task.recurrence !== "none" && task.due) {
@@ -176,6 +177,8 @@ export async function updateTask(ctx: MutationCtx, id: string, change: Partial<T
 
 export async function deleteTask(ctx: MutationCtx, id: string, meta: Meta) {
   const task = await own<any>(ctx, tasks, id, "task");
+  // Documents attached to it stay (they are the person's); they just stop pointing at a task that is gone.
+  for (const d of await ctx.db.find(documents, { owner: me(ctx), taskId: id })) await ctx.db.patch(documents, d.id, { taskId: undefined });
   await ctx.db.delete(tasks, id);
   const gone = !(await ctx.db.get(tasks, id));
   if (!gone) fail("INTERNAL", `Verification failed: task ${id} still exists.`);

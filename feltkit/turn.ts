@@ -22,7 +22,7 @@ import { app } from "./app.js";
 import { clockFor, offsetFor, type Clock } from "./_clock.js";
 
 /** The capabilities the model may use, as tools. Everything else stays with the person. */
-const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "memory.add", "memory.list", "briefing.today", "projects.list"];
+const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "memory.add", "memory.list", "briefing.today", "projects.list", "documents.list"];
 /** Inputs the app fills in itself (from the caller's clock), so the model never guesses them. */
 const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset"], "tasks.update": ["tzOffset"], "briefing.today": ["today"] };
 const MAX_ROUNDS = 3;
@@ -35,9 +35,9 @@ function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[
     "How you act:",
     "- You change nothing yourself. To create, update or complete a task, or to remember something, call the matching tool: that only PROPOSES it, and the user approves it in the app. Never say it is done, created, scheduled, saved or set. Say you've proposed it and it needs their approval.",
     "- A reminder is tasks.create with reminder: true, a due date and a time.",
-    "- Reading tools (tasks.list, briefing.today, memory.list, projects.list) run immediately; use them when you need facts you don't have below.",
+    "- Reading tools (tasks.list, briefing.today, memory.list, projects.list, documents.list) run immediately; use them when you need facts you don't have below.",
     "- Never invent tasks, people, dates or facts. Unconfirmed memories are guesses; say so if you rely on one.",
-    "- You cannot send messages, email, or manage calendars: there is no such integration. Say so plainly if asked.",
+    "- You can list the user's saved documents but cannot read their contents. You cannot send messages, email, or manage calendars: there is no such integration. Say so plainly if asked.",
     "",
     `Open tasks (${info.openTaskCount}, soonest first): ${JSON.stringify(info.tasks)}`,
     `What you know about the user (status "confirmed" = they said so): ${JSON.stringify(info.memories)}`,
@@ -123,7 +123,7 @@ export const turn = app.action({
           reply += "\n\n";
           ctx.emit({ type: "delta", text: "\n\n" });
         }
-        const g = await ctx.model.generate({ taskId, messages: conversation, tools, maxTokens: 700, temperature: 0.4 });
+        const g = await ctx.model.generate({ taskId, messages: conversation, tools, maxTokens: 700 });
         generations.push(g.memoryId);
         model = `${g.receipt.provider}/${g.receipt.model}`;
         if (g.receipt.resolution) reference = `${g.receipt.resolution.ref}@${g.receipt.resolution.revision}`;

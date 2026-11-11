@@ -3,11 +3,11 @@ import { useConnectionState, useFeltKit, useMutation, useQuery, useSession } fro
 import { api } from "../feltkit/_generated/api";
 import { ThemeToggle } from "./theme";
 import { describe, ResetForm, SignedOut } from "./auth";
-import { Chat } from "./chat";
-import { Activity, MemoryScreen, Projects, Settings, Tasks, Today } from "./screens";
+import { Chat, type Compose } from "./chat";
+import { Activity, Files, MemoryScreen, Projects, Settings, Tasks, Today } from "./screens";
 import { clientDay, Icon } from "./ui";
 
-type Tab = "chat" | "today" | "tasks" | "memory" | "projects" | "activity" | "settings";
+type Tab = "chat" | "today" | "tasks" | "memory" | "projects" | "files" | "activity" | "settings";
 const PRIMARY: Array<{ tab: Tab; label: string }> = [
   { tab: "chat", label: "Chat" },
   { tab: "today", label: "Today" },
@@ -16,6 +16,7 @@ const PRIMARY: Array<{ tab: Tab; label: string }> = [
 ];
 const SECONDARY: Array<{ tab: Tab; label: string }> = [
   { tab: "projects", label: "Projects" },
+  { tab: "files", label: "Files" },
   { tab: "activity", label: "Activity" },
   { tab: "settings", label: "Settings" },
 ];
@@ -116,6 +117,19 @@ function Workspace(props: {
     setRoute({ tab: next, conversation: conv });
     setMore(false);
   }, []);
+  // Another surface (the browser extension) can ask Chat to send something: a new conversation with it.
+  const [compose, setCompose] = useState<Compose | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: string }>).detail?.text;
+      if (!text) return;
+      lastConversation.current = null;
+      go("chat", null);
+      setCompose({ text, nonce: Date.now() });
+    };
+    addEventListener("personalos:compose", on);
+    return () => removeEventListener("personalos:compose", on);
+  }, [go]);
   const settings = useQuery(api.settings.get);
   const pending = useQuery(api.actions.list, { status: "proposed" })?.length ?? 0;
   const send = useMutation(api.assistant.send);
@@ -151,11 +165,12 @@ function Workspace(props: {
           <div className="brand"><span className="logo" aria-hidden="true">◐</span> PersonalOS</div>
           <span className={`live ${props.live ? "on" : ""}`} title={props.live ? "Live" : "Reconnecting"}><span className="dot" /></span>
         </header>
-        {tab === "chat" && <Chat conversationId={conversation} onConversation={(id) => go("chat", id)} onError={props.onError} name={settings?.name ?? null} />}
+        {tab === "chat" && <Chat conversationId={conversation} onConversation={(id) => go("chat", id)} onError={props.onError} name={settings?.name ?? null} compose={compose} />}
         {tab === "today" && <Today onError={props.onError} onAsk={ask} />}
         {tab === "tasks" && <Tasks onError={props.onError} />}
         {tab === "memory" && <MemoryScreen onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
         {tab === "projects" && <Projects onError={props.onError} onAsk={ask} />}
+        {tab === "files" && <Files onError={props.onError} />}
         {tab === "activity" && <Activity onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
         {tab === "settings" && (
           <>

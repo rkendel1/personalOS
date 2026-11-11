@@ -38,8 +38,11 @@ In development you're signed in as Ada (owner + admin). Grace is a second owner,
 | Chat | Multiple threads; history persists; edit a message (the old turn is kept, marked superseded) or ask again; suggested follow-ups; each reply shows the actions it reports, with status and evidence | `feltkit/assistant.ts`, `src/chat.tsx` |
 | Tasks & reminders | "Remind me to follow up with John tomorrow at 10am", "add X to my list, it's urgent", "move that task to Friday", "mark the report done", "every Monday at 8am". A reminder is a real AppPort Services job at that time; it sends a notification. Recurring tasks schedule their next occurrence when completed | `feltkit/_ops.ts`, `feltkit/reminders.ts` |
 | Memory | "Remember that Sam is my manager" is stored as **confirmed**. "I prefer afternoon meetings" (volunteered, not asked) is stored as **inferred**: hedged on recall and never treated as fact until you confirm it. Every memory has provenance (conversation, message, quote) and timestamps; inspect, edit, confirm or forget it on the Memory tab | `feltkit/memory.ts` |
-| Your day | "What should I focus on?", "what am I forgetting?", "help me plan my week"; the Today tab; an optional daily check-in posted to its own thread by a scheduled job | `feltkit/_briefing.ts`, `feltkit/checkins.ts` |
+| Your day | "What should I focus on?", "what am I forgetting?", "help me plan my week"; the Today tab; an optional daily check-in and weekly review (day and time you choose), each posted to its own thread by a scheduled job | `feltkit/_briefing.ts`, `feltkit/checkins.ts`, `feltkit/weekly.ts` |
 | Projects | Create projects, attach tasks, ask "status of …" (open/done tasks and related memories) | `feltkit/projects.ts` |
+| Files | Upload documents (10 MB each), attach them to a project, download through a short-lived link, delete. Bytes live in AppPort Services Files in the same FeltDB instance, owned by you; the assistant can list them (`documents.list`) but not read or delete them | `feltkit/documents.ts` |
+| Outbound events | `task.completed`, `reminder.fired` and `document.added` are emitted to webhook endpoints an operator registers in Studio → Webhooks (signed, retried, with history) | `feltkit/_ops.ts`, `feltkit/reminders.ts` |
+| Chrome extension | The assistant in Chrome's side panel beside any page: sign in with your account, same data as the web app; summarize or ask about the page, save it to Files, add a task from a selection or link. Build with `npm run extension:build` | `extension/`, [extension/README.md](extension/README.md) |
 | Activity | Every change made or proposed: what, how (chat, UI, job, model), status, and the record it was verified against. Approve or reject proposals here or inline in chat | `feltkit/actions.ts` |
 | Model | On by default when a model is configured: replies are written by the model, streamed, cancellable (Stop). Switch models in Studio → Models, `feltkit model set`, or a Resolver reference (`ref://prod/personalos/model`; in development `PERSONALOS_MODEL_REF`), with no restart. Settings shows which model is in use | `turn.ts`, `turnstate.ts` |
 
@@ -60,7 +63,9 @@ Effects outside the transaction (reminder jobs, notifications, the model decisio
 
 ## What it deliberately doesn't do
 
-- **Email, calendar, messaging, files, web research.** No integration is configured, so none is offered. The assistant never says it sent or scheduled anything outside this app. These are P2; FeltKit's `app.integration` is the path when they're built.
+- **API keys.** An API key authenticates as its own identity, so anything it created would be owned by the key, not by you. PersonalOS keeps it off until keys can act for a person.
+- **Schedules** are enabled for operators (Studio → Schedules). A schedule runs as whoever created it, so per-person recurrence (reminders, check-ins) stays a job chain that runs as you.
+- **Email, calendar, messaging, web research.** No integration is configured, so none is offered. The assistant never says it sent or scheduled anything outside this app. These are P2; FeltKit's `app.integration` is the path when they're built.
 - **Semantic memory search.** Recall is keyword-based (gap G4).
 
 ## Requirements

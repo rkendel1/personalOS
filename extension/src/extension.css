@@ -1,0 +1,8 @@
+html, body, #root { height: 100%; }
+.ext { display: flex; flex-direction: column; height: 100%; }
+.ext-app { flex: 1; min-height: 0; position: relative; }
+.ext-app .shell { height: 100%; min-height: 0; }
+.pagebar { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.pagebar-page { display: flex; flex-direction: column; min-width: 0; }
+.pagebar-page strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.wrap { flex-wrap: wrap; }

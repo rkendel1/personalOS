@@ -17,6 +17,7 @@ export const fire = app.mutation({
     if (!task || task.owner !== who || task.status !== "open" || task.remindAt !== remindAt || task.remindedAt) return { fired: false };
     await ctx.db.patch(tasks, taskId, { remindedAt: Date.now() });
     ctx.afterCommit.notifications.send({ recipient: who, type: "reminder.due", title: task.title, data: { taskId }, idempotencyKey: `reminder:${taskId}:${remindAt}` });
+    ctx.afterCommit.webhooks.emit("reminder.fired", { taskId, title: task.title, remindAt });
     const stored = await ctx.db.get(tasks, taskId);
     await record(ctx, { kind: "reminder.fire", summary: `Reminder sent: ${task.title}`, status: "succeeded", input: { taskId, remindAt }, evidence: { collection: "tasks", id: taskId, version: stored!.__version, verified: !!stored!.remindedAt } }, { via: "job" });
     return { fired: true };

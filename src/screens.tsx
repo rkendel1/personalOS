@@ -340,6 +340,85 @@ export function Projects({ onError, onAsk }: Err & { onAsk: (text: string) => vo
   );
 }
 
+function size(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function Files({ onError }: Err) {
+  const client = useFeltKit();
+  const docs = useQuery(api.documents.list) ?? [];
+  const projects = useQuery(api.projects.list) ?? [];
+  const prepare = useMutation(api.documents.prepareUpload);
+  const attach = useMutation(api.documents.attach);
+  const update = useMutation(api.documents.update);
+  const link = useMutation(api.documents.link);
+  const remove = useMutation(api.documents.remove);
+  const [busy, setBusy] = useState(false);
+  const [projectId, setProjectId] = useState("");
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const target = await prepare({ name: file.name, ...(file.type ? { contentType: file.type } : {}) });
+      const stored = await client.uploadFile(target, file, { name: file.name, ...(file.type ? { contentType: file.type } : {}) });
+      await attach({ fileId: stored.id, ...(projectId ? { projectId } : {}) });
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const download = (id: string) =>
+    void link({ id })
+      .then((l) => {
+        const a = document.createElement("a");
+        a.href = client.fileUrl(l);
+        a.click();
+      })
+      .catch(onError);
+  return (
+    <div className="screen">
+      <header className="screen-head">
+        <h1>Files</h1>
+        <p className="muted">Documents you keep here, up to 10 MB each. They stay in this app's own database, and only you can open them.</p>
+      </header>
+      <div className="add-row">
+        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Attach to project">
+          <option value="">No project</option>
+          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <label className={`btn ${busy ? "disabled" : ""}`}>
+          {busy ? "Uploading…" : "Add file"}
+          <input type="file" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} aria-label="Add file" />
+        </label>
+      </div>
+      {docs.length === 0 && <p className="muted pad">No files yet.</p>}
+      <ul className="plain">
+        {docs.map((d) => (
+          <li key={d.id} className="project">
+            <div>
+              <div className="task-title">{d.name}</div>
+              <div className="task-meta">
+                <span>{size(d.size)}</span>
+                <span>{ago(d.createdAt)}</span>
+                {d.projectId && <span>{projectName.get(d.projectId) ?? "project"}</span>}
+              </div>
+            </div>
+            <div className="row">
+              <select value={d.projectId ?? ""} onChange={(e) => void update({ id: d.id, projectId: e.target.value || null }).catch(onError)} aria-label="Project">
+                <option value="">No project</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <button className="ghost tiny" onClick={() => download(d.id)}>Download</button>
+              <button className="ghost tiny" onClick={() => confirm(`Delete ${d.name}?`) && void remove({ id: d.id }).catch(onError)} aria-label={`Delete ${d.name}`}><Icon name="trash" size={16} /></button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const VIA: Record<string, string> = { chat: "from chat", ui: "by you", model: "model, approved", job: "scheduled" };
 
 export function Activity({ onError, onOpenConversation }: Err & { onOpenConversation: (id: string) => void }) {
@@ -392,6 +471,7 @@ export function Settings({ onError, dashboard, principal, onSignOut }: Err & { d
   const s = useQuery(api.settings.get);
   const set = useMutation(api.settings.set);
   const configure = useMutation(api.checkins.configure);
+  const review = useMutation(api.weekly.configure);
   const [name, setName] = useState<string | null>(null);
   if (!s) return <div className="screen"><p className="muted">Loading…</p></div>;
   return (
@@ -419,6 +499,37 @@ export function Settings({ onError, dashboard, principal, onSignOut }: Err & { d
           <div className="row" style={{ marginTop: 10 }}>
             <input type="time" value={s.checkinTime} onChange={(e) => e.target.value && void configure({ time: e.target.value, tzOffset: clientDay().tzOffset }).catch(onError)} aria-label="Check-in time" />
             {s.checkinAt && <span className="muted small">Next: {new Date(s.checkinAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}</span>}
+          </div>
+        )}
+      </section>
+      {location.protocol.startsWith("http") && (
+        <section>
+          <h2>Browser extension</h2>
+          <p className="muted small">The PersonalOS Chrome extension puts this assistant beside any page, signed in as you, with the same chats, tasks, memory and files. When it asks for your address, enter:</p>
+          <div className="row">
+            <code className="kindcode">{location.origin}</code>
+            <button className="ghost tiny" onClick={() => void navigator.clipboard?.writeText(location.origin)}>Copy</button>
+          </div>
+          {/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && <p className="muted small">This is a development address. Deploy the app (see the README) to use the extension anywhere.</p>}
+        </section>
+      )}
+      <section>
+        <h2>Weekly review</h2>
+        <label className="toggle">
+          <input type="checkbox" checked={s.reviewDay !== null} onChange={(e) => void review({ day: e.target.checked ? 0 : null, time: s.reviewTime ?? "18:00", tzOffset: clientDay().tzOffset }).catch(onError)} />
+          <span>
+            <strong>Review my week</strong>
+            <br />
+            <span className="muted small">Once a week I post what you finished, what is overdue, and what the next seven days hold in a "Weekly review" conversation, and send a notification.</span>
+          </span>
+        </label>
+        {s.reviewDay !== null && (
+          <div className="row" style={{ marginTop: 10 }}>
+            <select value={s.reviewDay} onChange={(e) => void review({ day: Number(e.target.value), time: s.reviewTime ?? "18:00", tzOffset: clientDay().tzOffset }).catch(onError)} aria-label="Review day">
+              {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => <option key={d} value={i}>{d}</option>)}
+            </select>
+            <input type="time" value={s.reviewTime ?? "18:00"} onChange={(e) => e.target.value && void review({ day: s.reviewDay, time: e.target.value, tzOffset: clientDay().tzOffset }).catch(onError)} aria-label="Review time" />
+            {s.reviewAt && <span className="muted small">Next: {new Date(s.reviewAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}</span>}
           </div>
         )}
       </section>
