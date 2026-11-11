@@ -135,16 +135,20 @@ try {
 
   // 1. The acceptance conversation, streamed.
   await page.getByLabel("Message").fill("Remind me to follow up with John tomorrow at 10am, and tell me what else I should prioritize.");
+  // Every length the streaming bubble renders, recorded in the page itself: a fast model can stream a
+  // whole reply in a few hundred milliseconds, faster than polling from the test can see.
+  await page.evaluate(() => {
+    window.__lengths = new Set();
+    new MutationObserver(() => {
+      const el = document.querySelector('[data-testid="streaming"]');
+      if (el) window.__lengths.add(el.textContent.length);
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
   await page.getByLabel("Send").click();
-  const seen = new Set();
   const stream = page.getByTestId("streaming");
   await stream.waitFor({ timeout: 60_000 });
-  for (let i = 0; i < 40; i += 1) {
-    const text = await stream.innerText().catch(() => "");
-    if (text) seen.add(text.length);
-    if (!(await stream.count())) break;
-    await page.waitForTimeout(60);
-  }
+  await stream.waitFor({ state: "detached", timeout: 120_000 });
+  const seen = new Set(await page.evaluate(() => [...window.__lengths].filter((n) => n > 0)));
   assert.ok(seen.size >= 2, `the reply grew in the UI while streaming (lengths seen: ${[...seen].join(", ")})`);
   log(`streamed: the reply grew through ${seen.size} different lengths before it finished`);
   const card = page.getByTestId("proposal").last();

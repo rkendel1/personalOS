@@ -2,6 +2,8 @@
   "name": "personalos",
   "private": true,
   "version": "0.1.0",
+  "description": "A personal assistant on FeltKit: durable conversations, memory, tasks, reminders, daily briefing and an auditable action log.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "feltkit dev",
@@ -14,7 +16,8 @@
     "e2e:ui": "node e2e/ui.mjs",
     "e2e:model": "node e2e/model.mjs",
     "extension:build": "vite build -c vite.extension.config.ts",
-    "e2e:extension": "npm run extension:build && node e2e/extension.mjs"
+    "e2e:extension": "npm run extension:build && node e2e/extension.mjs",
+    "measure": "node scripts/measure.mjs"
   },
   "dependencies": {
     "@feltdb/feltkit": "0.3.24",
@@ -32,6 +35,5 @@
     "typescript": "5.9.3",
     "vite": "7.3.7",
     "@types/chrome": "0.0.304"
-  },
-  "description": "A personal assistant on FeltKit: durable conversations, memory, tasks, reminders, daily briefing and an auditable action log."
+  }
 }

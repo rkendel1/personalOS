@@ -1,9 +1,9 @@
 {
   "name": "@stack-ui/react",
-  "version": "0.7.0",
+  "version": "0.8.1",
   "description": "React 18/19 binding for @stack-ui/core.",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
@@ -15,13 +15,13 @@
     "src"
   ],
   "peerDependencies": {
-    "@stack-ui/core": "0.7.0",
+    "@stack-ui/core": "0.8.1",
     "react": "^18 || ^19"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "@stack-ui/core": "0.7.0"
+    "@stack-ui/core": "0.8.1"
   }
 }
