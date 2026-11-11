@@ -47,7 +47,7 @@
     },
     "configuration": {
       "files": 6,
-      "lines": 154
+      "lines": 156
     },
     "tests": {
       "files": 10,
@@ -72,7 +72,7 @@
   },
   "authored": {
     "files": 48,
-    "lines": 4097
+    "lines": 4099
   },
   "definitions": {
     "app": {
@@ -296,7 +296,7 @@
       "path": ".github/workflows/ci.yml",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 28
+      "lines": 30
     },
     {
       "path": ".gitignore",
