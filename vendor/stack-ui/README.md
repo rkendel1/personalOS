@@ -4,7 +4,7 @@ The shared design foundation (`rkendel1/stack-ui`), vendored because the package
 on npm (stack-ui `docs/decisions.md` D9). Each directory is an unpacked package
 (`pnpm pack` of `packages/<name>`), unmodified; `SHA256SUMS` covers every file.
 
-**Source: stack-ui commit 7a97a97 (rkendel1/stack-ui#21, the Shell's opt-in narrow menu),
+**Source: stack-ui main at a28f999 (rkendel1/stack-ui#21 merged: the Shell's opt-in narrow menu),
 which is not yet released.** The package versions still read 0.7.0, but this is not 0.7.0's
 content. Replace it with the released version (all three packages bumped together) before
 this is merged.
