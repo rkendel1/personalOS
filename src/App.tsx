@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConnectionState, useFeltKit, useMutation, useQuery, useSession } from "@feltdb/feltkit/react";
 import { api } from "../feltkit/_generated/api";
-import { ThemeToggle } from "./theme";
+import { focusMain, Shell } from "@stack-ui/react";
+import { useThemePreference } from "./theme";
 import { describe, ResetForm, SignedOut } from "./auth";
 import { Chat, type Compose } from "./chat";
 import { Activity, Files, MemoryScreen, Projects, Settings, Tasks, Today } from "./screens";
-import { clientDay, Icon } from "./ui";
+import { clientDay } from "./ui";
 
 type Tab = "chat" | "today" | "tasks" | "memory" | "projects" | "files" | "activity" | "settings";
 const PRIMARY: Array<{ tab: Tab; label: string }> = [
@@ -102,7 +103,8 @@ function Workspace(props: {
   environment: string | null;
 }) {
   const [{ tab, conversation }, setRoute] = useState(readHash);
-  const [more, setMore] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const theme = useThemePreference();
   // Coming back to Chat reopens the conversation you left.
   const lastConversation = useRef<string | null>(readHash().conversation);
   if (tab === "chat") lastConversation.current = conversation;
@@ -115,7 +117,7 @@ function Workspace(props: {
     const hash = `#/${next}${conv ? `/${conv}` : ""}`;
     if (location.hash !== hash) location.hash = hash;
     setRoute({ tab: next, conversation: conv });
-    setMore(false);
+    setMenuOpen(false);
   }, []);
   // Another surface (the browser extension) can ask Chat to send something: a new conversation with it.
   const [compose, setCompose] = useState<Compose | null>(null);
@@ -139,57 +141,49 @@ function Workspace(props: {
       .then((r) => go("chat", r.conversationId))
       .catch(props.onError);
 
-  const nav = (items: Array<{ tab: Tab; label: string }>, cls: string) =>
-    items.map((i) => (
-      <button key={i.tab} className={`${cls} ${tab === i.tab ? "on" : ""}`} onClick={() => go(i.tab, i.tab === "chat" ? lastConversation.current : null)} aria-current={tab === i.tab ? "page" : undefined}>
-        <Icon name={i.tab} />
-        <span>{i.label}</span>
-        {i.tab === "activity" && pending > 0 && <span className="dot-count">{pending}</span>}
-      </button>
-    ));
+  // The shared stack-ui Shell: a sidebar on wide screens; below 768px (phones, the extension's
+  // side panel) the navigation is a menu behind the bar's button.
+  const navigation = [...PRIMARY, ...SECONDARY].map((i, order) => ({
+    id: i.tab,
+    label: i.tab === "activity" && pending > 0 ? `${i.label} (${pending} waiting)` : i.label,
+    href: `#/${i.tab}${i.tab === "chat" && lastConversation.current ? `/${lastConversation.current}` : ""}`,
+    group: order < PRIMARY.length ? undefined : "More",
+    order,
+    current: tab === i.tab,
+  }));
+  const onNavigate = (href: string) => {
+    const next = href.replace(/^#\/?/, "").split("/")[0] as Tab;
+    go(next, next === "chat" ? lastConversation.current : null);
+    // Keyboard and screen-reader users start at the new page (stack-ui product-shell §2).
+    requestAnimationFrame(() => focusMain("main"));
+  };
 
   return (
-    <div className="workspace">
-      <aside className="rail">
-        <div className="brand">
-          <span className="logo" aria-hidden="true">◐</span> PersonalOS
-        </div>
-        <nav className="rail-nav">{nav([...PRIMARY, ...SECONDARY], "rail-item")}</nav>
-        <div className="rail-foot">
+    <Shell
+      className="app-shell"
+      product={{ name: "PersonalOS", homeHref: "#/chat", mark: "P" }}
+      mainId="main"
+      navigation={navigation}
+      onNavigate={onNavigate}
+      narrowNavigation="menu"
+      navigationOpen={menuOpen}
+      onNavigationToggle={setMenuOpen}
+      theme={theme}
+      account={<span className={`live ${props.live ? "on" : ""}`} title={props.live ? "Live" : "Reconnecting"}><span className="dot" /><span className="sr-only">{props.live ? "Live" : "Reconnecting"}</span></span>}
+    >
+      {tab === "chat" && <Chat conversationId={conversation} onConversation={(id) => go("chat", id)} onError={props.onError} name={settings?.name ?? null} compose={compose} />}
+      {tab === "today" && <Today onError={props.onError} onAsk={ask} />}
+      {tab === "tasks" && <Tasks onError={props.onError} />}
+      {tab === "memory" && <MemoryScreen onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
+      {tab === "projects" && <Projects onError={props.onError} onAsk={ask} />}
+      {tab === "files" && <Files onError={props.onError} />}
+      {tab === "activity" && <Activity onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
+      {tab === "settings" && (
+        <Settings onError={props.onError} dashboard={props.dashboard} principal={props.principal} onSignOut={props.onSignOut}>
           <Footer {...props} />
-        </div>
-      </aside>
-
-      <main className="main">
-        <header className="mobile-top">
-          <div className="brand"><span className="logo" aria-hidden="true">◐</span> PersonalOS</div>
-          <span className={`live ${props.live ? "on" : ""}`} title={props.live ? "Live" : "Reconnecting"}><span className="dot" /></span>
-        </header>
-        {tab === "chat" && <Chat conversationId={conversation} onConversation={(id) => go("chat", id)} onError={props.onError} name={settings?.name ?? null} compose={compose} />}
-        {tab === "today" && <Today onError={props.onError} onAsk={ask} />}
-        {tab === "tasks" && <Tasks onError={props.onError} />}
-        {tab === "memory" && <MemoryScreen onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
-        {tab === "projects" && <Projects onError={props.onError} onAsk={ask} />}
-        {tab === "files" && <Files onError={props.onError} />}
-        {tab === "activity" && <Activity onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
-        {tab === "settings" && (
-          <>
-            <Settings onError={props.onError} dashboard={props.dashboard} principal={props.principal} onSignOut={props.onSignOut} />
-            <div className="screen mobile-only"><Footer {...props} /></div>
-          </>
-        )}
-      </main>
-
-      <nav className="tabbar" aria-label="Main">
-        {nav(PRIMARY, "tab")}
-        <button className={`tab ${SECONDARY.some((s) => s.tab === tab) ? "on" : ""}`} onClick={() => setMore((v) => !v)} aria-expanded={more}>
-          <Icon name="more" />
-          <span>More</span>
-          {pending > 0 && <span className="dot-count">{pending}</span>}
-        </button>
-        {more && <div className="more-sheet">{nav(SECONDARY, "rail-item")}</div>}
-      </nav>
-    </div>
+        </Settings>
+      )}
+    </Shell>
   );
 }
 
@@ -198,7 +192,6 @@ function Footer(props: { live: boolean; devUsers: Array<{ id: string; name: stri
     <div className="foot">
       <div className="row between">
         <span className={`live ${props.live ? "on" : ""}`}><span className="dot" /> {props.live ? "Live" : "Reconnecting"}</span>
-        <ThemeToggle />
       </div>
       {props.devUsers.length > 0 && (
         <select value={props.currentDev} onChange={(e) => props.onSwitch(e.target.value)} aria-label="Signed in as (development)">

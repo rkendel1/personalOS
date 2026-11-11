@@ -35,6 +35,13 @@ const MODEL_B = "openai/gpt-4o-mini";
 const APP_PORT = 5190;
 const RESOLVER_PORT = 4390;
 const log = (...a) => console.log("✓", ...a);
+// The stack-ui Shell's navigation: a sidebar on wide screens, a menu behind the bar's button below 768px.
+async function navTo(page, name) {
+  const button = page.locator(".stack-shell__menu-button");
+  if ((await button.isVisible()) && (await button.getAttribute("aria-expanded")) !== "true") await button.click();
+  await page.locator(".stack-shell__nav").getByRole("link", { name: new RegExp(`^${name}\\b`) }).click();
+}
+
 const conversationUrlOf = (page) => page.url();
 const children = [];
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(VITE_)?FELTDB_|^FELTKIT_CREDENTIAL_|^OPENAI_API_KEY$|^AI_GATEWAY_API_KEY$/.test(k)));
@@ -118,13 +125,13 @@ try {
 
   // Seed one outstanding high-priority task through the UI.
   const today = await page.evaluate(() => new Date().toLocaleDateString("en-CA"));
-  await page.locator(".rail").getByRole("button", { name: "Tasks" }).click();
+  await navTo(page, "Tasks");
   await page.getByLabel("New task").fill("Pending project review");
   await page.getByLabel("Due date").fill(today);
   await page.getByRole("button", { name: "Add" }).click();
   await page.getByText("Pending project review").click();
   await page.getByRole("combobox").filter({ hasText: "Normal" }).first().selectOption("high");
-  await page.locator(".rail").getByRole("button", { name: "Chat" }).click();
+  await navTo(page, "Chat");
 
   // 1. The acceptance conversation, streamed.
   await page.getByLabel("Message").fill("Remind me to follow up with John tomorrow at 10am, and tell me what else I should prioritize.");
@@ -192,7 +199,7 @@ try {
   // 4. Retarget the model in Resolver; the app keeps running.
   const pid = appProc.pid;
   resolverCli(["set", MODEL_REF, "--kind", "model", "--value", JSON.stringify({ provider: "custom", model: MODEL_B, endpoint: "https://ai-gateway.vercel.sh/v1", credential: SECRET_REF, options: { max_tokens: 700 } }), "--reason", "switch to B"], admin);
-  await page.locator(".rail").getByRole("button", { name: "Settings" }).click();
+  await navTo(page, "Settings");
   await until(async () => {
     await page.reload();
     return /gpt-4o-mini/.test(await page.getByTestId("model-status").innerText());
@@ -200,7 +207,7 @@ try {
   const status = await page.getByTestId("model-status").innerText();
   assert.match(status, /r2/);
   await page.screenshot({ path: `${shots}/m1-3-switched.png` });
-  await page.locator(".rail").getByRole("button", { name: "Chat" }).click();
+  await navTo(page, "Chat");
   await page.getByLabel("Message").fill("In one sentence: what's due today?");
   await page.getByLabel("Send").click();
   await page.locator(".provenance").filter({ hasText: MODEL_B }).last().waitFor({ timeout: 90_000 });
@@ -252,10 +259,10 @@ try {
   log(`isolation: Grace sees 0 actions and 0 conversations; approving Ada's action → HTTP ${graceView.approveStatus} ${graceView.approveCode}`);
 
   // 7. Model off: the deterministic assistant.
-  await page.locator(".rail").getByRole("button", { name: "Settings" }).click();
+  await navTo(page, "Settings");
   await page.getByLabel(/Converse with the model/).click();
   await page.waitForFunction(() => ![...document.querySelectorAll(".toggle")].find((l) => l.textContent.includes("Converse"))?.querySelector("input")?.checked);
-  await page.locator(".rail").getByRole("button", { name: "Chat" }).click();
+  await navTo(page, "Chat");
   await page.getByLabel("New conversation").click();
   await page.getByLabel("Message").fill("Remind me to call mom tomorrow at 9am");
   await page.getByLabel("Send").click();
