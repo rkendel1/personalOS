@@ -1,112 +1,59 @@
-import { fail, s } from "@feltdb/feltkit";
-import { app, projects, tasks } from "./app.js";
+import { s } from "@feltdb/feltkit";
+import { app, RECURRENCE, tasks } from "./app.js";
+import * as ops from "./_ops.js";
 
-const Task = s.object({
-  id: s.string(),
-  projectId: s.string(),
-  title: s.string(),
-  details: s.optional(s.string()),
-  done: s.boolean(),
-  createdAt: s.number(),
-  createdBy: s.string(),
-  completedAt: s.optional(s.number()),
-  completedBy: s.optional(s.string()),
-  __version: s.number(),
-});
+const ui = { via: "ui" as const };
+const When = { due: s.optional(s.string()), time: s.optional(s.string()), tzOffset: s.optional(s.number()), reminder: s.optional(s.boolean()) };
 
-/** Tasks in a project: open first, then completed, oldest first. */
 export const list = app.query({
   access: "tasks.read",
-  args: { projectId: s.string() },
-  returns: s.array(Task),
-  capability: { name: "tasks.list", description: "List the tasks in a project, open ones first." },
-  handler: async (ctx, { projectId }) => {
-    const items = await ctx.db.find(tasks, { projectId }, { orderBy: [{ field: "createdAt", direction: "asc" }] });
-    return [...items.filter((t) => !t.done), ...items.filter((t) => t.done)];
-  },
+  args: { status: s.optional(s.enum(["open", "done"] as const)) },
+  returns: s.array(s.doc(tasks)),
+  capability: { name: "tasks.list", description: "Your tasks (open or done), newest first." },
+  handler: (ctx, { status }) => ctx.db.find(tasks, { owner: ops.me(ctx), ...(status ? { status } : {}) }, { orderBy: [{ field: "createdAt", direction: "desc" }] }),
 });
 
 export const create = app.mutation({
   access: "tasks.write",
-  args: { projectId: s.string(), title: s.string({ minLength: 1, maxLength: 200 }), details: s.optional(s.string({ maxLength: 4000 })) },
-  returns: s.string(),
-  capability: { name: "tasks.create", description: "Add a task to a project." },
-  handler: async (ctx, { projectId, title, details }) => {
-    if (!(await ctx.db.get(projects, projectId))) fail("NOT_FOUND", "That project does not exist.");
-    const id = await ctx.db.insert(tasks, {
-      projectId,
-      title: title.trim(),
-      ...(details?.trim() ? { details: details.trim() } : {}),
-      done: false,
-      createdAt: Date.now(),
-      createdBy: ctx.auth.requirePrincipal().id,
-    });
-    // Delivered, signed, to every webhook endpoint registered for "task.created" (Studio → Services → Webhooks).
-    // ctx.afterCommit: only if this mutation commits (ctx.services.* effects happen even if it does not).
-    ctx.afterCommit.webhooks.emit("task.created", { id, projectId, title: title.trim() });
-    return id;
-  },
+  args: { title: s.string({ minLength: 1, maxLength: 200 }), notes: s.optional(s.string({ maxLength: 4000 })), priority: s.optional(s.enum(["low", "normal", "high"] as const)), recurrence: s.optional(s.enum(RECURRENCE)), projectId: s.optional(s.string()), ...When },
+  returns: s.doc(tasks),
+  capability: { name: "tasks.create", description: "Create a task, optionally with a due date and a reminder." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, args) => (await ops.createTask(ctx, args, ui)).task,
 });
 
 export const update = app.mutation({
   access: "tasks.write",
-  args: { id: s.string(), title: s.optional(s.string({ minLength: 1, maxLength: 200 })), details: s.optional(s.string({ maxLength: 4000 })) },
-  handler: async (ctx, { id, title, details }) => {
-    await ctx.db.patch(tasks, id, {
-      ...(title !== undefined ? { title: title.trim() } : {}),
-      ...(details !== undefined ? { details: details.trim() || undefined } : {}),
-    });
-  },
+  args: { id: s.string(), title: s.optional(s.string({ minLength: 1, maxLength: 200 })), notes: s.optional(s.string({ maxLength: 4000 })), priority: s.optional(s.enum(["low", "normal", "high"] as const)), recurrence: s.optional(s.enum(RECURRENCE)), projectId: s.optional(s.string()), clearDue: s.optional(s.boolean()), ...When },
+  returns: s.doc(tasks),
+  capability: { name: "tasks.update", description: "Change a task: title, notes, priority, date, reminder, project." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { id, ...change }) => (await ops.updateTask(ctx, id, change, ui)).task,
 });
 
-export const setDone = app.mutation({
-  access: "tasks.complete",
-  args: { id: s.string(), done: s.boolean() },
-  returns: s.object({ id: s.string(), done: s.boolean() }),
-  capability: { name: "tasks.complete", description: "Mark a task complete (done: true) or reopen it (done: false)." },
-  handler: async (ctx, { id, done }) => {
-    const who = ctx.auth.requirePrincipal().id;
-    const task = await ctx.db.patch(tasks, id, done ? { done: true, completedAt: Date.now(), completedBy: who } : { done: false, completedAt: undefined, completedBy: undefined });
-    if (done) {
-      ctx.afterCommit.webhooks.emit("task.completed", { id: task.id, projectId: task.projectId, completedBy: who });
-      // Tell whoever created the task, when someone else completes it.
-      if (task.createdBy !== who) {
-        ctx.afterCommit.notifications.send({ recipient: task.createdBy, type: "task.completed", title: `${who} completed "${task.title}"`, data: { taskId: task.id }, idempotencyKey: `task.completed:${task.id}:${task.completedAt}` });
-      }
-    }
-    return { id: task.id, done: task.done };
-  },
+export const complete = app.mutation({
+  access: "tasks.write",
+  args: { id: s.string() },
+  returns: s.doc(tasks),
+  capability: { name: "tasks.complete", description: "Mark a task done. A recurring task schedules its next occurrence." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { id }) => (await ops.completeTask(ctx, id, ui)).task,
 });
 
+export const reopen = app.mutation({
+  access: "tasks.write",
+  args: { id: s.string() },
+  returns: s.doc(tasks),
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { id }) => (await ops.reopenTask(ctx, id, ui)).task,
+});
+
+/** Deleting from the Tasks screen is the person's own direct act; the assistant can only propose it. */
 export const remove = app.mutation({
   access: "tasks.write",
   args: { id: s.string() },
+  retry: { sequenceConflicts: 3 },
   handler: async (ctx, { id }) => {
-    for (const file of await ctx.services.files.list({ metadata: { taskId: id } })) await ctx.services.files.remove(file.id);
-    await ctx.db.delete(tasks, id);
-  },
-});
-
-/** Notes are text files stored by the AppPort Services Files service in this app's FeltDB instance. */
-export const notes = app.query({
-  access: "tasks.read",
-  args: { taskId: s.string() },
-  handler: async (ctx, { taskId }) => {
-    const files = await ctx.services.files.list({ metadata: { taskId } });
-    return Promise.all(
-      files.map(async (file) => ({ id: file.id, author: file.owner, createdAt: file.createdAt, text: (await ctx.services.files.read(file.id)).text() })),
-    );
-  },
-});
-
-export const addNote = app.mutation({
-  access: "tasks.note",
-  args: { taskId: s.string(), text: s.string({ minLength: 1, maxLength: 8000 }) },
-  returns: s.object({ id: s.string() }),
-  capability: { name: "tasks.note", description: "Attach a text note to a task (stored with AppPort Services Files)." },
-  handler: async (ctx, { taskId, text }) => {
-    if (!(await ctx.db.get(tasks, taskId))) fail("NOT_FOUND", "That task does not exist.");
-    const file = await ctx.services.files.upload({ name: "note.txt", contentType: "text/plain", content: text.trim(), metadata: { taskId } });
-    return { id: file.id };
+    await ops.deleteTask(ctx, id, ui);
   },
 });

@@ -1,73 +1,192 @@
 /**
- * The application: its name, who may do what, and its data.
+ * PersonalOS: a personal assistant whose durable state is the product.
  *
- * Everything here is stored in one FeltDB instance per environment. In development
- * that is .feltkit/development/state — run `npx feltkit inspect` to see it.
+ * Everything the assistant knows or did lives in this app's FeltDB instance: conversations,
+ * messages, memory, tasks, projects, and the action log (with evidence). The model is optional
+ * and replaceable; it only ever *proposes* an interpretation (see feltkit/assistant.ts).
+ *
+ * Every record carries `owner` (the principal id). Handlers read and write only the caller's own
+ * records (feltkit/_own.ts), so one deployment can serve several people without seeing each
+ * other's data.
  */
 import { feltkit, s } from "@feltdb/feltkit";
 
+/** What a person who owns an assistant may do. */
+const OWNER = [
+  "assistant.*", "conversations.*", "tasks.*", "memory.*", "projects.*", "actions.*", "briefing.read", "settings.*",
+  "notifications.read", "notifications.update",
+  // Reminders are jobs queued as the owner, re-authorized each run (feltkit/reminders.ts).
+  "jobs.create", "jobs.execute", "notifications.send",
+  // The model may propose; the owner approves in Studio → Agent (docs/PLATFORM-GAPS.md, G2).
+  "feltkit.agent.*",
+];
+
 export const app = feltkit({
   name: "personalos",
-  description: "A small task manager that demonstrates the whole FeltKit platform.",
-  // Roles grant AppPort permissions. "tasks.*" grants every tasks.<x> permission.
+  description: "A personal assistant: conversations, memory, tasks, reminders and a daily briefing, with an auditable action log.",
   roles: {
-    // Members use the app and Studio's agent (feltkit.agent.*: create, approve, and follow agent tasks).
-    // notifications.*: a principal reads, marks, and dismisses only its own notifications.
-    // webhooks.emit + webhooks.deliver: their changes notify registered endpoints (task.created,
-    // task.completed); each delivery runs as the person whose change emitted it.
-    member: ["projects.*", "tasks.*", "files.*", "notifications.*", "webhooks.emit", "webhooks.deliver", "feltkit.agent.*"],
-    // Viewers read. They can see agent tasks but not start or approve them.
-    viewer: ["projects.read", "tasks.read", "files.read", "notifications.read", "feltkit.agent.read"],
-    // Agents can read, complete tasks, and leave notes. They cannot create or delete.
-    // feltkit.agent.*: discover the app (feltkit_context), work tasks, propose actions; a person approves.
-    agent: ["projects.read", "tasks.read", "tasks.complete", "tasks.note", "files.read", "files.write", "notifications.send", "webhooks.emit", "webhooks.deliver", "feltkit.agent.*"],
-    // Admins configure the app in Studio → Services: the model (intelligence.*), stored
-    // credentials (credential.*), configuration, API keys, webhooks, jobs, and schedules.
-    // Credentials are stored by reference; the value never enters FeltDB.
-    // feltkit.operations.*: in production, admins are Studio's operators (npx feltkit operator grant).
-    admin: ["intelligence.*", "credential.*", "configuration.*", "apikeys.*", "webhooks.*", "jobs.*", "schedules.*", "feltkit.operations.*"],
+    owner: OWNER,
+    // Read-only access (used to prove refusals in tests; useful for a shared view later).
+    viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read"],
+    // Operators configure the model and services in Studio. Never granted to the assistant itself.
+    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "feltkit.operations.*"],
   },
-  // People sign up and sign in with an e-mail address and a password (stored in this app's FeltDB;
-  // only a hash of the password). A new account is a member.
-  auth: { accounts: { roles: ["member"] } },
-  // Development-only identities. Sign in as them from the app or the dashboard.
+  auth: { accounts: { roles: ["owner"] } },
   dev: {
     users: [
-      { id: "ada", name: "Ada Lovelace", roles: ["member", "admin"] },
-      { id: "grace", name: "Grace Hopper", roles: ["viewer"] },
+      { id: "ada", name: "Ada Lovelace", roles: ["owner", "admin"] },
+      { id: "grace", name: "Grace Hopper", roles: ["owner"] },
+      { id: "guest", name: "Read-only guest", roles: ["viewer"] },
     ],
   },
-  // AppPort Services, stored in this app's FeltDB instance, each configured in Studio →
-  // Services. Intelligence is the model the agent decides with (Studio → Models).
+  // Production decides with whatever this Resolver reference points to; change the model there,
+  // without a redeploy (docs/RESOLVER.md in @feltdb/feltkit). Development uses Studio → Models.
+  agent: { model: { production: "ref://prod/personalos/model" } },
   services: {
-    files: true,
-    // The types this app sends; Studio offers them when you send one by hand.
-    notifications: { types: ["task.completed"] },
+    notifications: { types: ["reminder.due"] },
     configuration: true,
-    // A request authenticated by an API key holds these roles.
-    apiKeys: { roles: ["member"] },
-    // The events this app emits (feltkit/tasks.ts); Studio offers them when you register an endpoint.
-    webhooks: { events: ["task.created", "task.completed"] },
-    // Job type → the mutation that runs it, as the principal that queued it, with retries.
-    jobs: { handlers: { "projects.clear-completed": "projects:clearCompleted" } },
-    schedules: true,
+    jobs: { handlers: { "reminder.fire": "reminders:fire" } },
     intelligence: true,
   },
 });
 
-export const projects = app.collection("projects", {
-  name: s.string({ minLength: 1, maxLength: 80 }),
-  createdAt: s.number(),
-  createdBy: s.string(),
+const owner = s.string({ minLength: 1 });
+
+export const conversations = app.collection(
+  "conversations",
+  { owner, title: s.string({ minLength: 1, maxLength: 120 }), createdAt: s.number(), updatedAt: s.number(), messageCount: s.number() },
+  { indexes: [{ fields: ["owner"] }] },
+);
+
+/** Where an assistant reply came from: the deterministic interpreter, or a model proposal a person approved. */
+const Interpretation = s.object({
+  intent: s.string(),
+  source: s.enum(["rules", "model"] as const),
+  missing: s.optional(s.array(s.string())),
+  agentTaskId: s.optional(s.string()),
 });
 
-export const tasks = app.collection("tasks", {
-  projectId: s.string(),
-  title: s.string({ minLength: 1, maxLength: 200 }),
-  details: s.optional(s.string({ maxLength: 4000 })),
-  done: s.boolean(),
-  createdAt: s.number(),
-  createdBy: s.string(),
-  completedAt: s.optional(s.number()),
-  completedBy: s.optional(s.string()),
-});
+export const messages = app.collection(
+  "messages",
+  {
+    owner,
+    conversationId: s.string(),
+    seq: s.number(),
+    role: s.enum(["user", "assistant"] as const),
+    text: s.string({ maxLength: 8000 }),
+    createdAt: s.number(),
+    interpretation: s.optional(Interpretation),
+    /** Actions this reply reports on (ids in `actions`). A reply claims nothing it cannot cite here. */
+    actionIds: s.optional(s.array(s.string())),
+    /** Suggested follow-ups the UI renders as buttons. */
+    suggestions: s.optional(s.array(s.string())),
+    /** Set when the user edited this message and the conversation was continued from the edit. */
+    supersededBy: s.optional(s.string()),
+  },
+  { indexes: [{ fields: ["conversationId", "seq"] }], search: ["text"] },
+);
+
+export const MEMORY_KINDS = ["preference", "person", "project", "decision", "date", "instruction", "fact"] as const;
+
+export const memories = app.collection(
+  "memories",
+  {
+    owner,
+    kind: s.enum(MEMORY_KINDS),
+    /** What the memory is about ("John", "coffee", "Q3 launch"), lower-cased words for lookup. */
+    subject: s.string({ maxLength: 200 }),
+    content: s.string({ minLength: 1, maxLength: 2000 }),
+    /** confirmed: the user said it or confirmed it. inferred: the assistant concluded it; never used as fact. */
+    status: s.enum(["confirmed", "inferred"] as const),
+    source: s.object({
+      kind: s.enum(["conversation", "manual", "model"] as const),
+      conversationId: s.optional(s.string()),
+      messageId: s.optional(s.string()),
+      quote: s.optional(s.string({ maxLength: 500 })),
+    }),
+    date: s.optional(s.string()), // YYYY-MM-DD, for kind "date"
+    createdAt: s.number(),
+    updatedAt: s.number(),
+    confirmedAt: s.optional(s.number()),
+  },
+  { indexes: [{ fields: ["owner"] }], search: ["subject", "content"] },
+);
+
+export const RECURRENCE = ["none", "daily", "weekdays", "weekly", "monthly"] as const;
+
+export const tasks = app.collection(
+  "tasks",
+  {
+    owner,
+    title: s.string({ minLength: 1, maxLength: 200 }),
+    notes: s.optional(s.string({ maxLength: 4000 })),
+    status: s.enum(["open", "done"] as const),
+    priority: s.enum(["low", "normal", "high"] as const),
+    due: s.optional(s.string()), // YYYY-MM-DD in the owner's local calendar
+    /** A reminder: the instant it fires (epoch ms), the local time it was asked for, and when it fired. */
+    remindAt: s.optional(s.number()),
+    remindTime: s.optional(s.string()), // HH:MM
+    /** The client's UTC offset (minutes, Date#getTimezoneOffset) when the reminder was set. */
+    tzOffset: s.optional(s.number()),
+    remindedAt: s.optional(s.number()),
+    recurrence: s.enum(RECURRENCE),
+    projectId: s.optional(s.string()),
+    source: s.object({ kind: s.enum(["conversation", "manual", "model", "recurrence"] as const), conversationId: s.optional(s.string()), messageId: s.optional(s.string()) }),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+    completedAt: s.optional(s.number()),
+  },
+  { indexes: [{ fields: ["owner", "status"] }], search: ["title", "notes"] },
+);
+
+export const projects = app.collection(
+  "projects",
+  {
+    owner,
+    name: s.string({ minLength: 1, maxLength: 120 }),
+    description: s.optional(s.string({ maxLength: 2000 })),
+    status: s.enum(["active", "paused", "done"] as const),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+  },
+  { indexes: [{ fields: ["owner"] }], search: ["name", "description"] },
+);
+
+/**
+ * The action log: every state change the assistant made or proposed, with its outcome and the
+ * record that proves it. Append-only in spirit: rows change state (proposed → succeeded/rejected),
+ * never content.
+ */
+export const actions = app.collection(
+  "actions",
+  {
+    owner,
+    seq: s.number(),
+    kind: s.string(), // "task.create", "memory.remember", …
+    summary: s.string({ maxLength: 500 }),
+    status: s.enum(["proposed", "succeeded", "failed", "rejected"] as const),
+    /** "none": ran on the user's explicit request. "required": waits for the user (destructive, or model-chosen). */
+    approval: s.enum(["none", "required"] as const),
+    input: s.record(s.unknown()),
+    evidence: s.optional(s.object({ collection: s.string(), id: s.string(), version: s.number(), verified: s.boolean() })),
+    error: s.optional(s.object({ code: s.string(), message: s.string() })),
+    via: s.enum(["chat", "ui", "model", "job"] as const),
+    conversationId: s.optional(s.string()),
+    messageId: s.optional(s.string()),
+    createdAt: s.number(),
+    decidedAt: s.optional(s.number()),
+  },
+  { indexes: [{ fields: ["owner", "seq"] }, { fields: ["owner", "status"] }] },
+);
+
+export const settings = app.collection(
+  "settings",
+  {
+    owner,
+    name: s.optional(s.string({ maxLength: 80 })),
+    /** Send messages the rules cannot interpret to the environment's model as a proposal. */
+    modelAssist: s.boolean(),
+    updatedAt: s.number(),
+  },
+  { unique: [{ fields: ["owner"] }] },
+);

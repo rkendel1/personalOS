@@ -1,10 +1,7 @@
 import { s } from "@feltdb/feltkit";
 import { app } from "./app.js";
 
-/**
- * The signed-in person's notifications (AppPort Services Notifications, e.g. "task.completed"
- * from tasks:setDone). Each principal reads and marks only its own; the service enforces it.
- */
+/** Reminders that fired, from AppPort Services Notifications. Each person reads only their own. */
 export const list = app.query({
   access: "notifications.read",
   args: { unread: s.optional(s.boolean()) },
