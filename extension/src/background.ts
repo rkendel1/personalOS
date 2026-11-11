@@ -3,9 +3,14 @@
  * side panel, and the right-click menu hands a selection, link or page to it. It never talks to the
  * PersonalOS instance and holds no session; the panel does that, as the signed-in person.
  */
-import { PENDING_KEY, type Pending } from "./config";
+import { lockStorage, PENDING_KEY, type Pending } from "./config";
+
+// Lock the session's storage away from content scripts whenever the worker starts (install, update, browser start).
+void lockStorage();
+chrome.runtime.onStartup.addListener(() => void lockStorage());
 
 chrome.runtime.onInstalled.addListener(() => {
+  void lockStorage();
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: "ask", title: "Ask PersonalOS about “%s”", contexts: ["selection"] });
