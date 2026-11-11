@@ -161,7 +161,7 @@ function Workspace(props: {
   return (
     <Shell
       className="app-shell"
-      product={{ name: "PersonalOS", homeHref: "#/chat", mark: "◐" }}
+      product={{ name: "PersonalOS", homeHref: "#/chat", mark: "P" }}
       mainId="main"
       navigation={navigation}
       onNavigate={onNavigate}
@@ -179,10 +179,9 @@ function Workspace(props: {
       {tab === "files" && <Files onError={props.onError} />}
       {tab === "activity" && <Activity onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
       {tab === "settings" && (
-        <>
-          <Settings onError={props.onError} dashboard={props.dashboard} principal={props.principal} onSignOut={props.onSignOut} />
-          <div className="screen"><Footer {...props} /></div>
-        </>
+        <Settings onError={props.onError} dashboard={props.dashboard} principal={props.principal} onSignOut={props.onSignOut}>
+          <Footer {...props} />
+        </Settings>
       )}
     </Shell>
   );

@@ -17,7 +17,7 @@
     "e2e:extension": "npm run extension:build && node e2e/extension.mjs"
   },
   "dependencies": {
-    "@feltdb/feltkit": "0.3.23",
+    "@feltdb/feltkit": "0.3.24",
     "@stack-ui/core": "file:vendor/stack-ui/core",
     "@stack-ui/react": "file:vendor/stack-ui/react",
     "@stack-ui/tokens": "file:vendor/stack-ui/tokens",

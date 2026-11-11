@@ -1,5 +1,5 @@
 /** Today, Tasks, Memory, Projects, Activity and Settings: each a live view of durable state. */
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useFeltKit, useMutation, useQuery } from "@feltdb/feltkit/react";
 import { api } from "../feltkit/_generated/api";
 import { ago, clientDay, dayLabel, Evidence, Icon, localToday, StatusBadge, timeLabel, type Action } from "./ui";
@@ -467,7 +467,7 @@ export function Activity({ onError, onOpenConversation }: Err & { onOpenConversa
   );
 }
 
-export function Settings({ onError, dashboard, principal, onSignOut }: Err & { dashboard?: string | null; principal: string; onSignOut?: () => void }) {
+export function Settings({ onError, dashboard, principal, onSignOut, children }: Err & { dashboard?: string | null; principal: string; onSignOut?: () => void; children?: ReactNode }) {
   const s = useQuery(api.settings.get);
   const set = useMutation(api.settings.set);
   const configure = useMutation(api.checkins.configure);
@@ -556,6 +556,7 @@ export function Settings({ onError, dashboard, principal, onSignOut }: Err & { d
           <li>Email, calendar or messaging: no integration is configured, so I won't pretend to send or schedule anything.</li>
         </ul>
       </section>
+      {children && <section>{children}</section>}
     </div>
   );
 }
@@ -578,7 +579,7 @@ function ModelStatus() {
           <strong>{status.provider}/{status.model}</strong> <span className="muted">via {status.source}{status.reference ? ` (${status.reference.ref} r${status.reference.revision})` : ""}</span>
         </>
       ) : (
-        <span className="muted">No model is ready: {status.problems[0]?.message ?? "not configured"}. The built-in assistant is answering.</span>
+        <span className="muted">No model is ready: {(status.problems[0]?.message ?? "not configured").replace(/\.$/, "")}. The built-in assistant is answering.</span>
       )}
     </p>
   );
