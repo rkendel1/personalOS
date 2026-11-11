@@ -37,7 +37,7 @@ export const configure = app.mutation({
     const checkinAt = time ? nextCheckin(Date.now(), time, tzOffset) : undefined;
     const change = { checkinTime: time ?? undefined, tzOffset, checkinAt, updatedAt: Date.now() };
     if (row) await ctx.db.patch(settings, row.id, change);
-    else await ctx.db.insert(settings, { owner, modelAssist: false, ...change });
+    else await ctx.db.insert(settings, { owner, modelAssist: true, ...change });
     if (checkinAt) schedule(ctx, checkinAt);
     return { checkinAt: checkinAt ?? null };
   },

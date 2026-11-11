@@ -15,7 +15,7 @@
     "e2e:model": "node e2e/model.mjs"
   },
   "dependencies": {
-    "@feltdb/feltkit": "^0.3.22",
+    "@feltdb/feltkit": "file:../feltkit/packages/sdk",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

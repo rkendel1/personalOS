@@ -1,5 +1,13 @@
 # Platform gaps found while building PersonalOS
 
+**Update (FeltKit M1, branch `claude/m1-agent-foundation`):** G1, G2, G3 and G5 are closed by FeltKit
+itself. PersonalOS now converses with the model (`app.action` + `ctx.model.generate`, streamed), its
+capabilities are the model's tools (proposals through FeltKit's agent), the owner approves in the app
+(`/api/agent/actions/*`, `useOwnActions`), Settings shows the active model (`ctx.model.status`), and
+dates come from the caller's time zone (`ctx.auth.context`). The application-side workarounds those
+gaps forced (decide-based "model assist", Studio approvals, client-sent dates) are removed. G4 (semantic
+retrieval) and G6 remain. The original findings follow, as recorded against FeltKit 0.3.22.
+
 Checked against `@feltdb/feltkit` 0.3.22 (with `@feltdb/core` 0.21.0 and `@appport/services` 0.16.0), as installed by `create-feltkit` 0.3.22 on 2026-11-11. Each gap cites where the evidence is, says what PersonalOS does instead, and says what would close it. None of these is worked around by inventing an API.
 
 ## G1. Applications cannot generate text with the environment's model

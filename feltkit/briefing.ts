@@ -2,6 +2,7 @@ import { fail, s } from "@feltdb/feltkit";
 import { actions, app, memories, projects, settings, tasks } from "./app.js";
 import { briefing } from "./_briefing.js";
 import { isDay } from "./_dates.js";
+import { clockFor } from "./_clock.js";
 import { me } from "./_ops.js";
 
 const Task = s.doc(tasks);
@@ -22,11 +23,13 @@ const Briefing = s.object({
 /** Today's briefing, live: it re-runs whenever a task, memory, project or action changes. */
 export const today = app.query({
   access: "briefing.read",
-  args: { today: s.string() },
+  /** `today` overrides the caller's own date (from their time zone) for tests and replays. */
+  args: { today: s.optional(s.string()) },
   returns: Briefing,
   capability: { name: "briefing.today", description: "The daily briefing: focus, overdue, due today, coming up, dates, projects, and what needs attention." },
-  handler: async (ctx, { today }) => {
-    if (!isDay(today)) fail("INVALID_ARGUMENT", "today must be YYYY-MM-DD.");
+  handler: async (ctx, args) => {
+    if (args.today !== undefined && !isDay(args.today)) fail("INVALID_ARGUMENT", "today must be YYYY-MM-DD.");
+    const today = args.today ?? clockFor(ctx.auth.context.timeZone).today;
     const owner = me(ctx);
     const [ts, ms, ps, proposed, failed, pref] = await Promise.all([
       ctx.db.find(tasks, { owner }),

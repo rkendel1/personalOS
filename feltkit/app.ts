@@ -17,7 +17,7 @@ const OWNER = [
   "notifications.read", "notifications.update",
   // Reminders are jobs queued as the owner, re-authorized each run (feltkit/reminders.ts).
   "jobs.create", "jobs.execute", "notifications.send",
-  // The model may propose; the owner approves in Studio → Agent (docs/PLATFORM-GAPS.md, G2).
+  // The model proposes through FeltKit's agent; the owner approves in the app (FeltKit M1).
   "feltkit.agent.*",
 ];
 
@@ -41,7 +41,8 @@ export const app = feltkit({
   },
   // Production decides with whatever this Resolver reference points to; change the model there,
   // without a redeploy (docs/RESOLVER.md in @feltdb/feltkit). Development uses Studio → Models.
-  agent: { model: { production: "ref://prod/personalos/model" } },
+  // Development may name one too (PERSONALOS_MODEL_REF, with RESOLVER_URL / RESOLVER_API_KEY), to switch models live.
+  agent: { model: { production: "ref://prod/personalos/model", ...(process.env.PERSONALOS_MODEL_REF ? { development: process.env.PERSONALOS_MODEL_REF as `ref://${string}` } : {}) } },
   services: {
     notifications: { types: ["reminder.due", "checkin.daily"] },
     configuration: true,
@@ -82,8 +83,25 @@ export const messages = app.collection(
     suggestions: s.optional(s.array(s.string())),
     /** Set when the user edited this message and the conversation was continued from the edit. */
     supersededBy: s.optional(s.string()),
+    /** The client's id for a user message: a retried send is the same message (and the same turn). */
+    clientId: s.optional(s.string({ maxLength: 100 })),
+    /**
+     * A model turn's reply: the FeltKit agent task that holds its evidence, the generation records,
+     * and the proposals the model made (each waits for the owner's approval unless it only reads).
+     */
+    agent: s.optional(
+      s.object({
+        taskId: s.string(),
+        replyTo: s.string(),
+        model: s.string(),
+        reference: s.optional(s.string()),
+        generations: s.array(s.string()),
+        proposals: s.array(s.object({ taskId: s.string(), actionId: s.string(), capability: s.string(), effect: s.string(), state: s.string(), input: s.record(s.unknown()) })),
+        cancelled: s.optional(s.boolean()),
+      }),
+    ),
   },
-  { indexes: [{ fields: ["conversationId", "seq"] }], search: ["text"] },
+  { indexes: [{ fields: ["conversationId", "seq"] }, { fields: ["owner", "clientId"] }], search: ["text"] },
 );
 
 export const MEMORY_KINDS = ["preference", "person", "project", "decision", "date", "instruction", "fact"] as const;
@@ -184,7 +202,7 @@ export const settings = app.collection(
   {
     owner,
     name: s.optional(s.string({ maxLength: 80 })),
-    /** Send messages the rules cannot interpret to the environment's model as a proposal. */
+    /** Converse with the environment's model when one is ready (default). Off: the deterministic assistant only. */
     modelAssist: s.boolean(),
     /** Daily check-in: local time (HH:MM), the client's UTC offset, the instant the next one is due, and its thread. */
     checkinTime: s.optional(s.string()),

@@ -12,14 +12,15 @@
  *   9. evidence     each operation writes an `actions` row citing the record and its version
  *  10. report       the reply is composed from those rows; it states nothing they do not show
  *
- * A message the rules cannot read goes to the environment's model only if the owner turned that
- * on, and only as a *proposal* among options this code builds (ctx.agent.start). Nothing a model
- * says is stored as fact or executed without a person's approval.
+ * This is the deterministic assistant: the path when the model is off or unavailable. With a
+ * model, a turn is feltkit/turn.ts (generation, tools as proposals, approval), which falls back
+ * to this. Either way nothing a model says is stored as fact or executed without approval.
  */
 import { fail, s } from "@feltdb/feltkit";
 import type { MutationCtx } from "@feltdb/feltkit";
 import { actions, app, conversations, memories, messages, projects, settings, tasks } from "./app.js";
 import { addDays, describeDay, describeTime, instant, isDay, type Day } from "./_dates.js";
+import { clockFor } from "./_clock.js";
 import { interpret, keywords, relevance, type Intent, type TaskRef } from "./_interpret.js";
 import { briefing, forgetting, rank, weekPlan, type TaskLike } from "./_briefing.js";
 import * as ops from "./_ops.js";
@@ -334,33 +335,10 @@ async function handle(ctx: MutationCtx, intent: Intent, missing: string[], meta:
     }
 
     case "unknown": {
-      const pref = (await ctx.db.find(settings, { owner }))[0];
-      if (pref?.modelAssist && ctx.auth.has("feltkit.agent.write")) {
-        // The model picks among interpretations this code built; its pick is a proposal a person approves.
-        const input = { conversationId: meta.conversationId, messageId: meta.messageId, text };
-        const { taskId } = ctx.agent.start({
-          objective: `Interpret a message to the assistant: "${text.slice(0, 200)}"`,
-          subject: { collection: "messages", id: meta.messageId },
-          decision: {
-            question: "The user sent this message to their personal assistant. Which interpretation fits best?",
-            context: { message: text.slice(0, 1000) },
-            options: [
-              { id: "task", label: "A task or to-do to add to their list", capability: "assistant.apply", input: { ...input, as: "task" } },
-              { id: "memory", label: "Information about the user worth remembering", capability: "assistant.apply", input: { ...input, as: "memory" } },
-              { id: "none", label: "Conversation only: nothing to record or do" },
-            ],
-          },
-        });
-        return {
-          text: "I couldn't map that to anything I can do on my own, so I've asked the model how to read it. Whatever it suggests waits for your approval (Studio → Agent) before anything changes.",
-          agentTaskId: taskId,
-          suggestions: ["What can you do?"],
-        };
-      }
       const words = keywords(text);
       return {
         text: pick(seed, [
-          "I didn't catch an action in that. I'm good with tasks, reminders, memory and planning your day. I don't do open-ended chat yet.",
+          "I didn't catch an action in that. With the model off I handle tasks, reminders, memory and planning your day, but not open-ended chat (Settings → Model).",
           "Not sure what to do with that one. I can track tasks, set reminders, remember things, and brief you on your day.",
         ]),
         suggestions: words.length ? [`Remember that ${text.replace(/[.!?]+$/, "")}`, `Add ${text.replace(/[.!?]+$/, "")} to my list`] : ["What can you do?"],
@@ -382,22 +360,29 @@ export const send = app.mutation({
   args: {
     conversationId: s.optional(s.string()),
     text: s.string({ minLength: 1, maxLength: 4000 }),
-    /** The user's local date (YYYY-MM-DD) and Date#getTimezoneOffset(): relative dates are theirs, not the server's. */
-    today: s.string(),
-    tzOffset: s.number(),
+    /** Overrides for tests and replays only: by default the date comes from the caller's time zone (ctx.auth.context). */
+    today: s.optional(s.string()),
+    tzOffset: s.optional(s.number()),
   },
   returns: SendResult,
   capability: { name: "assistant.send", description: "Send a message to the assistant. It may create or change tasks and memories, and replies citing what it did." },
   retry: { sequenceConflicts: 3 },
   handler: async (ctx, args) => {
-    if (!isDay(args.today)) fail("INVALID_ARGUMENT", "today must be YYYY-MM-DD.");
+    const { today, tzOffset } = when(ctx, args);
     const owner = ops.me(ctx);
     let conversationId = args.conversationId;
     if (conversationId) await ops.own(ctx, conversations, conversationId, "conversation");
     else conversationId = await ctx.db.insert(conversations, { owner, title: titleFrom(args.text), createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 });
-    return converse(ctx, conversationId, args.text, args.today, args.tzOffset);
+    return converse(ctx, conversationId, args.text, today, tzOffset);
   },
 });
+
+/** The caller's local date and UTC offset: from their time zone, unless a test or replay overrides it. */
+export function when(ctx: { auth: { context: { timeZone: string | null } } }, args: { today?: string; tzOffset?: number }): { today: Day; tzOffset: number } {
+  if (args.today !== undefined && !isDay(args.today)) fail("INVALID_ARGUMENT", "today must be YYYY-MM-DD.");
+  const clock = clockFor(ctx.auth.context.timeZone);
+  return { today: args.today ?? clock.today, tzOffset: args.tzOffset ?? clock.tzOffset };
+}
 
 async function converse(ctx: MutationCtx, conversationId: string, text: string, today: Day, tzOffset: number) {
   const { intent, missing } = interpret(text, today);
@@ -419,14 +404,15 @@ async function converse(ctx: MutationCtx, conversationId: string, text: string, 
  */
 export const edit = app.mutation({
   access: "assistant.send",
-  args: { messageId: s.string(), text: s.string({ minLength: 1, maxLength: 4000 }), today: s.string(), tzOffset: s.number() },
+  args: { messageId: s.string(), text: s.string({ minLength: 1, maxLength: 4000 }), today: s.optional(s.string()), tzOffset: s.optional(s.number()) },
   returns: SendResult,
   retry: { sequenceConflicts: 3 },
   handler: async (ctx, args) => {
     const original = await ops.own<any>(ctx, messages, args.messageId, "message");
     if (original.role !== "user") fail("FAILED_PRECONDITION", "Only your own messages can be edited.");
     const later = await ctx.db.find(messages, { conversationId: original.conversationId }, { orderBy: [{ field: "seq", direction: "asc" }] });
-    const result = await converse(ctx, original.conversationId, args.text, args.today, args.tzOffset);
+    const { today, tzOffset } = when(ctx, args);
+    const result = await converse(ctx, original.conversationId, args.text, today, tzOffset);
     for (const m of later) if (m.seq >= original.seq && !m.supersededBy) await ctx.db.patch(messages, m.id, { supersededBy: result.messageId });
     return result;
   },
@@ -435,46 +421,13 @@ export const edit = app.mutation({
 /** Ask again: re-run a message against the current state (useful after you changed something). */
 export const retry = app.mutation({
   access: "assistant.send",
-  args: { messageId: s.string(), today: s.string(), tzOffset: s.number() },
+  args: { messageId: s.string(), today: s.optional(s.string()), tzOffset: s.optional(s.number()) },
   returns: SendResult,
   retry: { sequenceConflicts: 3 },
   handler: async (ctx, args) => {
     const original = await ops.own<any>(ctx, messages, args.messageId, "message");
     if (original.role !== "user") fail("FAILED_PRECONDITION", "Retry one of your own messages.");
-    return converse(ctx, original.conversationId, original.text, args.today, args.tzOffset);
-  },
-});
-
-/**
- * Apply a model's interpretation, after a person approved it in the FeltKit agent lifecycle.
- * This is the only capability the model's options name. It runs as the task owner and uses the
- * same operations as a direct request; memory it creates stays *inferred*.
- */
-export const apply = app.mutation({
-  access: "assistant.apply",
-  args: { conversationId: s.string(), messageId: s.string(), text: s.string({ minLength: 1, maxLength: 4000 }), as: s.enum(["task", "memory"] as const) },
-  returns: s.object({ actionId: s.string(), replyId: s.string() }),
-  capability: { name: "assistant.apply", description: "Record an approved model interpretation of a message as a task or an (unconfirmed) memory." },
-  retry: { sequenceConflicts: 3 },
-  handler: async (ctx, args) => {
-    await ops.own(ctx, conversations, args.conversationId, "conversation");
-    const source = await ops.own<any>(ctx, messages, args.messageId, "message");
-    if (source.text !== args.text) fail("FAILED_PRECONDITION", "The message changed since the model read it.");
-    const meta: ops.Meta = { via: "model", conversationId: args.conversationId, messageId: args.messageId };
-    const phrase = args.text.trim().replace(/[.!?]+$/, "");
-    const cased = phrase.charAt(0).toUpperCase() + phrase.slice(1);
-    let actionId: string;
-    let text: string;
-    if (args.as === "task") {
-      const r = await ops.createTask(ctx, { title: cased }, meta);
-      actionId = r.actionId;
-      text = `Following up on "${args.text}": the model read it as a task and you approved, so it's on your list as **${r.task.title}**.`;
-    } else {
-      const r = await ops.remember(ctx, { kind: "fact", subject: keywords(args.text).slice(0, 4).join(" "), content: cased, status: "inferred", quote: args.text }, meta);
-      actionId = r.actionId ?? fail("FAILED_PRECONDITION", "I already remember that.");
-      text = `Following up on "${args.text}": the model read it as something to remember. Saved as **unconfirmed**, since a model's reading isn't your word. Confirm it in Memory if it's right.`;
-    }
-    const replyId = await appendMessage(ctx, args.conversationId, { role: "assistant", text, interpretation: { intent: args.as === "task" ? "task.create" : "remember", source: "model" }, actionIds: [actionId] });
-    return { actionId, replyId };
+    const { today, tzOffset } = when(ctx, args);
+    return converse(ctx, original.conversationId, original.text, today, tzOffset);
   },
 });
