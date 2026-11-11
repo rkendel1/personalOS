@@ -127,7 +127,7 @@ e2e/                  real-browser acceptance: web app, extension, real models
 ```bash
 npm test            # the app on the real runtime: workflows, isolation, restarts, model turns
 npm run typecheck
-npm run measure     # what you write vs what FeltKit gives you
+npm run measure     # what the app is made of (feltkit measure); measure.json keeps it
 ```
 
 Real-browser acceptance needs Playwright (`npm i -D playwright`):
@@ -150,8 +150,8 @@ guarantees, auth, deployment). PersonalOS uses FeltKit's agent, so it runs on a 
 
 ## Design
 
-The UI is built on [stack-ui](https://github.com/rkendel1/stack-ui) (MIT), vendored in
-`vendor/stack-ui` with checksums that a test verifies. The Shell gives a sidebar on wide screens and a
+The UI is built on [stack-ui](https://github.com/rkendel1/stack-ui) (MIT), the `@stack-ui/*` packages from
+npm, pinned to one release. The Shell gives a sidebar on wide screens and a
 menu on phones and in the side panel. Light and dark follow your system or your choice.
 
 <img src="docs/screenshots/today-dark.png" width="640" alt="The Today screen in dark mode">

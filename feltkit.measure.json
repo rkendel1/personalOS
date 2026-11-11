@@ -1,0 +1,6 @@
+{
+  "report": "measure.json",
+  "acknowledged": {
+    "audit-trail:feltkit/app.ts": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
+  }
+}
