@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: What the app is made of (feltkit measure; measure.json is current)
+        run: npx feltkit measure --check
+      - name: The measured section of docs/WHAT-FELTKIT-GIVES-YOU.md matches it
+        run: npm run measure:doc -- --check
+      - name: Tests (the app on FeltKit's real runtime and an isolated database)
+        run: npm test
+      - name: Build the web app
+        run: npm run build
+      - name: Build the Chrome extension
+        run: npm run extension:build
