@@ -18,6 +18,9 @@
   },
   "dependencies": {
     "@feltdb/feltkit": "0.3.23",
+    "@stack-ui/core": "file:vendor/stack-ui/core",
+    "@stack-ui/react": "file:vendor/stack-ui/react",
+    "@stack-ui/tokens": "file:vendor/stack-ui/tokens",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

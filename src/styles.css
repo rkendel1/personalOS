@@ -25,8 +25,8 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-:root[data-theme="light"] { color-scheme: light; }
-:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-stack-theme="light"] { color-scheme: light; }
+:root[data-stack-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); }
@@ -74,41 +74,22 @@ textarea { resize: none; }
 .notice { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50; width: min(560px, calc(100% - 24px)); padding: 10px 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); }
 .notice.error { background: var(--danger-soft); color: var(--danger); }
 .notice.info { background: var(--accent-soft); color: var(--accent); }
-.theme-toggle { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 8px; }
-.theme-toggle button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; padding: 0; border-radius: 6px; background: transparent; color: var(--muted); }
-.theme-toggle button.on { background: var(--accent-soft); color: var(--accent); }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
 .live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
 .live.on .dot { background: #22c55e; }
 
 /* Layout: mobile first — content, then a bottom tab bar. */
 .shell { height: 100%; }
-.workspace { height: 100%; display: flex; flex-direction: column; }
-.rail { display: none; }
-.main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.mobile-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); border-bottom: 1px solid var(--line); background: var(--surface); }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 650; letter-spacing: -0.01em; }
-.logo { color: var(--accent); font-size: 1.2rem; }
-.tabbar { position: relative; display: flex; justify-content: space-around; border-top: 1px solid var(--line); background: var(--surface); padding-bottom: env(safe-area-inset-bottom); }
-.tab { flex: 1; background: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 6px; font-size: 0.7rem; font-weight: 550; border-radius: 0; position: relative; }
-.tab.on { color: var(--accent); }
-.more-sheet { position: absolute; bottom: calc(100% + 8px); right: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; min-width: 180px; }
-.dot-count { position: absolute; top: 4px; right: calc(50% - 22px); background: var(--danger); color: #fff; font-size: 0.65rem; min-width: 16px; height: 16px; border-radius: 8px; display: grid; place-items: center; padding: 0 4px; }
-.rail-item { background: none; color: var(--muted); display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; font-weight: 500; position: relative; text-align: left; width: 100%; }
-.rail-item:hover { background: var(--raised); color: var(--ink); }
-.rail-item.on { background: var(--accent-soft); color: var(--accent); }
-.rail-item .dot-count { position: static; margin-left: auto; }
+/* Layout: the shared stack-ui Shell (sidebar; below 768px a menu). The page fills the space
+   under the bar, and each screen scrolls inside it, so the chat composer stays in view. */
+.app-shell.stack-shell { height: 100%; min-height: 0; }
+.app-shell .stack-shell__body { min-height: 0; }
+.app-shell .stack-shell__main { padding: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* The product mark in PersonalOS's own accent (stack-ui's per-product accent hook). */
+.app-shell { --stack-product-accent: var(--accent); --stack-product-accent-fg: var(--accent-ink); }
+.app-shell .live .dot { display: inline-block; }
 .foot { display: flex; flex-direction: column; gap: 10px; }
 .foot select { width: 100%; }
-.mobile-only { display: block; }
-
-@media (min-width: 860px) {
-  .workspace { display: grid; grid-template-columns: 240px 1fr; }
-  .rail { display: flex; flex-direction: column; gap: 20px; padding: 20px 14px; border-right: 1px solid var(--line); background: var(--surface); }
-  .rail-nav { display: flex; flex-direction: column; gap: 2px; }
-  .rail-foot { margin-top: auto; }
-  .mobile-top, .tabbar, .mobile-only { display: none; }
-}
 
 /* Screens */
 .screen { flex: 1; overflow-y: auto; padding: 20px 16px 40px; width: 100%; max-width: 720px; margin: 0 auto; }

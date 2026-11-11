@@ -26,7 +26,13 @@ async function say(text) {
   }, text);
   return (await last().innerText()).trim();
 }
-const tab = (name) => page.locator(".tabbar").getByRole("button", { name, exact: true }).click();
+// The stack-ui Shell's navigation: a sidebar on wide screens, a menu behind the bar's button below 768px.
+async function navTo(page, name) {
+  const button = page.locator(".stack-shell__menu-button");
+  if ((await button.isVisible()) && (await button.getAttribute("aria-expanded")) !== "true") await button.click();
+  await page.locator(".stack-shell__nav").getByRole("link", { name: new RegExp(`^${name}\\b`) }).click();
+}
+const tab = (name) => (name === "More" ? Promise.resolve() : navTo(page, name));
 
 await page.goto(url);
 await page.getByLabel("Message").waitFor();
@@ -70,8 +76,7 @@ if (phase === "before") {
   log("approval → executed");
 
   // 9. Inspect actions.
-  await tab("More");
-  await page.locator(".more-sheet").getByRole("button", { name: "Activity" }).click();
+  await tab("Activity");
   await page.locator(".activity").first().waitFor();
   const kinds = await page.locator(".activity .kindcode").allInnerTexts();
   assert.ok(kinds.includes("reminder.create") && kinds.includes("task.delete") && kinds.includes("memory.remember"), kinds.join(","));
@@ -84,7 +89,8 @@ if (phase === "before") {
   // 2. The conversation is still there; 4. a new conversation recalls the memory.
   await page.getByLabel("Conversations").click();
   await page.locator(".thread").first().click();
-  await page.getByText("Remember that Sam Rivera is my manager").waitFor();
+  // The message itself (the chat title shows the same words).
+  await page.locator(".msg.user .bubble", { hasText: "Remember that Sam Rivera is my manager" }).waitFor();
   log("old conversation persisted across a server restart");
   await page.getByLabel("New conversation").click();
   const r = await say("who is Sam?");
@@ -95,7 +101,7 @@ if (phase === "before") {
   log("tasks persisted");
   await page.setViewportSize({ width: 1280, height: 820 });
   await tab("Chat").catch(() => {});
-  await page.locator(".rail").getByRole("button", { name: "Today" }).click();
+  await navTo(page, "Today");
   await page.screenshot({ path: `${shots}/7-desktop-dark.png` });
 }
 await browser.close();

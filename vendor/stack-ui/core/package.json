@@ -1,0 +1,40 @@
+{
+  "name": "@stack-ui/core",
+  "version": "0.7.0",
+  "description": "Stack design-system core: component structure, state semantics, framework-free DOM rendering and styles.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": "./src/index.js",
+    "./states": "./src/states.js",
+    "./view": "./src/view.js",
+    "./dom": "./src/dom.js",
+    "./core.css": "./src/core.css",
+    "./classic": "./classic/stack-ui-core.js",
+    "./classic-stateless": "./classic/stack-ui-core-stateless.js",
+    "./theme": {
+      "types": "./src/theme.d.ts",
+      "default": "./src/theme.js"
+    },
+    "./brand": "./src/brand.js",
+    "./html": "./src/html.js",
+    "./conformance": "./bin/conformance.mjs"
+  },
+  "files": [
+    "src",
+    "classic",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "stack-ui-conformance": "bin/conformance.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}

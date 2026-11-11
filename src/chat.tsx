@@ -145,7 +145,7 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
     <div className="chat">
       <div className="chat-bar">
         <button className="ghost icon-btn" onClick={() => setShowThreads((v) => !v)} aria-expanded={showThreads} aria-label="Conversations">
-          <Icon name="menu" />
+          <Icon name="threads" />
         </button>
         <div className="chat-title">{conversations.find((c) => c.id === conversationId)?.title ?? "New conversation"}</div>
         <button className="ghost icon-btn" onClick={() => (onConversation(null), setShowThreads(false), input.current?.focus())} aria-label="New conversation" title="New conversation">

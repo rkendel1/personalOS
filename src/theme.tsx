@@ -1,58 +1,36 @@
 /**
- * Light, dark, or the system's setting. The choice is kept in this browser (localStorage) and
- * applied as data-theme on <html>; every color in styles.css follows it. public/theme.js
- * applies it before first paint.
+ * Light, dark, or the system's setting: the shared stack-ui theme preference. stack-ui keeps it
+ * in this browser (localStorage `stack-ui.theme`) and applies it as `data-stack-theme` on <html>;
+ * stack-ui's tokens and every color in styles.css follow it. The Shell's theme select is the
+ * control. public/theme.js applies it before first paint.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { initThemePreference, setThemePreference, THEME_STORAGE_KEY, type ThemePreference } from "@stack-ui/core/theme";
 
-type Theme = "system" | "light" | "dark";
-const KEY = "app:theme";
+/** The key PersonalOS used before it adopted stack-ui: read once, then moved. */
+const LEGACY_KEY = "app:theme";
 
-function stored(): Theme {
+function migrate() {
   try {
-    const value = localStorage.getItem(KEY);
-    return value === "light" || value === "dark" ? value : "system";
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy && localStorage.getItem(THEME_STORAGE_KEY) === null && (legacy === "light" || legacy === "dark")) localStorage.setItem(THEME_STORAGE_KEY, legacy);
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
-    return "system";
+    // Storage is blocked (a private window): nothing to move.
   }
 }
 
-function apply(theme: Theme) {
-  if (theme === "system") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme;
-  try {
-    if (theme === "system") localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, theme);
-  } catch {
-    // Storage is blocked (a private window): the choice lasts until the page reloads.
-  }
-}
-
-const OPTIONS: Array<{ theme: Theme; label: string; icon: ReactNode }> = [
-  { theme: "system", label: "System", icon: <><rect x="3" y="4" width="14" height="10" rx="1.5" /><path d="M7.5 17h5M10 14v3" /></> },
-  { theme: "light", label: "Light", icon: <><circle cx="10" cy="10" r="3.2" /><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" /></> },
-  { theme: "dark", label: "Dark", icon: <path d="M15.5 12.2A6 6 0 0 1 7.8 4.5a6 6 0 1 0 7.7 7.7Z" /> },
-];
-
-/** The light / dark / system switch in the top bar. */
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(stored);
-  useEffect(() => apply(theme), [theme]);
+export function useThemePreference(): { preference: ThemePreference; onChange: (value: ThemePreference) => void } {
+  const [preference, setPreference] = useState<ThemePreference>(() => {
+    migrate();
+    return initThemePreference(window);
+  });
+  const onChange = useCallback((value: ThemePreference) => setPreference(setThemePreference(value, window)), []);
+  // Another tab changed it.
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => e.key === KEY && setTheme(stored());
+    const onStorage = (e: StorageEvent) => e.key === THEME_STORAGE_KEY && setPreference(initThemePreference(window));
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
-  return (
-    <div className="theme-toggle" role="radiogroup" aria-label="Theme">
-      {OPTIONS.map((o) => (
-        <button key={o.theme} type="button" role="radio" aria-checked={theme === o.theme} className={theme === o.theme ? "on" : ""} onClick={() => setTheme(o.theme)} title={`${o.label} theme`}>
-          <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {o.icon}
-          </svg>
-          <span className="sr-only">{o.label}</span>
-        </button>
-      ))}
-    </div>
-  );
+  return { preference, onChange };
 }
