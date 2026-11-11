@@ -6,7 +6,7 @@ export const get = app.query({
   access: "settings.read",
   handler: async (ctx) => {
     const row = (await ctx.db.find(settings, { owner: me(ctx) }))[0];
-    return { name: row?.name ?? null, modelAssist: row?.modelAssist ?? false, checkinTime: row?.checkinTime ?? null, checkinAt: row?.checkinAt ?? null, canUseModel: ctx.auth.has("feltkit.agent.write") };
+    return { name: row?.name ?? null, modelAssist: row?.modelAssist ?? true, checkinTime: row?.checkinTime ?? null, checkinAt: row?.checkinAt ?? null, canUseModel: ctx.auth.has("feltkit.agent.write") };
   },
 });
 
@@ -18,6 +18,6 @@ export const set = app.mutation({
     const row = (await ctx.db.find(settings, { owner }))[0];
     const change = { ...(name !== undefined ? { name: name?.trim() || undefined } : {}), ...(modelAssist !== undefined ? { modelAssist } : {}), updatedAt: Date.now() };
     if (row) await ctx.db.patch(settings, row.id, change);
-    else await ctx.db.insert(settings, { owner, modelAssist: false, ...change });
+    else await ctx.db.insert(settings, { owner, modelAssist: true, ...change });
   },
 });

@@ -1,6 +1,6 @@
 /** Today, Tasks, Memory, Projects, Activity and Settings: each a live view of durable state. */
-import { useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "@feltdb/feltkit/react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useFeltKit, useMutation, useQuery } from "@feltdb/feltkit/react";
 import { api } from "../feltkit/_generated/api";
 import { ago, clientDay, dayLabel, Evidence, Icon, localToday, StatusBadge, timeLabel, type Action } from "./ui";
 
@@ -424,27 +424,51 @@ export function Settings({ onError, dashboard, principal, onSignOut }: Err & { d
       </section>
       <section>
         <h2>Model</h2>
+        <ModelStatus />
         <label className="toggle">
           <input type="checkbox" checked={s.modelAssist} disabled={!s.canUseModel} onChange={(e) => void set({ modelAssist: e.target.checked }).catch(onError)} />
           <span>
-            <strong>Ask the model about messages I can't interpret</strong>
+            <strong>Converse with the model</strong>
             <br />
             <span className="muted small">
-              The model only picks between a few readings I offer (a task, something to remember, or nothing). Its pick is a proposal; nothing changes until you approve it in Studio → Agent. Facts it suggests are stored as unconfirmed.
+              The model writes the replies and can use your tasks, memory and briefing as tools. Anything that would change something is only proposed: it waits for your approval, here in the chat. Off: the built-in assistant (tasks, reminders, memory, briefing) without a model.
             </span>
           </span>
         </label>
         <p className="muted small">
-          Which model is used is the environment's setting, not the app's: {dashboard ? <a href={dashboard} target="_blank" rel="noreferrer">Studio → Models</a> : "Studio → Models"} in development, a Resolver reference (<code>ref://prod/personalos/model</code>) in production. Changing it never touches your conversations, memory or tasks.
+          Which model is used is the environment's setting, not the app's: {dashboard ? <a href={dashboard} target="_blank" rel="noreferrer">Studio → Models</a> : "Studio → Models"}, or a Resolver reference (<code>ref://prod/personalos/model</code> in production), changeable without a restart. Changing it never touches your conversations, memory or tasks.
         </p>
       </section>
       <section>
         <h2>What I can't do yet</h2>
         <ul className="muted small">
-          <li>Open-ended conversation: the platform exposes model decisions to apps, not text generation.</li>
           <li>Email, calendar or messaging: no integration is configured, so I won't pretend to send or schedule anything.</li>
         </ul>
       </section>
     </div>
+  );
+}
+
+function ModelStatus() {
+  const client = useFeltKit();
+  const [status, setStatus] = useState<{ ready: boolean; provider: string | null; model: string | null; source: string; reference: { ref: string; revision: number | null } | null; problems: Array<{ message: string }> } | null>(null);
+  useEffect(() => {
+    let live = true;
+    client.action(api.turn.modelStatus, {}).then((s) => live && setStatus(s as never), () => live && setStatus(null));
+    return () => {
+      live = false;
+    };
+  }, [client]);
+  if (!status) return <p className="muted small">Checking the model…</p>;
+  return (
+    <p className="small" data-testid="model-status">
+      {status.ready ? (
+        <>
+          <strong>{status.provider}/{status.model}</strong> <span className="muted">via {status.source}{status.reference ? ` (${status.reference.ref} r${status.reference.revision})` : ""}</span>
+        </>
+      ) : (
+        <span className="muted">No model is ready: {status.problems[0]?.message ?? "not configured"}. The built-in assistant is answering.</span>
+      )}
+    </p>
   );
 }

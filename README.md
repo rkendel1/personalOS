@@ -1,15 +1,26 @@
 # PersonalOS
 
-A personal assistant built on [FeltKit](https://www.npmjs.com/package/@feltdb/feltkit). You talk to it, and it keeps track of your tasks, reminders, and the things you tell it. It briefs you on your day and shows its work: every change it makes is recorded with the record that proves it, and anything destructive waits for your approval.
+A personal assistant built on [FeltKit](https://www.npmjs.com/package/@feltdb/feltkit). Talk to it the way you would to a person. It answers in its own words, streamed, and it keeps track of your tasks, reminders and the things you tell it. It works through the same capabilities you use, and it never changes anything without your approval. Every reply, proposal, approval and execution is recorded with the evidence behind it.
 
 > The assistant is intelligent, but the system is dependable. The model is not the product. The memory, conversations, tasks, permissions and evidence are, and they survive a model change.
 
 <p>
-<img src="docs/screenshots/1-empty.png" width="200" alt="Empty chat with example prompts">
-<img src="docs/screenshots/2-chat.png" width="200" alt="Chat: a task created with evidence, and an inferred memory awaiting confirmation">
-<img src="docs/screenshots/4-today.png" width="200" alt="Today: focus, coming up, needs you">
-<img src="docs/screenshots/9-activity-dark.png" width="200" alt="Activity log in dark mode">
+<img src="docs/screenshots/m1-proposed.png" width="420" alt="A streamed reply that proposes a reminder, awaiting approval">
+<img src="docs/screenshots/m1-after-restart.png" width="420" alt="After approval and a server restart: the reminder created, with its receipt">
 </p>
+
+## How a turn works (FeltKit M1)
+
+`feltkit/turn.ts`, one `app.action` per message:
+
+1. **Record the message.** It is idempotent by the client's message id, so a retried send is the same turn.
+2. **Open the turn's agent task.** It is keyed by the message, and it is where all of the turn's evidence lives.
+3. **Generate.** `ctx.model.generate` streams to the UI as the model writes. The model comes from the environment (Studio → Models, or a Resolver reference), never from the app. The model sees the conversation, open tasks and confirmed memories. Its tools are PersonalOS capabilities: `tasks.create/update/complete/list`, `memory.add/list`, `briefing.today`, `projects.list`.
+4. **Tool calls are proposals.** Reading tools run immediately, and their results go back to the model, which is how it can actually tell you what to prioritize. Changing tools wait for your approval in the chat. The app, not the model, fills in your time zone offset and today's date.
+5. **Approval runs it.** The action runs server-side through AppPort as you, exactly once. The card shows who proposed it (the model), who approved it, and the receipt.
+6. **The reply is recorded** with its task, generation records and proposals. A provider failure still ends with a reply that says what happened.
+
+**With the model off** (Settings) or none configured, the same turn runs the deterministic assistant (`feltkit/assistant.ts`): the built-in interpreter for tasks, reminders, memory and the briefing.
 
 ## Run it
 
@@ -30,7 +41,7 @@ In development you're signed in as Ada (owner + admin). Grace is a second owner,
 | Your day | "What should I focus on?", "what am I forgetting?", "help me plan my week"; the Today tab; an optional daily check-in posted to its own thread by a scheduled job | `feltkit/_briefing.ts`, `feltkit/checkins.ts` |
 | Projects | Create projects, attach tasks, ask "status of …" (open/done tasks and related memories) | `feltkit/projects.ts` |
 | Activity | Every change made or proposed: what, how (chat, UI, job, model), status, and the record it was verified against. Approve or reject proposals here or inline in chat | `feltkit/actions.ts` |
-| Model | Optional. When on, a message the rules can't interpret goes to the environment's model, which picks among readings the app offers. Its pick is a proposal you approve; facts it suggests stay unconfirmed. Switch models in Studio → Models, `feltkit model set`, or a Resolver reference in production, with no redeploy | `assistant.ts` (`unknown`), `apply` |
+| Model | On by default when a model is configured: replies are written by the model, streamed, cancellable (Stop). Switch models in Studio → Models, `feltkit model set`, or a Resolver reference (`ref://prod/personalos/model`; in development `PERSONALOS_MODEL_REF`), with no restart. Settings shows which model is in use | `turn.ts`, `turnstate.ts` |
 
 ## How it works
 
@@ -49,14 +60,17 @@ Effects outside the transaction (reminder jobs, notifications, the model decisio
 
 ## What it deliberately doesn't do
 
-- **Open-ended chat or model-written replies.** FeltKit 0.3.22 gives apps model *decisions*, not text generation (see [platform gaps](docs/PLATFORM-GAPS.md), G1). Rather than call a provider around the platform's credential custody and receipts, the assistant replies deterministically and says when it can't help.
 - **Email, calendar, messaging, files, web research.** No integration is configured, so none is offered. The assistant never says it sent or scheduled anything outside this app. These are P2; FeltKit's `app.integration` is the path when they're built.
 - **Semantic memory search.** Recall is keyword-based (gap G4).
+
+## Requirements
+
+Until FeltKit's M1 release is published, this branch depends on a sibling checkout: `"@feltdb/feltkit": "file:../feltkit/packages/sdk"` (rkendel1/feltkit, branch `claude/m1-agent-foundation`, built with `npm run build` in `packages/sdk`). Switch it back to the published version once it exists.
 
 ## Tests
 
 ```bash
-npm test             # 20 tests: interpreter + workflows on the real runtime and an isolated FeltDB instance
+npm test             # 25 tests: interpreter, workflows, and model turns on the real runtime and an isolated FeltDB instance
 npm run typecheck
 ```
 
@@ -71,6 +85,23 @@ NODE_PATH=$(npm root -g) node e2e/ui.mjs http://localhost:3000 before .   # chat
 NODE_PATH=$(npm root -g) node e2e/ui.mjs http://localhost:3000 after .    # same state after a process restart
 NODE_PATH=$(npm root -g) node e2e/model.mjs http://localhost:3000         # switch models live with `feltkit model set`
 ```
+
+M1 acceptance against the running app, in a real browser, with a real model, and Resolver as its own process:
+
+```bash
+NODE_PATH=$(npm root -g) AI_GATEWAY_API_KEY=… node e2e/acceptance.mjs <screenshot-dir>
+```
+
+It covers:
+- the conversation streaming, with its reminder proposed (approval required) and the priorities named;
+- approval in the app, with an execution receipt;
+- Stop;
+- a Resolver retarget (A → B) with no restart;
+- a process restart;
+- isolation between two people;
+- the model switched off.
+
+`tests/real-provider.test.ts` runs the same conversation against the real model without a browser. Both use OpenAI's model through Vercel AI Gateway (`AI_GATEWAY_API_KEY`), or OpenAI directly (`OPENAI_API_KEY`).
 
 The e2e scripts need Playwright (`npm i -D playwright`, or a global install via `NODE_PATH`).
 
