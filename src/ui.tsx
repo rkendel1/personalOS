@@ -98,6 +98,8 @@ const paths: Record<string, ReactNode> = {
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  // The conversation list (distinct from the app's navigation menu): speech bubbles.
+  threads: <path d="M4 5h11v8H8l-4 3V5ZM9 16v1h7l4 3V9h-3" />,
   trash: <path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13" />,
 };
 export function Icon({ name, size = 20 }: { name: keyof typeof paths | string; size?: number }) {

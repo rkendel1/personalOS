@@ -156,7 +156,13 @@ async function probe() {
   await web.close();
   return seen;
 }
-const tab = (page, name) => page.locator(".tabbar").getByRole("button", { name, exact: true }).click();
+// The stack-ui Shell's navigation: a sidebar on wide screens, a menu behind the bar's button below 768px.
+async function navTo(page, name) {
+  const button = page.locator(".stack-shell__menu-button");
+  if ((await button.isVisible()) && (await button.getAttribute("aria-expanded")) !== "true") await button.click();
+  await page.locator(".stack-shell__nav").getByRole("link", { name: new RegExp(`^${name}\\b`) }).click();
+}
+const tab = (page, name) => navTo(page, name);
 async function say(page, text) {
   await page.getByLabel("Message").fill(text);
   await page.getByLabel("Send").click();
@@ -171,8 +177,7 @@ async function say(page, text) {
   return (await bubble.innerText()).trim();
 }
 async function setModel(page, on) {
-  await tab(page, "More");
-  await page.locator(".more-sheet").getByRole("button", { name: "Settings" }).click();
+  await tab(page, "Settings");
   const toggle = page.getByLabel(/Converse with the model/);
   await toggle.waitFor();
   if ((await toggle.isChecked()) !== on) await toggle.click();
@@ -180,8 +185,7 @@ async function setModel(page, on) {
   await tab(page, "Chat");
 }
 async function switchUser(page, id) {
-  await tab(page, "More");
-  await page.locator(".more-sheet").getByRole("button", { name: "Settings" }).click();
+  await tab(page, "Settings");
   const select = page.locator("select").filter({ has: page.locator(`option[value="${id}"]`) }).last();
   await select.selectOption(id);
   await until(async () => (await select.inputValue()) === id, `signed in as ${id}`);
@@ -205,15 +209,21 @@ try {
     return "token stored as fks_… in chrome.storage.local (locked to trusted contexts)";
   });
 
-  await scenario("rendering: the same App at side-panel width (bottom tab bar, More sheet)", async () => {
-    await page.locator(".tabbar").waitFor();
-    assert.equal(await page.locator(".rail").isVisible().catch(() => false), false, "no desktop rail at 400px");
+  await scenario("rendering: the same App at side-panel width (stack-ui Shell, navigation menu)", async () => {
+    // stack-ui Shell in menu mode: the panel is narrower than 768px.
+    const button = page.getByRole("button", { name: "Menu" });
+    assert.equal(await button.getAttribute("aria-expanded"), "false");
+    assert.equal(await page.locator(".stack-shell__nav").isVisible(), false, "navigation behind the menu");
     await page.screenshot({ path: `${shots}/02-panel-chat.png` });
-    await tab(page, "More");
-    await page.locator(".more-sheet").waitFor();
-    await page.screenshot({ path: `${shots}/03-panel-more.png` });
-    await tab(page, "More");
-    return "tabbar + More sheet";
+    await button.click();
+    const links = await page.locator(".stack-shell__nav a").allInnerTexts();
+    assert.deepEqual(links.map((l) => l.split(" (")[0]), ["Chat", "Today", "Tasks", "Memory", "Projects", "Files", "Activity", "Settings"]);
+    await page.screenshot({ path: `${shots}/03-panel-menu.png` });
+    await page.keyboard.press("Escape");
+    assert.equal(await button.getAttribute("aria-expanded"), "false");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert.ok(overflow <= 0, `no sideways scroll (${overflow})`);
+    return "stack-ui Shell, menu mode: 8 destinations behind the menu button; Escape closes";
   });
 
   await scenario("capabilities: chat creates a task through the app's functions; the Tasks tab shows it", async () => {
