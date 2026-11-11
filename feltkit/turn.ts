@@ -141,7 +141,7 @@ export const turn = app.action({
           }
           const input = normalize(call.name, call.input, clock);
           try {
-            const p = await ctx.agent.propose(taskId, { capability: call.name, input, reason: text.slice(0, 500), idempotencyKey: call.id, model: { provider: g.receipt.provider, model: g.receipt.model, generation: { memoryId: g.memoryId, toolCallId: call.id } } });
+            const p = await ctx.agent.propose(taskId, { capability: call.name, input, reason: text.slice(0, 500), idempotencyKey: call.id, model: { provider: g.receipt.provider, model: g.receipt.model, generation: { generationId: g.generationId, memoryId: g.memoryId, toolCallId: call.id } } });
             proposals.push({ taskId, actionId: p.actionId, capability: p.capability, effect: p.effect, state: p.state, input });
             results.push({
               call,
