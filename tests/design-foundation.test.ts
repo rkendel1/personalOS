@@ -1,25 +1,25 @@
 /**
- * The vendored stack-ui packages are an unmodified release: every file matches vendor/stack-ui/SHA256SUMS,
- * which is the release's own manifest (stack-ui releases/<version>/packages.SHA256SUMS), and the three
- * packages carry one version.
+ * stack-ui is the published release: @stack-ui/core, react and tokens from npm, pinned to one exact version,
+ * resolved from the registry with an integrity hash that npm checks on every install.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const VENDOR = join(import.meta.dirname, "..", "vendor", "stack-ui");
+const root = join(import.meta.dirname, "..");
 
-test("vendored stack-ui matches its checksums and is one release", () => {
-  const lines = readFileSync(join(VENDOR, "SHA256SUMS"), "utf8").trim().split("\n");
-  assert.ok(lines.length > 0);
-  for (const line of lines) {
-    const [digest, file] = line.split(/\s+/);
-    const actual = createHash("sha256").update(readFileSync(join(VENDOR, file!))).digest("hex");
-    assert.equal(actual, digest, `${file} was modified`);
-  }
-  const versions = ["tokens", "core", "react"].map((p) => JSON.parse(readFileSync(join(VENDOR, p, "package.json"), "utf8")).version);
+test("stack-ui is one published release, pinned, from the registry", () => {
+  const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
+  const versions = ["tokens", "core", "react"].map((name) => {
+    const pinned = manifest.dependencies[`@stack-ui/${name}`];
+    assert.match(pinned, /^\d+\.\d+\.\d+$/, `@stack-ui/${name} is pinned to an exact version`);
+    const entry = lock.packages[`node_modules/@stack-ui/${name}`];
+    assert.equal(entry?.version, pinned, `the lockfile resolves @stack-ui/${name} to ${pinned}`);
+    assert.match(String(entry?.resolved), /^https:\/\/registry\.npmjs\.org\//, "from the registry, not a local copy");
+    assert.match(String(entry?.integrity), /^sha512-/, "with an integrity hash npm checks on install");
+    return pinned;
+  });
   assert.equal(new Set(versions).size, 1, `one release: ${versions.join(", ")}`);
-  assert.equal(versions[0], "0.8.0");
 });
