@@ -34,11 +34,12 @@ export interface ProjectLike {
 }
 
 const PRIORITY = { high: 0, normal: 1, low: 2 } as const;
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Most important first: overdue, then today, then by priority, then oldest. */
-export function rank(tasks: TaskLike[], today: Day): TaskLike[] {
+export function rank<T extends TaskLike>(tasks: T[], today: Day): T[] {
   const urgency = (t: TaskLike) => (t.due ? Math.min(daysBetween(today, t.due), 8) : 9);
-  return [...tasks].sort((a, b) => urgency(a) - urgency(b) || PRIORITY[a.priority] - PRIORITY[b.priority] || (a.remindTime ?? "99").localeCompare(b.remindTime ?? "99") || a.createdAt - b.createdAt);
+  return [...tasks].sort((a, b) => urgency(a) - urgency(b) || PRIORITY[a.priority] - PRIORITY[b.priority] || cmp(a.remindTime ?? "99", b.remindTime ?? "99") || a.createdAt - b.createdAt);
 }
 
 /** The next date a "date" memory falls on, treating birthdays and anniversaries as yearly. */
@@ -53,20 +54,20 @@ export function nextDate(memory: MemoryLike, today: Day): Day | null {
   return null;
 }
 
-export interface Briefing {
+export interface Briefing<T extends TaskLike = TaskLike, M extends MemoryLike = MemoryLike, P extends ProjectLike = ProjectLike> {
   date: Day;
-  focus: TaskLike[];
-  overdue: TaskLike[];
-  dueToday: TaskLike[];
-  upcoming: TaskLike[];
+  focus: T[];
+  overdue: T[];
+  dueToday: T[];
+  upcoming: T[];
   undated: number;
-  dates: Array<{ memory: MemoryLike; on: Day; inDays: number }>;
-  projects: Array<{ project: ProjectLike; open: number; next: TaskLike | null }>;
+  dates: Array<{ memory: M; on: Day; inDays: number }>;
+  projects: Array<{ project: P; open: number; next: T | null }>;
   attention: { inferredMemories: number; pendingApprovals: number; failedActions: number };
   completedYesterday: number;
 }
 
-export function briefing(input: { today: Day; tasks: TaskLike[]; memories: MemoryLike[]; projects: ProjectLike[]; pendingApprovals: number; failedActions: number; now: number }): Briefing {
+export function briefing<T extends TaskLike, M extends MemoryLike, P extends ProjectLike>(input: { today: Day; tasks: T[]; memories: M[]; projects: P[]; pendingApprovals: number; failedActions: number; now: number }): Briefing<T, M, P> {
   const { today } = input;
   const open = input.tasks.filter((t) => t.status === "open");
   const overdue = rank(open.filter((t) => t.due && daysBetween(today, t.due) < 0), today);
@@ -77,7 +78,7 @@ export function briefing(input: { today: Day; tasks: TaskLike[]; memories: Memor
   const dates = input.memories
     .filter((m) => m.kind === "date" && m.status === "confirmed")
     .map((memory) => ({ memory, on: nextDate(memory, today) }))
-    .filter((d): d is { memory: MemoryLike; on: Day } => !!d.on && daysBetween(today, d.on) >= 0 && daysBetween(today, d.on) <= 14)
+    .filter((d): d is { memory: M; on: Day } => !!d.on && daysBetween(today, d.on) >= 0 && daysBetween(today, d.on) <= 14)
     .map((d) => ({ ...d, inDays: daysBetween(today, d.on) }))
     .sort((a, b) => a.inDays - b.inDays);
   const projects = input.projects

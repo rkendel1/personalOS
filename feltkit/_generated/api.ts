@@ -5,6 +5,7 @@ import type * as actions_module from "../actions.js";
 import type * as app_module from "../app.js";
 import type * as assistant_module from "../assistant.js";
 import type * as briefing_module from "../briefing.js";
+import type * as checkins_module from "../checkins.js";
 import type * as conversations_module from "../conversations.js";
 import type * as inbox_module from "../inbox.js";
 import type * as memory_module from "../memory.js";
@@ -14,4 +15,4 @@ import type * as settings_module from "../settings.js";
 import type * as tasks_module from "../tasks.js";
 
 /** Typed references to every query and mutation. Type-only imports: no backend code reaches the browser. */
-export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "conversations": typeof conversations_module; "inbox": typeof inbox_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "settings": typeof settings_module; "tasks": typeof tasks_module }>();
+export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "conversations": typeof conversations_module; "inbox": typeof inbox_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "settings": typeof settings_module; "tasks": typeof tasks_module }>();

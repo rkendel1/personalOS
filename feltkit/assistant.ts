@@ -109,11 +109,12 @@ export function briefingText(b: ReturnType<typeof briefing>, today: Day, name?: 
   const lines: string[] = [];
   const open = b.overdue.length + b.dueToday.length;
   const hello = name ? `${name}, ` : "";
-  if (!open && !b.upcoming.length && !b.dates.length && !b.undated) return `${hello}your slate is clean. Nothing due, nothing overdue. Tell me what's on your mind and I'll keep track of it.`;
+  const cap = (t: string) => (name ? t : t.charAt(0).toUpperCase() + t.slice(1));
+  if (!open && !b.upcoming.length && !b.dates.length && !b.undated) return cap(`${hello}your slate is clean. Nothing due, nothing overdue. Tell me what's on your mind and I'll keep track of it.`);
   if (b.focus.length) {
-    lines.push(`${hello}here's where I'd put your energy today:`);
+    lines.push(cap(`${hello}here's where I'd put your energy today:`));
     b.focus.forEach((t, i) => lines.push(`${i + 1}. ${t.title}${t.due && t.due < today ? ` (overdue since ${describeDay(t.due, today)})` : t.remindTime ? ` (${describeTime(t.remindTime)})` : ""}`));
-  } else lines.push(`${hello}nothing is due today. A rare open day.`);
+  } else lines.push(cap(`${hello}nothing is due today. A rare open day.`));
   if (b.overdue.length > 1) lines.push(`\n**${b.overdue.length} overdue.** Worth clearing or moving. Overdue lists only get heavier.`);
   else if (b.overdue.length === 1 && !b.focus.includes(b.overdue[0]!)) lines.push(`\n**Overdue:** ${b.overdue[0]!.title}`);
   if (b.upcoming.length) lines.push(`\n**Coming up:** ${b.upcoming.slice(0, 4).map((t) => `${t.title} (${describeDay(t.due!, today)})`).join(", ")}${b.upcoming.length > 4 ? `, +${b.upcoming.length - 4} more` : ""}`);

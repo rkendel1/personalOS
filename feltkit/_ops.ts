@@ -13,6 +13,8 @@ import type { MemoryKind } from "./_interpret.js";
 export type Via = "chat" | "ui" | "model" | "job";
 export interface Meta {
   via: Via;
+  /** Set when an approved proposal is being carried out: that proposal is the log row, not a new one. */
+  proposalId?: string;
   conversationId?: string;
   messageId?: string;
 }
@@ -36,6 +38,7 @@ export async function record(
   meta: Meta,
 ): Promise<string> {
   const owner = me(ctx);
+  if (meta.proposalId) return meta.proposalId;
   return ctx.db.insert(actions, {
     owner,
     seq: await ctx.db.sequence(`actions:${owner}`),

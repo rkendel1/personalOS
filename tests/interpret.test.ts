@@ -36,6 +36,7 @@ test("tasks, reminders and their missing pieces", () => {
   assert.deepEqual(r.missing, ["when"], "a reminder without a time asks when");
   const t = interpret("add buy milk to my list", TODAY);
   assert.deepEqual(t.intent, { kind: "task.create", title: "Buy milk", reminder: false, priority: "normal" });
+  assert.equal((interpret("add renew passport to my list, it's urgent", TODAY).intent as any).title, "Renew passport");
   const u = interpret("I need to file taxes by friday, it's urgent", TODAY).intent as any;
   assert.deepEqual([u.title, u.due, u.priority], ["File taxes", "2026-11-13", "high"]);
   const rec = interpret("remind me to water the plants every monday at 8am", TODAY).intent as any;

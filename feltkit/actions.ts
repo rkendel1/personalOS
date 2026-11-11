@@ -21,7 +21,7 @@ export const approve = app.mutation({
   handler: async (ctx, { id }) => {
     const proposal = await ops.own<any>(ctx, actions, id, "action");
     if (proposal.status !== "proposed") fail("FAILED_PRECONDITION", `This action is already ${proposal.status}.`);
-    const meta = { via: proposal.via, ...(proposal.conversationId ? { conversationId: proposal.conversationId } : {}), ...(proposal.messageId ? { messageId: proposal.messageId } : {}) } as ops.Meta;
+    const meta = { via: proposal.via, ...(proposal.conversationId ? { conversationId: proposal.conversationId } : {}), ...(proposal.messageId ? { messageId: proposal.messageId } : {}), proposalId: id } as ops.Meta;
     try {
       const result = await ops.execute(ctx, proposal.kind, proposal.input, meta);
       await ctx.db.patch(actions, id, { status: "succeeded", decidedAt: Date.now(), ...(result.evidence ? { evidence: result.evidence } : {}) });

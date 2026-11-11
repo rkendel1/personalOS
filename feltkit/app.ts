@@ -43,9 +43,9 @@ export const app = feltkit({
   // without a redeploy (docs/RESOLVER.md in @feltdb/feltkit). Development uses Studio → Models.
   agent: { model: { production: "ref://prod/personalos/model" } },
   services: {
-    notifications: { types: ["reminder.due"] },
+    notifications: { types: ["reminder.due", "checkin.daily"] },
     configuration: true,
-    jobs: { handlers: { "reminder.fire": "reminders:fire" } },
+    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire" } },
     intelligence: true,
   },
 });
@@ -186,6 +186,11 @@ export const settings = app.collection(
     name: s.optional(s.string({ maxLength: 80 })),
     /** Send messages the rules cannot interpret to the environment's model as a proposal. */
     modelAssist: s.boolean(),
+    /** Daily check-in: local time (HH:MM), the client's UTC offset, the instant the next one is due, and its thread. */
+    checkinTime: s.optional(s.string()),
+    tzOffset: s.optional(s.number()),
+    checkinAt: s.optional(s.number()),
+    checkinConversationId: s.optional(s.string()),
     updatedAt: s.number(),
   },
   { unique: [{ fields: ["owner"] }] },

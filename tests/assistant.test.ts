@@ -135,7 +135,7 @@ test("DoD 7-8: what needs attention today, from durable state", async () => {
     await t.as("ada").mutation(api.tasks.create, { title: "Book flights", due: "2026-11-14" });
     await say(t, "remember that Alex's birthday is November 15");
     const b = await t.as("ada").query(api.briefing.today, { today: TODAY });
-    assert.deepEqual(b.focus.map((x) => x.title), ["Renew passport", "Pay rent"]);
+    assert.deepEqual(b.focus.map((x: { title: string }) => x.title), ["Renew passport", "Pay rent"]);
     assert.deepEqual([b.overdue.length, b.dueToday.length, b.upcoming.length, b.dates.length], [1, 1, 1, 1]);
     const { conversationId } = await say(t, "What needs my attention today?");
     const text = (await reply(t, conversationId)).text;
@@ -165,7 +165,8 @@ test("DoD 9: destructive requests are proposed, wait for approval, and the log s
     assert.deepEqual(await t.as("ada").query(api.tasks.list, {}), []);
     assert.match((await reply(t, conversationId)).text, /Approved and done: Deleted task: Dentist appointment/);
     const log = await t.as("ada").query(api.actions.list, {});
-    assert.deepEqual(log.map((a) => [a.kind, a.status]), [["task.delete", "succeeded"], ["task.delete", "succeeded"], ["task.create", "succeeded"]]);
+    assert.deepEqual(log.map((a) => [a.kind, a.status, a.approval]), [["task.delete", "succeeded", "required"], ["task.create", "succeeded", "none"]], "the approved proposal is the one log row");
+    assert.deepEqual([log[0]!.evidence?.collection, log[0]!.evidence?.verified], ["tasks", true]);
     await assert.rejects(t.as("ada").mutation(api.actions.approve, { id: proposal!.id }), { code: "FAILED_PRECONDITION" });
   } finally {
     await t.close();
@@ -221,6 +222,35 @@ test("an unknown message is answered honestly when no model is enabled, and noth
     assert.match((await reply(t, conversationId)).text, /didn't catch an action|Not sure what to do/);
     assert.deepEqual(await t.as("ada").query(api.actions.list, {}), []);
     assert.deepEqual(await t.as("ada").query(api.memory.list), []);
+  } finally {
+    await t.close();
+  }
+});
+
+test("scheduled check-in: a real job posts the briefing into its own thread, notifies, and re-arms for tomorrow", async () => {
+  const t = await createTestApp();
+  try {
+    const ada = t.as("ada");
+    await ada.mutation(api.tasks.create, { title: "Ship the release", due: "2020-01-01", priority: "high" }); // overdue on any day
+    const { checkinAt } = await ada.mutation(api.checkins.configure, { time: "07:30", tzOffset: TZ });
+    assert.ok(checkinAt! > Date.now() && checkinAt! - Date.now() <= 86_400_000);
+    await t.runtime.runServices();
+    const jobs = (t.runtime.services as any).jobs;
+    const job = (await jobs.listJobs("personalos")).find((j: any) => j.type === "checkin.fire");
+    assert.deepEqual([job.status, job.runAt, job.principal.principalId], ["scheduled", new Date(checkinAt!).toISOString(), "ada"]);
+    assert.equal(await jobs.executeJob("personalos", job.id, "test-worker"), true);
+    await t.runtime.runServices();
+
+    const [conversation] = await ada.query(api.conversations.list);
+    assert.equal(conversation!.title, "Daily check-in");
+    const [msg] = await ada.query(api.conversations.messagesOf, { conversationId: conversation!.id });
+    assert.match(msg!.text, /Ship the release \(overdue since/);
+    assert.deepEqual((await ada.query(api.inbox.list, {})).map((n) => n.type), ["checkin.daily"]);
+    const next = (await jobs.listJobs("personalos")).filter((j: any) => j.type === "checkin.fire" && j.status === "scheduled");
+    assert.deepEqual(next.map((j: any) => j.runAt), [new Date(checkinAt! + 86_400_000).toISOString()], "tomorrow's is queued");
+    // Turning it off makes the queued run a no-op.
+    await ada.mutation(api.checkins.configure, { time: null, tzOffset: TZ });
+    assert.deepEqual(await ada.mutation(api.checkins.fire, { checkinAt: checkinAt! + 86_400_000 }), { sent: false });
   } finally {
     await t.close();
   }

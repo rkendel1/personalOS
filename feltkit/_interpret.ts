@@ -179,12 +179,10 @@ export function interpret(input: string, today: Day): Interpretation {
     const when = parseWhen(text, today);
     let title = text.slice(create.index + create[0].length);
     if (reminder) title = title.replace(/^(?:me\s+)?(?:about|that i need to|that i have to|to)\s+/i, "").replace(/^(?:on|at|in)\b[^,]*?\bto\s+/i, "");
-    title = stripSpans(title, when.spans)
+    title = stripSpans(title.replace(PRIORITY_HIGH, " ").replace(PRIORITY_LOW, " "), when.spans)
+      .replace(/[,;]?\s*(?:it's|it is|this is|that's|which is)\s*$/i, "")
       .replace(/\s*(?:to|on|in) my (?:list|to-?do list|tasks)$/i, "")
-      .replace(PRIORITY_HIGH, "")
-      .replace(PRIORITY_LOW, "")
-      .replace(/^(?:to|that)\s+/i, "")
-      .replace(/[,;]?\s*(?:it's|it is|this is|that's|which is)\s*$/i, "");
+      .replace(/^(?:to|that)\s+/i, "");
     title = sentence(title.replace(/\bmy\b/g, "my"));
     const priority = PRIORITY_HIGH.test(text) ? "high" : PRIORITY_LOW.test(text) ? "low" : "normal";
     const intent: Intent = {

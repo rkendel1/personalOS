@@ -1,6 +1,6 @@
 import { fail, s } from "@feltdb/feltkit";
 import { actions, app, memories, projects, settings, tasks } from "./app.js";
-import { briefing, type TaskLike } from "./_briefing.js";
+import { briefing } from "./_briefing.js";
 import { isDay } from "./_dates.js";
 import { me } from "./_ops.js";
 
@@ -36,6 +36,6 @@ export const today = app.query({
       ctx.db.count(actions, { owner, status: "failed" }),
       ctx.db.find(settings, { owner }),
     ]);
-    return { name: pref[0]?.name ?? null, ...(briefing({ today, tasks: ts as unknown as TaskLike[], memories: ms as any, projects: ps as any, pendingApprovals: proposed, failedActions: failed, now: Date.now() }) as any) };
+    return { name: pref[0]?.name ?? null, ...briefing({ today, tasks: ts, memories: ms, projects: ps, pendingApprovals: proposed, failedActions: failed, now: Date.now() }) };
   },
 });
