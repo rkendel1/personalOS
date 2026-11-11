@@ -1,9 +1,9 @@
 {
   "name": "@stack-ui/tokens",
-  "version": "0.7.0",
+  "version": "0.8.1",
   "description": "Boundry design-foundation tokens (Stack UI) as CSS custom properties (light and dark, or light only), JSON, company and product identity, and the Boundry mark.",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "sideEffects": [
     "*.css"
   ],

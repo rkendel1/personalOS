@@ -21,5 +21,5 @@ test("vendored stack-ui matches its checksums and is one release", () => {
   }
   const versions = ["tokens", "core", "react"].map((p) => JSON.parse(readFileSync(join(VENDOR, p, "package.json"), "utf8")).version);
   assert.equal(new Set(versions).size, 1, `one release: ${versions.join(", ")}`);
-  assert.equal(versions[0], "0.8.0");
+  assert.equal(versions[0], "0.8.1");
 });

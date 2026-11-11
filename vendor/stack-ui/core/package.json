@@ -1,9 +1,9 @@
 {
   "name": "@stack-ui/core",
-  "version": "0.7.0",
+  "version": "0.8.1",
   "description": "Stack design-system core: component structure, state semantics, framework-free DOM rendering and styles.",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "sideEffects": [
     "*.css"
   ],

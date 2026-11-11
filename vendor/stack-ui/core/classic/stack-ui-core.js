@@ -1,4 +1,4 @@
-/*! @stack-ui/core 0.7.0 — classic build. Exposes window.StackUI. */
+/*! @stack-ui/core 0.8.1 — classic build. Exposes window.StackUI. */
 'use strict';
 (function (global) {
 'use strict';
@@ -1754,5 +1754,5 @@ function setThemePreference(preference, scope, root) {
 /// system theme.
 const THEME_INIT_SCRIPT = `(function(){try{var v=window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(v==="light"||v==="dark")document.documentElement.setAttribute("data-stack-theme",v);}catch(e){}})();`;
 
-global.StackUI = Object.freeze({ version: "0.7.0", TONES, GLYPHS, OUTCOMES, OUTCOME_LABELS, VERIFICATION_STATES, FRESHNESS_STATES, CAPABILITY_STATES, humanize, fields, valuesOf, resolve, verification, verificationOf, freshnessOf, capability, PORTFOLIO, portfolioProduct, isTree, formatTime, StatusIndicator, VerificationBadge, FreshnessLabel, Unavailable, Loading, EmptyState, ErrorPanel, MetadataList, ResourceIdentity, PageHeader, Button, Breadcrumbs, tabsKeydown, Tabs, TabPanel, DataTable, FilterBar, Pagination, THEME_OPTIONS, Shell, TextField, Select, Form, Dialog, ConfirmAction, EvidenceSummary, Alert, Checkbox, FieldGroup, ActivityTimeline, BrandMark, ThemeSwitch, SiteHeader, SiteFooter, COMPONENTS, toDom, focusMain, dom, openDialog, confirmAction, formDialog, THEME_STORAGE_KEY, THEME_PREFERENCES, readThemePreference, storeThemePreference, applyThemePreference, initThemePreference, setThemePreference, THEME_INIT_SCRIPT });
+global.StackUI = Object.freeze({ version: "0.8.1", TONES, GLYPHS, OUTCOMES, OUTCOME_LABELS, VERIFICATION_STATES, FRESHNESS_STATES, CAPABILITY_STATES, humanize, fields, valuesOf, resolve, verification, verificationOf, freshnessOf, capability, PORTFOLIO, portfolioProduct, isTree, formatTime, StatusIndicator, VerificationBadge, FreshnessLabel, Unavailable, Loading, EmptyState, ErrorPanel, MetadataList, ResourceIdentity, PageHeader, Button, Breadcrumbs, tabsKeydown, Tabs, TabPanel, DataTable, FilterBar, Pagination, THEME_OPTIONS, Shell, TextField, Select, Form, Dialog, ConfirmAction, EvidenceSummary, Alert, Checkbox, FieldGroup, ActivityTimeline, BrandMark, ThemeSwitch, SiteHeader, SiteFooter, COMPONENTS, toDom, focusMain, dom, openDialog, confirmAction, formDialog, THEME_STORAGE_KEY, THEME_PREFERENCES, readThemePreference, storeThemePreference, applyThemePreference, initThemePreference, setThemePreference, THEME_INIT_SCRIPT });
 })(typeof window !== 'undefined' ? window : globalThis);
