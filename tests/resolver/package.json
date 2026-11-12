@@ -1,0 +1,8 @@
+{
+  "name": "personalos-resolver-server",
+  "private": true,
+  "description": "The Resolver server PersonalOS's tests and acceptance run against: the published package at an exact version, installed apart from the app (it is a separate process, with its own dependencies). npm ci --prefix tests/resolver",
+  "dependencies": {
+    "@appport/resolver": "0.4.0"
+  }
+}

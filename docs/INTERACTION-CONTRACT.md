@@ -18,7 +18,7 @@ Then, with the same session:
 | Function | Kind | Args | Returns |
 |---|---|---|---|
 | `interactions:receive` | mutation | `{ envelope }` | the outcome (below) |
-| `interactions:status` | query | `{ key, afterSeq }` | `{ state, updates[], revoked }` |
+| `interactions:status` | mutation (a read: it asks Resolver whether the link still holds, which only a mutation or action can) | `{ key, afterSeq }` | `{ state, updates[], revoked }` |
 | `interactions:cancel` | mutation | `{ key, sourcePrincipalId }` | `{ state, updates[], revoked }`; only the original sender |
 
 `key` is the envelope's `idempotencyKey`.

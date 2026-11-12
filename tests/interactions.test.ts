@@ -4,7 +4,7 @@
  * The Multiplayer side (the adapter) is tested in the multiplayer repository; the two together in
  * its e2e/personalos-anywhere.e2e.mjs.
  */
-import { after, before, test } from "node:test";
+import { after, before, mock, test } from "node:test";
 import assert from "node:assert/strict";
 import { createTestApp, type TestApp } from "@feltdb/feltkit/testing";
 import { api } from "../feltkit/_generated/api.js";
@@ -49,12 +49,28 @@ async function deliverKeyed(t: TestApp, text: string, o: Opts = {}) {
   return { ...(await t.as(BRIDGE).mutation(api.interactions.receive, { envelope: e as any })), key: e.idempotencyKey };
 }
 
-/** Link a source identity to a PersonalOS account the real way: a code here, redeemed in a DM there. */
-async function link(t: TestApp, owner: string, source: string) {
-  const { code } = await t.as(owner).mutation(api.links.start, {});
-  const r = await deliver(t, `link ${code}`, { from: source, direct: true });
+/** Link a source identity to a PersonalOS account the real way: a code here, sent in a DM there, confirmed here. */
+async function link(t: TestApp, owner: string, source: string, o: Opts = {}) {
+  const { id, code } = await t.as(owner).mutation(api.links.start, {});
+  const r = await deliver(t, `link ${code}`, { from: source, direct: true, ...o });
   assert.equal(r.state, "completed", r.reply);
+  await t.as(owner).mutation(api.links.confirm, { id });
+  await settle(t); // the identity agent records the confirmed link in Resolver
+  assert.equal((await t.as(owner).query(api.links.list)).find((l) => l.id === id)?.status, "active");
   return r;
+}
+
+/** Run the work queued after commit (the identity agent), as the services worker would. */
+async function settle(t: TestApp) {
+  await (t.runtime as any).settleAgents();
+  await t.runtime.runServices();
+}
+
+/** Call Resolver's HTTP endpoint directly with a key (to show what Resolver itself refuses, whatever the app does). */
+async function resolverCall(key: string, name: string, input: Record<string, unknown>) {
+  const r = await fetch(`${resolver.url}/appport`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ protocol: "appport/1", type: "request", requestId: "test", capability: { name, version: 1 }, input }) });
+  const b = (await r.json()) as { ok: boolean; output?: any; error?: { code: string; details?: { reason?: string } } };
+  return { status: r.status, ...b };
 }
 
 async function rejects(p: Promise<unknown>, code: string) {
@@ -73,16 +89,140 @@ async function withApp(fn: (t: TestApp) => Promise<void>) {
 
 // ── Identity and linking ─────────────────────────────────────────────────────
 
-test("linking: a code issued in PersonalOS, redeemed by the authenticated sender in a DM, binds that sender to that account", () => withApp(async (t) => {
-  const r = await link(t, "ada", "ada");
-  assert.match(r.reply, /Connected/);
-  const [l] = await t.as("ada").query(api.links.list);
-  assert.deepEqual([l!.adapter, l!.status, l!.sourcePrincipalId], ["multiplayer", "active", "ada"]);
-  // The code is single use.
-  const { code } = await t.as("ada").mutation(api.links.start, {});
-  assert.equal((await deliver(t, `link ${code}`, { from: "ada", direct: true })).state, "completed");
+test("linking: a code issued in PersonalOS, sent by the authenticated sender in a DM, and confirmed by the owner binds that sender to that account", () => withApp(async (t) => {
+  const { id, code } = await t.as("ada").mutation(api.links.start, {});
+  const r = await deliver(t, `link ${code}`, { from: "ada", direct: true });
+  assert.match(r.reply, /Almost connected.*confirm/s);
+  // Presented, not linked: the sender does not resolve until the owner confirms.
+  assert.deepEqual((await t.as("ada").query(api.links.list)).map((l) => [l.status, l.sourcePrincipalId]), [["presented", "ada"]]);
+  assert.equal((await deliver(t, "@personalos show my tasks", { from: "ada" })).refusal?.code, "NOT_LINKED");
+  const confirmed = await t.as("ada").mutation(api.links.confirm, { id });
+  assert.deepEqual([confirmed.adapter, confirmed.status, confirmed.sourcePrincipalId], ["multiplayer", "confirming", "ada"]);
+  await settle(t); // the identity agent, not Ada's request, writes it to Resolver
+  assert.equal((await t.as("ada").query(api.links.list))[0]!.status, "active");
+  assert.equal((await deliver(t, "@personalos add buy milk to my list", { from: "ada" })).state, "completed");
+  // The code is single use: presented once, then nobody can present it again.
   const again = await deliver(t, `link ${code}`, { from: "mallory", direct: true });
   assert.deepEqual([again.state, again.refusal?.code], ["refused", "LINK_CODE_INVALID"]);
+}));
+
+// ── Identity bindings: who can write them (M4 Phase 1: Resolver credential and identity security) ──
+
+test("identity security: a code someone else saw and sent first shows THEIR account, which the owner does not confirm; it never links", () => withApp(async (t) => {
+  const { id, code } = await t.as("ada").mutation(api.links.start, {});
+  // Mallory read Ada's code over her shoulder and sent it from her own Multiplayer account first.
+  await deliver(t, `link ${code}`, { from: "mallory", name: "Ada Lovelace", direct: true });
+  // Ada sees which account presented it (its source identity, whatever display name it chose).
+  const [l] = await t.as("ada").query(api.links.list);
+  assert.deepEqual([l!.status, l!.sourcePrincipalId], ["presented", "mallory"]);
+  // Ada's own later attempt with the same code is refused (one presentation per code)...
+  assert.equal((await deliver(t, `link ${code}`, { from: "ada", direct: true })).refusal?.code, "LINK_CODE_INVALID");
+  // ...and until someone confirms, Mallory acts as nobody.
+  assert.equal((await deliver(t, "@personalos what do you know about me?", { from: "mallory" })).refusal?.code, "NOT_LINKED");
+  // Ada cancels it instead of confirming; nothing was ever written to Resolver for this installation.
+  await t.as("ada").mutation(api.links.revoke, { id });
+  await rejects(t.as("ada").mutation(api.links.confirm, { id }), "FAILED_PRECONDITION");
+  const hex = async (x: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(x))), (b) => b.toString(16).padStart(2, "0")).join("");
+  assert.deepEqual((await resolver.admin.list(`ref://identity/personalos/multiplayer/${await hex(INSTANCE)}/`)).refs, []);
+}));
+
+test("identity security: only the owner who issued a code can confirm it; another account and the bridge cannot", () => withApp(async (t) => {
+  const { id, code } = await t.as("ada").mutation(api.links.start, {});
+  await deliver(t, `link ${code}`, { from: "grace", direct: true });
+  // Grace (another PersonalOS account) cannot confirm Ada's presented code to bind her identity to Ada's account.
+  await rejects(t.as("grace").mutation(api.links.confirm, { id }), "NOT_FOUND");
+  // The surface's bridge cannot confirm, start or revoke links at all (no links.* permission).
+  await rejects(t.as(BRIDGE).mutation(api.links.confirm, { id }), "FORBIDDEN");
+  await rejects(t.as(BRIDGE).mutation(api.links.revoke, { id }), "FORBIDDEN");
+  await rejects(t.as(BRIDGE).mutation(api.links.start, {}), "FORBIDDEN");
+  assert.equal((await t.as("ada").query(api.links.list))[0]!.status, "presented");
+}));
+
+test("identity security: Resolver itself refuses writes with the resolving key, and reads with the linking key", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  const [ref] = (await resolver.admin.list("ref://identity/personalos/multiplayer/")).refs.filter((r) => r.state === "active").map((r) => r.ref);
+  const hex = async (x: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(x))), (b) => b.toString(16).padStart(2, "0")).join("");
+  const mine = `ref://identity/personalos/multiplayer/${await hex(INSTANCE)}/${await hex("mallory")}/takeover`;
+  const value = { canonical: "personalos:account:ada", external: { adapter: "multiplayer", instance: INSTANCE, principalId: "mallory" }, verification: { method: "x", challengeId: "x", verifiedAt: "2026-01-01" }, linkedAt: "2026-01-01" };
+  // The key interaction execution uses (read only): create a binding, overwrite Ada's, revoke Ada's. All refused by Resolver.
+  const attempts: Array<[string, Record<string, unknown>]> = [["resolver.put", { ref: mine, kind: "value", binding: { value }, expectedRevision: 0 }], ["resolver.put", { ref, kind: "value", binding: { value }, expectedRevision: 1 }], ["resolver.revoke", { ref, expectedRevision: 1 }]];
+  for (const [name, input] of attempts) {
+    const r = await resolverCall(resolver.keys.read.secret, name, input);
+    assert.deepEqual([r.status, r.error?.details?.reason], [403, "resolver.forbidden"], `${name} with the resolving key`);
+  }
+  // The linking key cannot read (so it cannot learn what to overwrite) and cannot write outside identity links.
+  assert.equal((await resolverCall(resolver.keys.write.secret, "resolver.resolve", { ref })).status, 403);
+  assert.equal((await resolverCall(resolver.keys.write.secret, "resolver.put", { ref: "ref://prod/personalos/model", kind: "value", binding: { value: 1 }, expectedRevision: 0 })).status, 403);
+  // Ada's link is unchanged and still resolves.
+  assert.equal((await deliver(t, "@personalos add still mine to my list", { from: "ada" })).state, "completed");
+}));
+
+test("identity security: the Resolver integrations cannot be called directly: no person or bridge can write a link, and the input schema holds", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  const [ref] = (await resolver.admin.list("ref://identity/personalos/multiplayer/")).refs.filter((r) => r.state === "active").map((r) => r.ref);
+  const hex = async (x: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(x))), (b) => b.toString(16).padStart(2, "0")).join("");
+  // Mallory's identity bound to Ada's account: the takeover a direct write would be.
+  const takeover = { protocol: "appport/1", type: "request", requestId: "x", capability: { name: "resolver.put", version: 1 }, input: { ref: `ref://identity/personalos/multiplayer/${await hex(INSTANCE)}/${await hex("mallory")}/direct`, kind: "value", schema: {}, binding: { value: { canonical: "personalos:account:ada", external: { adapter: "multiplayer", instance: INSTANCE, principalId: "mallory" } } }, expectedRevision: 0, ttlSeconds: 0, lookup: { key: "k", value: "v" }, reason: "takeover" } };
+  // FeltKit serves every integration operation as an AppPort capability on /appport. Call it there, as each kind of session.
+  const direct = async (principal: { id: string; type: string; roles: string[] }, capability: string, input: unknown) => {
+    const session = await (t.runtime as any).sessions.issue("console", principal, { kind: "test" });
+    const r = await (t.runtime as any).appport.handleRequest({ protocol: "appport/1", type: "request", requestId: `t-${Math.random().toString(36).slice(2)}`, capability: { name: capability, version: 1 }, input }, { session });
+    return r.ok ? "ok" : r.error.code;
+  };
+  const ada = { id: "ada", type: "user", roles: ["owner", "admin"] };
+  const bridge = { id: "multiplayer", type: "service", roles: ["bridge"] };
+  assert.equal(await direct(ada, "identitylinks.put", takeover), "FORBIDDEN", "an owner cannot write a link directly");
+  assert.equal(await direct(ada, "identitylinks.revoke", { ...takeover, capability: { name: "resolver.revoke", version: 1 }, input: { ref, expectedRevision: 1, reason: "x" } }), "FORBIDDEN");
+  assert.equal(await direct(ada, "identity.lookup", { ...takeover, capability: { name: "resolver.lookup", version: 1 }, input: { key: "k", value: "v" } }), "FORBIDDEN", "an owner cannot read others' links");
+  assert.equal(await direct(bridge, "identitylinks.put", takeover), "FORBIDDEN", "the bridge cannot write a link");
+  // Even as the identity agent's own role, the operation's input schema holds: no change to an existing link, no other capability.
+  const agent = { id: "personalos-identity", type: "agent", roles: ["identitylinker"] };
+  assert.equal(await direct(agent, "identitylinks.put", { ...takeover, input: { ...takeover.input, ref, expectedRevision: 1 } }), "INVALID_INPUT");
+  assert.equal(await direct(agent, "identitylinks.put", { ...takeover, capability: { name: "resolver.rollback", version: 1 } }), "INVALID_INPUT");
+  assert.equal((await resolver.admin.resolve(ref!)).revision, 1, "Ada's link is unchanged");
+  assert.deepEqual((await resolver.admin.list(`ref://identity/personalos/multiplayer/${await hex(INSTANCE)}/${await hex("mallory")}/`)).refs, [], "no link for Mallory was written");
+  assert.equal((await deliver(t, "@personalos show my tasks", { from: "mallory" })).refusal?.code, "NOT_LINKED");
+}));
+
+test("identity security: an expired presentation cannot be confirmed; concurrent presentations of one code record exactly one", () => withApp(async (t) => {
+  const first = await t.as("ada").mutation(api.links.start, {});
+  await deliver(t, `link ${first.code}`, { from: "ada", direct: true });
+  mock.timers.enable({ apis: ["Date"], now: Date.now() + 31 * 60_000 });
+  try { await rejects(t.as("ada").mutation(api.links.confirm, { id: first.id }), "FAILED_PRECONDITION"); } finally { mock.timers.reset(); }
+  assert.equal((await deliver(t, "@personalos show my tasks", { from: "ada" })).refusal?.code, "NOT_LINKED");
+  // Two surface accounts present the same code at once. Exactly one presentation is recorded: the other is
+  // refused (LINK_CODE_INVALID) or, when both read the code before either committed, its commit is refused
+  // by FeltDB (CONFLICT: nothing written, safe to retry), and its retry is refused as a used code.
+  const { id, code } = await t.as("ada").mutation(api.links.start, {});
+  const from = ["ada", "mallory"] as const;
+  const settled = await Promise.allSettled(from.map((f) => deliver(t, `link ${code}`, { from: f, direct: true })));
+  const won = settled.flatMap((r, i) => (r.status === "fulfilled" && r.value.state === "completed" ? [from[i]] : []));
+  assert.equal(won.length, 1, JSON.stringify(settled.map((r) => (r.status === "fulfilled" ? r.value.refusal?.code ?? r.value.state : (r.reason as any)?.code))));
+  for (const [i, r] of settled.entries()) {
+    if (from[i] === won[0]) continue;
+    if (r.status === "rejected") {
+      assert.equal((r.reason as any)?.code, "CONFLICT");
+      assert.equal((await deliver(t, `link ${code}`, { from: from[i]!, direct: true })).refusal?.code, "LINK_CODE_INVALID", "the retry finds the code used");
+    } else assert.equal(r.value.refusal?.code, "LINK_CODE_INVALID");
+  }
+  const [l] = (await t.as("ada").query(api.links.list)).filter((x) => x.id === id);
+  assert.deepEqual([l!.status, l!.sourcePrincipalId], ["presented", won[0]], "the recorded account is the one that was told it presented");
+}));
+
+test("identity security: the Resolver keys are custody credentials; a rotated key takes effect on the next request, and a revoked one fails closed", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  assert.equal(process.env.RESOLVER_API_KEY, undefined, "no Resolver key in the app's environment");
+  const old = await resolver.rotate("read");
+  assert.equal((await deliver(t, "@personalos add rotated to my list", { from: "ada" })).state, "completed", "the new key is used");
+  // The old key, revoked in Resolver, is refused there.
+  await resolver.admin.revokeKey(old.id);
+  assert.equal((await resolverCall(old.secret, "resolver.lookup", { key: "k", value: "v" })).status, 401);
+  // The current key revoked: resolution fails closed (nothing runs), and resumes when a new key is set.
+  await resolver.admin.revokeKey(resolver.keys.read.id);
+  await rejects(deliver(t, "@personalos add while revoked to my list", { from: "ada" }), "UNAVAILABLE");
+  await resolver.rotate("read");
+  assert.equal((await deliver(t, "@personalos add restored to my list", { from: "ada" })).state, "completed");
+  assert.deepEqual((await t.as("ada").query(api.tasks.list, {})).map((x) => x.title).sort(), ["Restored", "Rotated"]);
 }));
 
 test("linking: a code posted in a shared conversation is refused and burned, so a reader cannot redeem it", () => withApp(async (t) => {
@@ -191,14 +331,14 @@ test("approval: a destructive request waits for the owner in PersonalOS; approve
   await rejects(t.as(BRIDGE).mutation(api.actions.approve, { id: r.approval!.actionId }), "FORBIDDEN");
   // The owner approves in PersonalOS (the existing approval workflow).
   await t.as("ada").mutation(api.actions.approve, { id: r.approval!.actionId });
-  const s = await t.as(BRIDGE).query(api.interactions.status, { key: r.key, afterSeq: r.updateSeq });
+  const s = await t.as(BRIDGE).mutation(api.interactions.status, { key: r.key, afterSeq: r.updateSeq });
   assert.deepEqual([s.state, s.updates.map((u) => u.text)], ["completed", ["Approved in PersonalOS and done."]]);
   assert.deepEqual((await t.as("ada").query(api.tasks.list, {})).map((x) => x.title), ["Old draft"]);
 
   // Denied.
   const d = await deliverKeyed(t, "@personalos delete old draft", { from: "ada" });
   await t.as("ada").mutation(api.actions.reject, { id: d.approval!.actionId });
-  const ds = await t.as(BRIDGE).query(api.interactions.status, { key: d.key, afterSeq: 0 });
+  const ds = await t.as(BRIDGE).mutation(api.interactions.status, { key: d.key, afterSeq: 0 });
   assert.equal(ds.state, "cancelled");
   assert.equal(ds.updates.at(-1)!.text, "Declined in PersonalOS. Nothing was changed.");
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 1);
@@ -323,8 +463,11 @@ test("revoked link: the next request is refused, an in-flight interaction report
   // A bridge-queued reminder fires for the owner while the link is active (as the job would run: as the bridge).
   const [l] = await t.as("ada").query(api.links.list);
   await t.as("ada").mutation(api.links.revoke, { id: l!.id });
+  // Disconnected here: refused at once, before the identity agent has revoked it in Resolver.
+  assert.equal((await deliver(t, "@personalos show my tasks", { from: "ada" })).refusal?.code, "NOT_LINKED");
+  await settle(t);
   assert.deepEqual(await t.as(BRIDGE).mutation(api.reminders.fire, { taskId: task.id, remindAt: task.remindAt! }), { fired: false });
-  const s = await t.as(BRIDGE).query(api.interactions.status, { key: e.idempotencyKey, afterSeq: 0 });
+  const s = await t.as(BRIDGE).mutation(api.interactions.status, { key: e.idempotencyKey, afterSeq: 0 });
   assert.deepEqual([s.revoked, s.updates.length], [true, 0]);
   const next = await deliver(t, "@personalos show my tasks", { from: "ada" });
   assert.equal(next.refusal?.code, "NOT_LINKED");
@@ -375,7 +518,7 @@ test("Resolver: a verified link is a Resolver reference with provenance; the req
     if (v.external.instance === INSTANCE) mine.push({ ref: r.ref, v });
   }
   assert.equal(mine.length, 1);
-  assert.deepEqual([mine[0]!.v.canonical, mine[0]!.v.external.principalId, mine[0]!.v.verification.method], ["personalos:account:ada", "ada", "personalos.link-code/dm"]);
+  assert.deepEqual([mine[0]!.v.canonical, mine[0]!.v.external.principalId, mine[0]!.v.verification.method], ["personalos:account:ada", "ada", "personalos.link-code/dm+owner-confirmed"]);
   const [h] = (await resolver.admin.history(mine[0]!.ref)).entries;
   assert.match(h!.reason!, /linked by personalos:account:ada/);
   const r = await deliver(t, "@personalos add water the plants to my list", { from: "ada" });
@@ -389,8 +532,7 @@ test("Resolver: a verified link is a Resolver reference with provenance; the req
 test("Resolver: several external identities may resolve to one account; each resolves to it alone", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   const second = `${INSTANCE}-other`;
-  const { code } = await t.as("ada").mutation(api.links.start, {});
-  assert.equal((await deliver(t, `link ${code}`, { from: "ada.lovelace", direct: true, instance: second })).state, "completed");
+  await link(t, "ada", "ada.lovelace", { instance: second });
   await deliver(t, "@personalos add from the first identity to my list", { from: "ada" });
   await deliver(t, "@personalos add from the second identity to my list", { from: "ada.lovelace", instance: second });
   assert.deepEqual((await t.as("ada").query(api.tasks.list, {})).map((x) => x.title).sort(), ["From the first identity", "From the second identity"]);
@@ -428,6 +570,7 @@ test("Resolver: revoking in PersonalOS revokes the Resolver reference; it stops 
   await link(t, "ada", "ada");
   const [l] = await t.as("ada").query(api.links.list);
   await t.as("ada").mutation(api.links.revoke, { id: l!.id });
+  await settle(t);
   const { refs } = await resolver.admin.list("ref://identity/personalos/multiplayer/");
   const revoked = [];
   for (const r of refs) {
@@ -454,14 +597,12 @@ test("Resolver: unreachable or unconfigured, nothing resolves and nothing runs (
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 1);
 }));
 
-test("Resolver: PersonalOS's key is least privilege: it cannot read or write outside ref://identity/personalos/", async () => {
-  const { ResolverClient } = await import("@appport/resolver-client");
-  const own = await ResolverClient.connect({ url: process.env.RESOLVER_URL!, apiKey: process.env.RESOLVER_API_KEY!, live: false, maxStaleSeconds: 0 });
-  try {
-    await resolver.admin.put({ ref: "ref://prod/secret-config", kind: "value", binding: { value: { x: 1 } } as any, expectedRevision: 0 } as any);
-    await assert.rejects(own.resolve("ref://prod/secret-config"), (e: any) => ["NOT_FOUND", "FORBIDDEN"].includes(e.code));
-    await assert.rejects(own.put({ ref: "ref://prod/other", kind: "value", binding: { value: 1 } as any, expectedRevision: 0 } as any), (e: any) => ["NOT_FOUND", "FORBIDDEN"].includes(e.code));
-  } finally { own.close(); }
+test("Resolver: PersonalOS's keys are least privilege: neither reads or writes outside ref://identity/personalos/", async () => {
+  await resolver.admin.put({ ref: "ref://prod/secret-config", kind: "value", binding: { value: { x: 1 } } as any, expectedRevision: 0 } as any);
+  for (const key of [resolver.keys.read.secret, resolver.keys.write.secret]) {
+    assert.equal((await resolverCall(key, "resolver.resolve", { ref: "ref://prod/secret-config" })).status, 403);
+    assert.equal((await resolverCall(key, "resolver.put", { ref: "ref://prod/other", kind: "value", binding: { value: 1 }, expectedRevision: 0 })).status, 403);
+  }
 });
 
 // ── AuthBoundry: the requested capability ───────────────────────────────────
@@ -562,7 +703,7 @@ test("approval: seeing the conversation is not authority; only the requester app
   assert.deepEqual(i!.actionIds, [proposal.id]);
   assert.equal(i!.authority!.capability, "personalos.tasks.delete");
   await t.as("ada").mutation(api.actions.approve, { id: proposal.id });
-  assert.equal((await t.as(BRIDGE).query(api.interactions.status, { key: r.key, afterSeq: 0 })).state, "completed");
+  assert.equal((await t.as(BRIDGE).mutation(api.interactions.status, { key: r.key, afterSeq: 0 })).state, "completed");
 }));
 
 test("events: an approval or cancellation emits interaction.updated naming the interaction only, for the surface's endpoint", () => withApp(async (t) => {

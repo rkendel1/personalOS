@@ -1,13 +1,13 @@
 /**
- * Delegated execution against the REAL AuthBoundry server (built from source: rkendel1/authboundry,
- * pinned in scripts/anywhere-platform.mjs) and a real Resolver. Nothing here is a stand-in for the
+ * Delegated execution against the REAL AuthBoundry server (the published @authboundry/core, pinned
+ * in tests/authboundry/package.json and its lockfile) and a real Resolver. Nothing here is a stand-in for the
  * component whose behavior it establishes:
  *
  *   requester  Ada, resolved by Resolver from her Multiplayer identity
  *   executor   agent:personalos, PersonalOS's own principal at AuthBoundry
  *   authority  Ada's delegation to agent:personalos, decided by AuthBoundry on_behalf_of user:ada
  *
- * Without a server build these tests are skipped and say so; CI builds it, so CI never skips them.
+ * Without that install these tests are skipped and say so; CI installs it, so CI never skips them.
  */
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -15,11 +15,11 @@ import { createTestApp, type TestApp } from "@feltdb/feltkit/testing";
 import { api } from "../feltkit/_generated/api.js";
 import { CONTRACT } from "../feltkit/_interaction.js";
 import { CAPABILITIES } from "../feltkit/_authority.js";
-import { authboundryDir, startRealAuthority, startResolver, type RealAuthority, type TestResolver } from "./fixtures/anywhere.js";
+import { authboundryInstalled, startRealAuthority, startResolver, type RealAuthority, type TestResolver } from "./fixtures/anywhere.js";
 
 // CI sets REQUIRE_REAL_AUTHBOUNDRY=1: there a missing server build is a failure, never a skip.
-if (process.env.REQUIRE_REAL_AUTHBOUNDRY === "1" && !authboundryDir()) throw new Error("REQUIRE_REAL_AUTHBOUNDRY=1 but no AuthBoundry server build was found (AUTHBOUNDRY_DIR)");
-const SKIP = authboundryDir() ? false : "no AuthBoundry server build here (AUTHBOUNDRY_DIR, or scripts/anywhere-platform.mjs build); CI builds it";
+if (process.env.REQUIRE_REAL_AUTHBOUNDRY === "1" && !authboundryInstalled()) throw new Error("REQUIRE_REAL_AUTHBOUNDRY=1 but AuthBoundry is not installed (npm ci --prefix tests/authboundry)");
+const SKIP = authboundryInstalled() ? false : "AuthBoundry is not installed here (npm ci --prefix tests/authboundry); CI installs it";
 const BRIDGE = { id: "multiplayer", type: "service" as const, displayName: "Multiplayer bridge", roles: ["bridge"] };
 
 let resolver: TestResolver;
@@ -49,8 +49,10 @@ function envelope(text: string, from: string, direct = false) {
 }
 const deliver = (t: TestApp, text: string, from: string, direct = false) => t.as(BRIDGE).mutation(api.interactions.receive, { envelope: envelope(text, from, direct) });
 async function link(t: TestApp, owner: string) {
-  const { code } = await t.as(owner).mutation(api.links.start, {});
+  const { id, code } = await t.as(owner).mutation(api.links.start, {});
   assert.equal((await deliver(t, `link ${code}`, owner, true)).state, "completed");
+  await t.as(owner).mutation(api.links.confirm, { id });
+  await (t.runtime as any).settleAgents(); // the identity agent records it in Resolver
 }
 async function withApp(fn: (t: TestApp) => Promise<void>) {
   INSTANCE = `real-${Math.random().toString(36).slice(2, 10)}`;

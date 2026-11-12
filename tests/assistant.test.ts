@@ -57,12 +57,19 @@ test("volunteered facts are stored as inferred, hedged on recall, and only confi
 });
 
 test("DoD 5-6: a reminder from chat becomes a task with evidence, and fires through a real job", async () => {
+  // This workflow needs "tomorrow at 10am" to be in the future on the server's own clock, so it runs
+  // on the real date in the user's time zone (the other tests use the fixed TODAY).
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const today = day(Date.now() - TZ * 60_000);
+  const plus = (n: number) => day(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000);
+  const friday = plus(((5 - new Date(`${today}T00:00:00Z`).getUTCDay() + 7) % 7) || 7); // the next Friday after today
+  const sayToday = (text: string, conversationId?: string) => t.as("ada").mutation(api.assistant.send, { text, today, tzOffset: TZ, ...(conversationId ? { conversationId } : {}) });
   const t = await createTestApp();
   try {
-    const { conversationId, replyId } = await say(t, "Remind me to follow up with John tomorrow at 10am");
+    const { conversationId, replyId } = await sayToday("Remind me to follow up with John tomorrow at 10am");
     const [task] = await t.as("ada").query(api.tasks.list, { status: "open" });
-    assert.deepEqual([task!.title, task!.due, task!.remindTime], ["Follow up with John", "2026-11-12", "10:00"]);
-    assert.equal(task!.remindAt, Date.UTC(2026, 10, 12, 10, 0) + TZ * 60_000, "10am in the user's time zone");
+    assert.deepEqual([task!.title, task!.due, task!.remindTime], ["Follow up with John", plus(1), "10:00"]);
+    assert.equal(task!.remindAt, Date.parse(`${plus(1)}T10:00:00Z`) + TZ * 60_000, "10am in the user's time zone");
     const r = await reply(t, conversationId);
     assert.equal(r.id, replyId);
     assert.match(r.text, /remind you to \*\*follow up with John\*\* tomorrow at 10am/);
@@ -84,10 +91,10 @@ test("DoD 5-6: a reminder from chat becomes a task with evidence, and fires thro
     assert.deepEqual([fired!.kind, fired!.via, fired!.evidence?.verified], ["reminder.fire", "job", true]);
     assert.deepEqual(await t.as("ada").mutation(api.reminders.fire, { taskId: task!.id, remindAt: task!.remindAt! }), { fired: false }, "fires once");
     // Moving the task re-arms it; the old job would now find a different remindAt and do nothing.
-    await say(t, "move that to friday at 9am", conversationId);
+    await sayToday("move that to friday at 9am", conversationId);
     assert.deepEqual(await t.as("ada").mutation(api.reminders.fire, { taskId: task!.id, remindAt: task!.remindAt! }), { fired: false });
     const moved = (await t.as("ada").query(api.tasks.list, {}))[0]!;
-    assert.deepEqual([moved.due, moved.remindTime, moved.remindedAt], ["2026-11-13", "09:00", undefined]);
+    assert.deepEqual([moved.due, moved.remindTime, moved.remindedAt], [friday, "09:00", undefined]);
   } finally {
     await t.close();
   }

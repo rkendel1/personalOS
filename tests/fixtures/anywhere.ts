@@ -1,16 +1,17 @@
 /**
  * What PersonalOS Anywhere needs around it in tests:
  *
- * - a real Resolver (@appport/resolver, the published server, in a child process with its own state),
- *   initialised with an admin key, and a least-privilege key for PersonalOS (read, write on
- *   ref://identity/personalos/* only), exported as RESOLVER_URL / RESOLVER_API_KEY;
+ * - a real Resolver (@appport/resolver, the published server installed apart in tests/resolver, in a child process with its own state),
+ *   initialised with an admin key, and PersonalOS's two least-privilege keys on
+ *   ref://identity/personalos/*: `read` only (credential resolver-resolve) and `write` only
+ *   (credential resolver-link), given to FeltKit as FELTKIT_CREDENTIAL_RESOLVER_RESOLVE / _LINK;
  * - an authority speaking AuthBoundry's check contract (POST /_authboundry/authorize/check, with
  *   on_behalf_of) from a delegation table the test controls. It establishes PersonalOS's behavior
  *   *given* a decision, nothing about AuthBoundry: the real AuthBoundry's delegation decisions are
  *   tested against the real server in tests/authboundry-real.test.ts (built from source in CI).
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -18,7 +19,7 @@ import { join } from "node:path";
 import { ResolverClient } from "@appport/resolver-client";
 
 /** The package's own bin (`resolver`): its exports name only the library entry. */
-const CLI = join(process.cwd(), "node_modules", "@appport", "resolver", "dist", "cli.js");
+const CLI = join(process.cwd(), "tests", "resolver", "node_modules", "@appport", "resolver", "dist", "cli.js");
 
 async function freePort(): Promise<number> {
   return new Promise((resolve) => {
@@ -37,7 +38,14 @@ function run(args: string[]): Promise<string> {
   });
 }
 
-export interface TestResolver { url: string; admin: ResolverClient; adminKey: string; close(): Promise<void> }
+export interface TestResolver {
+  url: string; admin: ResolverClient; adminKey: string;
+  /** PersonalOS's keys (the tests use them directly to show what Resolver itself refuses). */
+  keys: { read: { secret: string; id: string }; write: { secret: string; id: string } };
+  /** Issue a new key for a credential and make it the one FeltKit uses (rotation); returns the old one. */
+  rotate(which: "read" | "write"): Promise<{ secret: string; id: string }>;
+  close(): Promise<void>;
+}
 
 /** A real Resolver server for this test file. */
 export async function startResolver(): Promise<TestResolver> {
@@ -56,13 +64,19 @@ export async function startResolver(): Promise<TestResolver> {
     child.on("exit", (code) => reject(new Error(`resolver exited ${code}`)));
   });
   const admin = await ResolverClient.connect({ url, apiKey: adminKey, live: false, maxStaleSeconds: 0 });
-  // PersonalOS's own key: identity references only.
-  const key = await admin.createKey("personalos");
-  await admin.grant(key.principal, ["read", "write"], "ref://identity/personalos/*");
+  // PersonalOS's keys, identity references only: one that can only read, one that can only write.
+  const issue = async (which: "read" | "write") => {
+    const k = await admin.createKey(`personalos-${which === "read" ? "resolve" : "link"}`);
+    await admin.grant(k.principal, [which], "ref://identity/personalos/*");
+    process.env[which === "read" ? "FELTKIT_CREDENTIAL_RESOLVER_RESOLVE" : "FELTKIT_CREDENTIAL_RESOLVER_LINK"] = k.secret;
+    return { secret: k.secret, id: k.id };
+  };
+  const keys = { read: await issue("read"), write: await issue("write") };
   process.env.RESOLVER_URL = url;
-  process.env.RESOLVER_API_KEY = key.secret;
+  delete process.env.RESOLVER_API_KEY;
   return {
-    url, admin, adminKey,
+    url, admin, adminKey, keys,
+    rotate: async (which) => { const old = keys[which]; keys[which] = await issue(which); return old; },
     close: async () => { admin.close(); child.kill(); await new Promise((r) => child.once("exit", r)); },
   };
 }
@@ -136,10 +150,34 @@ export interface RealAuthority {
   close(): Promise<void>;
 }
 
-/** Where the real server is: AUTHBOUNDRY_DIR (a checkout with target/release/authboundry), else the platform build. */
-export function authboundryDir(): string | null {
-  const dir = process.env.AUTHBOUNDRY_DIR ?? join(process.cwd(), ".anywhere", "src", "authboundry");
-  return existsSync(join(dir, "target", "release", "authboundry")) ? dir : null;
+/**
+ * Where the real server is: the published `@authboundry/core` installed apart from the app in
+ * tests/authboundry (exact version, its own lockfile: `npm ci --prefix tests/authboundry`). Its
+ * `authboundry` command runs the native server for this platform. AUTHBOUNDRY_CLI_PATH, the
+ * package's own override, points it at another build for local development only.
+ */
+const AUTHBOUNDRY_HOME = join(process.cwd(), "tests", "authboundry");
+const AUTHBOUNDRY_PACKAGE = join(AUTHBOUNDRY_HOME, "node_modules", "@authboundry", "core");
+export function authboundryInstalled(): string | null {
+  return existsSync(join(AUTHBOUNDRY_PACKAGE, "bin", "authboundry.js")) ? AUTHBOUNDRY_PACKAGE : null;
+}
+/**
+ * The package's native server for this platform: AUTHBOUNDRY_CLI_PATH (the package's own override,
+ * local development only), else the binary @authboundry/core bundles (`native/<platform>`). Not the
+ * optional `@authboundry/core-<platform>` package its wrapper prefers: in 1.17.3, three of those four
+ * packages (linux-x64, linux-arm64, darwin-x64) carry the 1.16.0 binary, byte for byte, without the
+ * delegated check; the bundled copies are the 1.17.3 build. Run directly, not through the wrapper:
+ * the wrapper waits on a child it does not forward signals to, so stopping it would orphan the server.
+ * Its environment names the package's own bridges (FeltDB through bridge/feltdb-store.cjs, the server's
+ * default in source) and this Node.
+ */
+export function authboundryExecutable(pkg: string): string {
+  return process.env.AUTHBOUNDRY_CLI_PATH ?? join(pkg, "native", `${process.platform}-${process.arch}`, "authboundry");
+}
+/** The installed server's version (what the tests ran against). */
+export function authboundryVersion(): string | null {
+  const pkg = authboundryInstalled();
+  return pkg ? (JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version as string) : null;
 }
 
 /**
@@ -149,14 +187,14 @@ export function authboundryDir(): string | null {
  * the test as each case needs them.
  */
 export async function startRealAuthority(people: Record<string, string[]>, capabilities: readonly string[]): Promise<RealAuthority> {
-  const dir = authboundryDir();
-  if (!dir) throw new Error("no AuthBoundry server build (set AUTHBOUNDRY_DIR or run scripts/anywhere-platform.mjs build)");
+  const pkg = authboundryInstalled();
+  if (!pkg) throw new Error("AuthBoundry is not installed: npm ci --prefix tests/authboundry");
   const data = mkdtempSync(join(tmpdir(), "pos-authboundry-"));
   const port = await freePort();
   const grants = ["identity.read", "identity.write", "principal.read", "principal.write", "policy.read", "policy.write", "agent.read", "agent.write", "delegation.read", "delegation.create", "delegation.revoke", "audit.read", "evidence.read", "authorization.read", "session.admin"].flatMap((g) => ["--grant", `authority.${g}=role:owner`]);
-  const child = spawn(join(dir, "target", "release", "authboundry"), ["serve", join(dir, "authboundry.flow"), "--addr", `127.0.0.1:${port}`, "--tenant", "reference", "--account", "owner:local-password:role=owner@reference", ...grants], {
-    cwd: dir, stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, FELTDB_URL: "", FELTDB_ENDPOINT: "", AUTHBOUNDRY_PORTAL_ORIGIN: "http://localhost:3001", AUTHBOUNDRY_FELTDB_PATH: data, AUTHBOUNDRY_FELTDB_BRIDGE: join(dir, "bridge", "feltdb-store.cjs"), AUTHBOUNDRY_APPPORT_SERVICES_BRIDGE: join(dir, "bridge", "appport-services.cjs") },
+  const child = spawn(authboundryExecutable(pkg), ["serve", join(AUTHBOUNDRY_HOME, "authboundry.flow"), "--addr", `127.0.0.1:${port}`, "--tenant", "reference", "--account", "owner:local-password:role=owner@reference", ...grants], {
+    cwd: data, stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, FELTDB_URL: "", FELTDB_ENDPOINT: "", AUTHBOUNDRY_PORTAL_ORIGIN: "http://localhost:3001", AUTHBOUNDRY_FELTDB_PATH: data, AUTHBOUNDRY_FELTDB_BRIDGE: join(pkg, "bridge", "feltdb-store.cjs"), AUTHBOUNDRY_APPPORT_SERVICES_BRIDGE: join(pkg, "bridge", "appport-services.cjs"), AUTHBOUNDRY_NODE: process.execPath },
   });
   let log = "";
   child.stdout!.on("data", (d) => (log += d));

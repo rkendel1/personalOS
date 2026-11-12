@@ -31,7 +31,8 @@ import { appendMessage, respond } from "./assistant.js";
 import { interpret } from "./_interpret.js";
 import { clockFor } from "./_clock.js";
 import * as ops from "./_ops.js";
-import { linkActive, linkExternal, resolveExternal } from "./_resolver.js";
+import { linkActive, resolveExternal } from "./_resolver.js";
+import { PRESENTED_TTL_MS } from "./links.js";
 import { authorityPrincipal, capabilityFor } from "./_authority.js";
 
 /** How a surface's adapter id reads to people. */
@@ -119,27 +120,30 @@ export const receive = app.mutation({
       const digested = await digest(`${code[1]}${code[2]}`);
       const [pending] = await ctx.db.find(identityLinks, { codeDigest: digested });
       if (!pending || pending.status !== "pending" || pending.adapter !== adapter || (pending.codeExpiresAt ?? 0) < now) return refuse("LINK_CODE_INVALID", "That code isn't valid (it may have expired or been used). Get a new one in PersonalOS → Settings → Connected surfaces.");
-      // Both identities are proven: the PersonalOS account issued the code (its session), and the
-      // surface's authenticated sender redeemed it where only they can read it. Resolver records the link.
       const external = { adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId };
-      const current = await resolveExternal(external);
+      const current = await resolveExternal(ctx, external);
       if (current.status === "resolved" && current.owner !== pending.owner) return refuse("ALREADY_LINKED", "This account is already connected to a different PersonalOS account. Disconnect it there first.");
       if (current.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "This account resolves to more than one PersonalOS link, so I won't act until that is fixed. Disconnect it in PersonalOS → Settings → Connected surfaces.");
-      const linked = current.status === "resolved" ? { ref: current.ref, revision: current.revision } : await linkExternal(external, pending.owner, pending.id, now);
-      await ctx.db.patch(identityLinks, pending.id, { status: "active", sourcePrincipalId: e.sender.sourcePrincipalId, sourceDisplayName: e.sender.displayName, sourceInstance: e.source.instance, resolverRef: linked.ref, linkedAt: now, codeDigest: undefined, codeExpiresAt: undefined });
-      const text = `Connected. When you mention me here, I'll work in your PersonalOS account, as you. In shared conversations I keep your private details out of my replies. Disconnect any time in PersonalOS → Settings → Connected surfaces.`;
-      const id = await ctx.db.insert(interactions, { ...base, owner: pending.owner, identity: { ...who, resolution: "link_completed", linkId: pending.id, resolverRef: linked.ref }, state: "completed", intent: "link", updates: [{ seq: 1, state: "completed", text, at: now }] });
+      // The code is used up here (one presentation per code), and nothing is linked yet: this records
+      // which surface account presented it. The owner, signed in to PersonalOS, sees that account and
+      // confirms it (links:confirm), which is what writes the link to Resolver. So a code someone else
+      // saw cannot link their account, and a surface's bridge never writes an identity binding.
+      await ctx.db.patch(identityLinks, pending.id, { status: "presented", sourcePrincipalId: e.sender.sourcePrincipalId, sourceDisplayName: e.sender.displayName, sourceInstance: e.source.instance, presentedAt: now, codeDigest: undefined, codeExpiresAt: now + PRESENTED_TTL_MS });
+      const text = `Almost connected. Open PersonalOS → Settings → Connected surfaces and confirm that ${e.sender.displayName} on ${label(adapter)} is you. Until you do, I won't act for this account.`;
+      const id = await ctx.db.insert(interactions, { ...base, owner: pending.owner, identity: { ...who, resolution: "link_presented", linkId: pending.id }, state: "completed", intent: "link", updates: [{ seq: 1, state: "completed", text, at: now }] });
       return outcome((await ctx.db.get(interactions, id))!, false);
     }
 
     // ── Identity: Resolver maps the authenticated source identity to a canonical account ──
-    const resolved = await resolveExternal({ adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId });
+    const resolved = await resolveExternal(ctx, { adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId });
     if (resolved.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "Your account here resolves to more than one PersonalOS link, so I won't act for anyone until that is fixed in PersonalOS → Settings → Connected surfaces.");
     if (resolved.status !== "resolved") {
       return refuse("NOT_LINKED", `I don't know which PersonalOS account is yours yet, so I can't act for you. To connect: in PersonalOS open Settings → Connected surfaces → Connect ${label(adapter)}, then send me the code in a direct message ("link XXXX-XXXX").`);
     }
     const owner = resolved.owner;
     const [index] = (await ctx.db.find(identityLinks, { owner })).filter((l) => l.resolverRef === resolved.ref);
+    // The owner disconnected it here and the identity agent is revoking it in Resolver: already refused.
+    if (index && (index.status === "revoking" || index.status === "revoked")) return refuse("NOT_LINKED", `This account was disconnected from PersonalOS. To connect again: in PersonalOS open Settings → Connected surfaces → Connect ${label(adapter)}.`);
     if (index) await ctx.db.patch(identityLinks, index.id, { lastUsedAt: now });
     const octx = ops.actingFor(ctx, owner);
     const identity = { ...who, resolution: "linked" as const, ...(index ? { linkId: index.id } : {}), resolverRef: resolved.ref, resolverRevision: resolved.revision, canonical: resolved.canonical };
@@ -292,7 +296,12 @@ async function personal(octx: MutationCtx, ctx: MutationCtx, e: EnvelopeT, conve
 }
 
 /** What changed since `afterSeq`, for the surface to post. Refused once the owner disconnected the surface. */
-export const status = app.query({
+/**
+ * An interaction's state and its updates after `afterSeq`, for the surface's bridge. A mutation, not a
+ * query: whether the link still holds is Resolver's answer (an integration call), which a query
+ * cannot make. It changes nothing.
+ */
+export const status = app.mutation({
   access: "interactions.receive",
   args: { key: s.string({ minLength: 8, maxLength: 300 }), afterSeq: s.number() },
   returns: s.object({ state: s.string(), updates: s.array(Update), revoked: s.boolean() }),
@@ -300,7 +309,7 @@ export const status = app.query({
     const adapter = ctx.auth.requirePrincipal().id;
     const i = (await ctx.db.find(interactions, { key: `${adapter}:${key}` }))[0] ?? fail("NOT_FOUND", "No such interaction.");
     // Revoked in Resolver (the owner disconnected the surface): no more content for this surface.
-    if (i.owner && i.identity.resolverRef && !(await linkActive(i.identity.resolverRef, i.owner))) return { state: i.state, updates: [], revoked: true };
+    if (i.owner && i.identity.resolverRef && !(await linkActive(ctx, i.identity.resolverRef, i.owner))) return { state: i.state, updates: [], revoked: true };
     return { state: i.state, updates: i.updates.filter((u: any) => u.seq > afterSeq), revoked: false };
   },
 });
@@ -315,7 +324,7 @@ export const cancel = app.mutation({
     const adapter = ctx.auth.requirePrincipal().id;
     const i = (await ctx.db.find(interactions, { key: `${adapter}:${key}` }))[0] ?? fail("NOT_FOUND", "No such interaction.");
     if (i.identity.sourcePrincipalId !== sourcePrincipalId) fail("FORBIDDEN", "Only the person who asked can cancel it.");
-    if (!i.owner || !i.identity.resolverRef || !(await linkActive(i.identity.resolverRef, i.owner))) return { state: i.state, updates: [], revoked: !!i.owner };
+    if (!i.owner || !i.identity.resolverRef || !(await linkActive(ctx, i.identity.resolverRef, i.owner))) return { state: i.state, updates: [], revoked: !!i.owner };
     if (TERMINAL.has(i.state as InteractionState)) return { state: i.state, updates: [], revoked: false };
     const octx = ops.actingFor(ctx, i.owner);
     for (const id of i.actionIds) {

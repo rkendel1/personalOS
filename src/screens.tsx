@@ -572,16 +572,27 @@ function ConnectedSurfaces({ onError }: Err) {
   const recent = useQuery(api.interactions.list, { limit: 5 }) ?? [];
   const start = useMutation(api.links.start);
   const revoke = useMutation(api.links.revoke);
+  const confirm = useMutation(api.links.confirm);
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
-  const active = links.filter((l) => l.status === "active");
+  const active = links.filter((l) => l.status === "active" || l.status === "confirming" || l.status === "revoking");
+  const presented = links.filter((l) => l.status === "presented");
   return (
     <section data-testid="connected-surfaces">
       <h2>Connected surfaces</h2>
       <p className="muted small">Mention @personalos in Multiplayer and I'll work here, in your account. In shared conversations I keep your private details out of my replies; anything destructive still waits for your approval here.</p>
       {active.map((l) => (
         <div key={l.id} className="row">
-          <span><strong>Multiplayer</strong> <span className="muted small">as {l.sourceDisplayName ?? l.sourcePrincipalId}{l.lastUsedAt ? ` · last used ${new Date(l.lastUsedAt).toLocaleString()}` : ""}</span></span>
-          <button className="ghost tiny" onClick={() => void revoke({ id: l.id }).catch(onError)}>Disconnect</button>
+          <span><strong>Multiplayer</strong> <span className="muted small">as {l.sourceDisplayName ?? l.sourcePrincipalId}{l.status === "confirming" ? " · connecting…" : l.status === "revoking" ? " · disconnecting…" : l.lastUsedAt ? ` · last used ${new Date(l.lastUsedAt).toLocaleString()}` : ""}</span></span>
+          {l.status === "active" && <button className="ghost tiny" onClick={() => void revoke({ id: l.id }).catch(onError)}>Disconnect</button>}
+        </div>
+      ))}
+      {presented.map((l) => (
+        <div key={l.id} className="row" data-testid="link-presented">
+          <span className="small">Your code was sent from the Multiplayer account <strong>{l.sourceDisplayName ?? l.sourcePrincipalId}</strong> <span className="muted">({l.sourcePrincipalId})</span>. Is that you?{l.error ? <span className="muted"> {l.error}</span> : null}</span>
+          <span>
+            <button className="tiny" onClick={() => void confirm({ id: l.id }).then(() => setCode(null)).catch(onError)}>This is me</button>{" "}
+            <button className="ghost tiny" onClick={() => void revoke({ id: l.id }).then(() => setCode(null)).catch(onError)}>Not me</button>
+          </span>
         </div>
       ))}
       {code ? (
