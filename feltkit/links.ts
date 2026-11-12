@@ -9,13 +9,16 @@
  *      interactions:receive binds that identity to the account that issued the code (one use).
  *
  * A code is accepted only in a direct conversation with PersonalOS, so nobody else can read and
- * redeem it first. A source identity links to one account at a time. Revoking takes effect on the
- * surface's next request, including requests already in progress (interactions:status).
+ * redeem it first. The verified link is recorded in Resolver (feltkit/_resolver.ts), which is what
+ * every request resolves through; a source identity resolves to one account at a time, and several
+ * source identities may resolve to the same account. Revoking revokes the Resolver reference, so the
+ * surface's next request, and requests already in progress (interactions:status), stop resolving.
  */
 import { fail, s } from "@feltdb/feltkit";
 import { app, identityLinks } from "./app.js";
 import { digest, linkCodeFrom } from "./_interaction.js";
 import { me, own } from "./_ops.js";
+import { revokeLink } from "./_resolver.js";
 
 export const CODE_TTL_MS = 10 * 60_000;
 const ADAPTER = s.string({ minLength: 1, maxLength: 100, pattern: "^[a-z0-9][a-z0-9-]*$" });
@@ -68,6 +71,8 @@ export const revoke = app.mutation({
   handler: async (ctx, { id }) => {
     const link = await own<any>(ctx, identityLinks, id, "link");
     if (link.status === "revoked") fail("FAILED_PRECONDITION", "Already disconnected.");
+    // Resolver first: if it cannot revoke, the link is still live and this must not say otherwise.
+    if (link.resolverRef) await revokeLink(link.resolverRef, `disconnected by ${me(ctx)}`);
     await ctx.db.patch(identityLinks, id, { status: "revoked", revokedAt: Date.now(), codeDigest: undefined });
   },
 });

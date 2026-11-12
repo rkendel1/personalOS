@@ -263,9 +263,10 @@ export const settings = app.collection(
 );
 
 /**
- * A connected surface's identity bound to a PersonalOS account (feltkit/links.ts). The owner starts
- * it here (a one-time code, stored only as a digest); the sender completes it from the surface, in a
- * direct message to PersonalOS, authenticated by that surface. Revoking it stops the next request.
+ * The owner's side of linking a surface identity (feltkit/links.ts): the pending one-time code (a
+ * digest only) and, once verified, the Resolver reference that *is* the link. This is an index for
+ * the owner's Settings screen, not an authority: resolution reads Resolver only (feltkit/_resolver.ts),
+ * and revocation goes to Resolver first.
  */
 export const identityLinks = app.collection(
   "identityLinks",
@@ -279,6 +280,8 @@ export const identityLinks = app.collection(
     sourcePrincipalId: s.optional(s.string()),
     sourceDisplayName: s.optional(s.string({ maxLength: 120 })),
     sourceInstance: s.optional(s.string()),
+    /** The link in Resolver (ref://identity/personalos/…): the authoritative record. */
+    resolverRef: s.optional(s.string()),
     createdAt: s.number(),
     linkedAt: s.optional(s.number()),
     revokedAt: s.optional(s.number()),
@@ -304,12 +307,22 @@ export const interactions = app.collection(
     adapter: s.string(),
     key: s.string(),
     envelope: s.record(s.unknown()),
+    /**
+     * Who asked. `sourcePrincipalId` is the adapter-authenticated source identity; `canonical` the
+     * PersonalOS identity Resolver resolved it to (`resolverRef` at `resolverRevision`); `displayName`
+     * is presentation only.
+     */
     identity: s.object({
       sourcePrincipalId: s.string(),
       displayName: s.string(),
       resolution: s.enum(["linked", "link_completed", "unlinked"] as const),
       linkId: s.optional(s.string()),
+      resolverRef: s.optional(s.string()),
+      resolverRevision: s.optional(s.number()),
+      canonical: s.optional(s.string()),
     }),
+    /** AuthBoundry's decision on the capability this request needed (feltkit/_authority.ts): the evidence it was allowed. */
+    authority: s.optional(s.object({ capability: s.string(), outcome: s.string(), principal: s.string(), decisionId: s.optional(s.string()), reason: s.optional(s.string()) })),
     audience: s.enum(["private", "shared"] as const),
     state: s.string(),
     intent: s.optional(s.string()),

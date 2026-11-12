@@ -21,6 +21,7 @@
     "measure:doc": "node scripts/measure-doc.mjs"
   },
   "dependencies": {
+    "@appport/resolver-client": "0.2.4",
     "@feltdb/feltkit": "0.3.25",
     "@stack-ui/core": "0.8.1",
     "@stack-ui/react": "0.8.1",
@@ -29,12 +30,13 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
+    "@appport/resolver": "0.3.3",
+    "@types/chrome": "0.0.304",
     "@types/node": "22.19.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@vitejs/plugin-react": "5.1.0",
     "typescript": "5.9.3",
-    "vite": "7.3.7",
-    "@types/chrome": "0.0.304"
+    "vite": "7.3.7"
   }
 }

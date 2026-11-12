@@ -1,6 +1,7 @@
 import { s } from "@feltdb/feltkit";
 import { app, identityLinks, tasks } from "./app.js";
 import { actingFor, me, record } from "./_ops.js";
+import { linkActive } from "./_resolver.js";
 
 /**
  * Job "reminder.fire": queued (after commit) when a reminder is set, to run at its time, as the
@@ -17,7 +18,12 @@ export const fire = app.mutation({
     // Queued by the owner, or by a connected surface's bridge for the owner: then it fires only while
     // that surface is still linked to the task's owner (authority is checked when it runs, not when queued).
     const caller = rawCtx.auth.requirePrincipal().id;
-    const viaBridge = caller !== task.owner && (await rawCtx.db.find(identityLinks, { owner: task.owner })).some((l) => l.adapter === caller && l.status === "active");
+    let viaBridge = false;
+    if (caller !== task.owner) {
+      for (const l of await rawCtx.db.find(identityLinks, { owner: task.owner })) {
+        if (l.adapter === caller && l.status === "active" && l.resolverRef && (await linkActive(l.resolverRef, task.owner))) { viaBridge = true; break; }
+      }
+    }
     const ctx = viaBridge ? actingFor(rawCtx, task.owner) : rawCtx;
     const who = me(ctx);
     if (task.owner !== who || task.status !== "open" || task.remindAt !== remindAt || task.remindedAt) return { fired: false };

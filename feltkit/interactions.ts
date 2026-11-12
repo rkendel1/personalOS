@@ -31,6 +31,8 @@ import { appendMessage, respond } from "./assistant.js";
 import { interpret } from "./_interpret.js";
 import { clockFor } from "./_clock.js";
 import * as ops from "./_ops.js";
+import { linkActive, linkExternal, resolveExternal } from "./_resolver.js";
+import { capabilityFor, decide } from "./_authority.js";
 
 /** How a surface's adapter id reads to people. */
 const LABELS: Record<string, string> = { multiplayer: "Multiplayer" };
@@ -117,41 +119,62 @@ export const receive = app.mutation({
       const digested = await digest(`${code[1]}${code[2]}`);
       const [pending] = await ctx.db.find(identityLinks, { codeDigest: digested });
       if (!pending || pending.status !== "pending" || pending.adapter !== adapter || (pending.codeExpiresAt ?? 0) < now) return refuse("LINK_CODE_INVALID", "That code isn't valid (it may have expired or been used). Get a new one in PersonalOS → Settings → Connected surfaces.");
-      const [taken] = await ctx.db.find(identityLinks, { adapter, sourcePrincipalId: e.sender.sourcePrincipalId, status: "active" });
-      if (taken && taken.owner !== pending.owner) return refuse("ALREADY_LINKED", "This account is already connected to a different PersonalOS account. Disconnect it there first.");
-      if (taken) await ctx.db.patch(identityLinks, taken.id, { status: "revoked", revokedAt: now });
-      await ctx.db.patch(identityLinks, pending.id, { status: "active", sourcePrincipalId: e.sender.sourcePrincipalId, sourceDisplayName: e.sender.displayName, sourceInstance: e.source.instance, linkedAt: now, codeDigest: undefined, codeExpiresAt: undefined });
+      // Both identities are proven: the PersonalOS account issued the code (its session), and the
+      // surface's authenticated sender redeemed it where only they can read it. Resolver records the link.
+      const external = { adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId };
+      const current = await resolveExternal(external);
+      if (current.status === "resolved" && current.owner !== pending.owner) return refuse("ALREADY_LINKED", "This account is already connected to a different PersonalOS account. Disconnect it there first.");
+      if (current.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "This account resolves to more than one PersonalOS link, so I won't act until that is fixed. Disconnect it in PersonalOS → Settings → Connected surfaces.");
+      const linked = current.status === "resolved" ? { ref: current.ref, revision: current.revision } : await linkExternal(external, pending.owner, pending.id, now);
+      await ctx.db.patch(identityLinks, pending.id, { status: "active", sourcePrincipalId: e.sender.sourcePrincipalId, sourceDisplayName: e.sender.displayName, sourceInstance: e.source.instance, resolverRef: linked.ref, linkedAt: now, codeDigest: undefined, codeExpiresAt: undefined });
       const text = `Connected. When you mention me here, I'll work in your PersonalOS account, as you. In shared conversations I keep your private details out of my replies. Disconnect any time in PersonalOS → Settings → Connected surfaces.`;
-      const id = await ctx.db.insert(interactions, { ...base, owner: pending.owner, identity: { ...who, resolution: "link_completed", linkId: pending.id }, state: "completed", intent: "link", updates: [{ seq: 1, state: "completed", text, at: now }] });
+      const id = await ctx.db.insert(interactions, { ...base, owner: pending.owner, identity: { ...who, resolution: "link_completed", linkId: pending.id, resolverRef: linked.ref }, state: "completed", intent: "link", updates: [{ seq: 1, state: "completed", text, at: now }] });
       return outcome((await ctx.db.get(interactions, id))!, false);
     }
 
-    // ── Identity: the source identity must be linked to a PersonalOS account ──
-    const [link] = await ctx.db.find(identityLinks, { adapter, sourcePrincipalId: e.sender.sourcePrincipalId, status: "active" });
-    if (!link) {
+    // ── Identity: Resolver maps the authenticated source identity to a canonical account ──
+    const resolved = await resolveExternal({ adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId });
+    if (resolved.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "Your account here resolves to more than one PersonalOS link, so I won't act for anyone until that is fixed in PersonalOS → Settings → Connected surfaces.");
+    if (resolved.status !== "resolved") {
       return refuse("NOT_LINKED", `I don't know which PersonalOS account is yours yet, so I can't act for you. To connect: in PersonalOS open Settings → Connected surfaces → Connect ${label(adapter)}, then send me the code in a direct message ("link XXXX-XXXX").`);
     }
-    await ctx.db.patch(identityLinks, link.id, { lastUsedAt: now });
-    const owner = link.owner as string;
+    const owner = resolved.owner;
+    const [index] = (await ctx.db.find(identityLinks, { owner })).filter((l) => l.resolverRef === resolved.ref);
+    if (index) await ctx.db.patch(identityLinks, index.id, { lastUsedAt: now });
     const octx = ops.actingFor(ctx, owner);
-    const identity = { ...who, resolution: "linked" as const, linkId: link.id };
+    const identity = { ...who, resolution: "linked" as const, ...(index ? { linkId: index.id } : {}), resolverRef: resolved.ref, resolverRevision: resolved.revision, canonical: resolved.canonical };
+
+    const tk = base.threadKey;
+    const clock = clockFor(e.sender.timeZone ?? null);
+    const text = clean(e.message.text) || e.message.text;
+    const about = e.context.messages.length ? conversationIntent(text) : null;
+    const said: { text: string; completes?: string } = about ? { text } : await answerTo(ctx, tk, owner, e, text, clock.today);
+    const understood = about ? null : interpret(said.text, clock.today as any).intent;
+
+    // ── Authority: AuthBoundry decides on the exact capability, before anything runs ──
+    const capability = capabilityFor(about?.kind ?? understood!.kind, { reminder: understood?.kind === "task.create" ? understood.reminder : false });
+    const decision = await decide(owner, capability, { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) });
+    const authority = { capability, outcome: decision.outcome, decisionId: decision.decisionId ?? undefined, principal: decision.principal, reason: decision.reason ?? undefined };
+    if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); nothing was done.`);
+    if (!decision.allowed) {
+      const message = `You aren't allowed to do that through ${label(adapter)} (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
+      const id = await ctx.db.insert(interactions, { ...base, owner, identity, authority, state: "refused", intent: about?.kind ?? understood!.kind, error: { code: "FORBIDDEN", message }, updates: [{ seq: 1, state: "refused", text: message, at: now }] });
+      return outcome((await ctx.db.get(interactions, id))!, false);
+    }
 
     // ── The PersonalOS conversation for this source thread (one history across surfaces) ──
-    const tk = base.threadKey;
     let conversationId: string | undefined;
     for (const p of (await ctx.db.find(interactions, { threadKey: tk })).sort((a, b) => b.createdAt - a.createdAt)) {
       if (p.owner === owner && p.conversationId && (await ctx.db.get(conversations, p.conversationId))?.owner === owner) { conversationId = p.conversationId; break; }
     }
     conversationId ??= await ctx.db.insert(conversations, { owner, title: conversationTitle(label(adapter), e), createdAt: now, updatedAt: now, messageCount: 0 });
+    if (!about && said.completes) await ctx.db.patch(interactions, said.completes, { state: "completed", updatedAt: now });
 
-    const clock = clockFor(e.sender.timeZone ?? null);
-    const text = clean(e.message.text) || e.message.text;
-    const about = e.context.messages.length ? conversationIntent(text) : null;
     let result: Result;
     try {
       result = about
         ? await aboutConversation(octx, about, e, conversationId, text)
-        : await personal(octx, ctx, e, tk, owner, conversationId, text, clock.today, clock.tzOffset, audience);
+        : await personal(octx, ctx, e, conversationId, said.text, clock.today, clock.tzOffset, audience);
     } catch (error) {
       const err = error as { code?: string; message?: string };
       if (!["NOT_FOUND", "FAILED_PRECONDITION", "INVALID_ARGUMENT"].includes(err.code ?? "")) throw error;
@@ -161,7 +184,7 @@ export const receive = app.mutation({
     }
     const approval = result.approval ?? null;
     const id = await ctx.db.insert(interactions, {
-      ...base, owner, identity, state: result.state, intent: result.intent, conversationId,
+      ...base, owner, identity, authority, state: result.state, intent: result.intent, conversationId,
       ...(result.messageId ? { messageId: result.messageId } : {}), ...(result.replyId ? { replyId: result.replyId } : {}),
       actionIds: result.actionIds,
       ...(approval ? { approval } : {}),
@@ -216,21 +239,22 @@ async function aboutConversation(ctx: MutationCtx, intent: ConversationIntent, e
   return { state: "completed", intent: intent.kind, reply, surface: reply, actionIds, sources, privateDataUsed: false, messageId, replyId };
 }
 
-/** A personal request: the deterministic assistant, working for the owner, then limited to the audience. */
-async function personal(octx: MutationCtx, ctx: MutationCtx, e: EnvelopeT, tk: string, owner: string, conversationId: string, text: string, today: string, tzOffset: number, audience: "private" | "shared"): Promise<Result> {
-  // A short answer to an earlier clarifying question in the same thread completes that request
-  // ("remind me to call Sarah" … "tomorrow at 10"). Only an earlier event: out-of-order delivery never merges backwards.
-  let said = text;
+/**
+ * A short answer to an earlier clarifying question in the same thread completes that request
+ * ("remind me to call Sarah" … "tomorrow at 10"). Only an earlier event: out-of-order delivery never
+ * merges backwards. Returns the text to act on, and the interaction it completes.
+ */
+async function answerTo(ctx: MutationCtx, tk: string, owner: string, e: EnvelopeT, text: string, today: string): Promise<{ text: string; completes?: string }> {
   const asked = (await ctx.db.find(interactions, { threadKey: tk }))
     .filter((p) => p.owner === owner && p.state === "needs_clarification" && p.intent === "task.create" && (p.sourceSequence ?? 0) < (e.source.sequence ?? Number.MAX_SAFE_INTEGER))
     .sort((a, b) => (b.sourceSequence ?? 0) - (a.sourceSequence ?? 0))[0];
-  if (asked && interpret(text, today).intent.kind === "unknown") {
-    const combined = `${clean(String((asked.envelope as any).message.text))} ${text}`;
-    if (!interpret(combined, today).missing.length) {
-      said = combined;
-      await ctx.db.patch(interactions, asked.id, { state: "completed", updatedAt: Date.now() });
-    }
-  }
+  if (!asked || interpret(text, today as any).intent.kind !== "unknown") return { text };
+  const combined = `${clean(String((asked.envelope as any).message.text))} ${text}`;
+  return interpret(combined, today as any).missing.length ? { text } : { text: combined, completes: asked.id };
+}
+
+/** A personal request: the deterministic assistant, working for the owner, then limited to the audience. */
+async function personal(octx: MutationCtx, ctx: MutationCtx, e: EnvelopeT, conversationId: string, said: string, today: string, tzOffset: number, audience: "private" | "shared"): Promise<Result> {
   const r = await respond(octx, conversationId, said, today as any, tzOffset);
   const kind = r.intent.kind;
   const logged = await Promise.all((r.reply.actionIds ?? []).map((id) => ctx.db.get(actions, id)));
@@ -267,10 +291,8 @@ export const status = app.query({
   handler: async (ctx, { key, afterSeq }) => {
     const adapter = ctx.auth.requirePrincipal().id;
     const i = (await ctx.db.find(interactions, { key: `${adapter}:${key}` }))[0] ?? fail("NOT_FOUND", "No such interaction.");
-    if (i.owner && i.identity.linkId) {
-      const link = await ctx.db.get(identityLinks, i.identity.linkId);
-      if (!link || link.status !== "active") return { state: i.state, updates: [], revoked: true };
-    }
+    // Revoked in Resolver (the owner disconnected the surface): no more content for this surface.
+    if (i.owner && i.identity.resolverRef && !(await linkActive(i.identity.resolverRef, i.owner))) return { state: i.state, updates: [], revoked: true };
     return { state: i.state, updates: i.updates.filter((u: any) => u.seq > afterSeq), revoked: false };
   },
 });
@@ -285,8 +307,7 @@ export const cancel = app.mutation({
     const adapter = ctx.auth.requirePrincipal().id;
     const i = (await ctx.db.find(interactions, { key: `${adapter}:${key}` }))[0] ?? fail("NOT_FOUND", "No such interaction.");
     if (i.identity.sourcePrincipalId !== sourcePrincipalId) fail("FORBIDDEN", "Only the person who asked can cancel it.");
-    const link = i.identity.linkId ? await ctx.db.get(identityLinks, i.identity.linkId) : null;
-    if (!i.owner || !link || link.status !== "active") return { state: i.state, updates: [], revoked: !!i.owner };
+    if (!i.owner || !i.identity.resolverRef || !(await linkActive(i.identity.resolverRef, i.owner))) return { state: i.state, updates: [], revoked: !!i.owner };
     if (TERMINAL.has(i.state as InteractionState)) return { state: i.state, updates: [], revoked: false };
     const octx = ops.actingFor(ctx, i.owner);
     for (const id of i.actionIds) {
@@ -335,6 +356,8 @@ export const list = app.query({
         where: conversationTitle(label(i.adapter), e), workspace: e.conversation.workspaceName ?? null, from: i.identity.displayName,
         text: e.message.text, conversationId: i.conversationId ?? null, actionIds: i.actionIds, provenance: i.provenance,
         context: { scope: e.context.scope, messages: e.context.messages.length, truncated: e.context.limits.truncated },
+        identity: { source: i.identity.sourcePrincipalId, canonical: i.identity.canonical ?? null, resolverRef: i.identity.resolverRef ?? null, resolverRevision: i.identity.resolverRevision ?? null },
+        authority: i.authority ?? null,
         updates: i.updates, createdAt: i.createdAt,
       };
     });

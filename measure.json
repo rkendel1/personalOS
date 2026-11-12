@@ -30,12 +30,12 @@
   },
   "totals": {
     "domain": {
-      "files": 25,
-      "lines": 2619
+      "files": 27,
+      "lines": 2821
     },
     "experience": {
       "files": 20,
-      "lines": 1880
+      "lines": 1914
     },
     "infrastructure": {
       "files": 1,
@@ -47,11 +47,11 @@
     },
     "configuration": {
       "files": 6,
-      "lines": 156
+      "lines": 158
     },
     "tests": {
-      "files": 11,
-      "lines": 1679
+      "files": 12,
+      "lines": 1911
     },
     "third-party": {
       "files": 0,
@@ -62,8 +62,8 @@
       "lines": 0
     },
     "excluded": {
-      "files": 14,
-      "lines": 4387
+      "files": 16,
+      "lines": 4531
     },
     "unclassified": {
       "files": 0,
@@ -71,8 +71,8 @@
     }
   },
   "authored": {
-    "files": 52,
-    "lines": 4679
+    "files": 54,
+    "lines": 4917
   },
   "definitions": {
     "app": {
@@ -97,28 +97,28 @@
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 614,
+      "callSites": 631,
       "files": 19
     },
     {
       "api": "ctx.db",
-      "callSites": 164,
+      "callSites": 162,
       "files": 16
     },
     {
+      "api": "@feltdb/feltkit fail",
+      "callSites": 33,
+      "files": 10
+    },
+    {
       "api": "@feltdb/feltkit MutationCtx",
-      "callSites": 28,
+      "callSites": 29,
       "files": 5
     },
     {
       "api": "@feltdb/feltkit/react useMutation",
-      "callSites": 27,
+      "callSites": 29,
       "files": 4
-    },
-    {
-      "api": "@feltdb/feltkit fail",
-      "callSites": 25,
-      "files": 9
     },
     {
       "api": "@feltdb/feltkit/testing createTestApp",
@@ -127,12 +127,12 @@
     },
     {
       "api": "@feltdb/feltkit feltkit",
-      "callSites": 16,
+      "callSites": 18,
       "files": 1
     },
     {
       "api": "@feltdb/feltkit/react useQuery",
-      "callSites": 15,
+      "callSites": 17,
       "files": 3
     },
     {
@@ -326,6 +326,18 @@
       "scaffold": "modified"
     },
     {
+      "path": "docs/ANYWHERE.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/INTERACTION-CONTRACT.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
       "path": "docs/LIMITATIONS.md",
       "class": "excluded",
       "basis": "documentation",
@@ -470,6 +482,12 @@
       "lines": 30
     },
     {
+      "path": "feltkit/_authority.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 60
+    },
+    {
       "path": "feltkit/_briefing.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -519,6 +537,12 @@
       "lines": 256
     },
     {
+      "path": "feltkit/_resolver.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 116
+    },
+    {
       "path": "feltkit/actions.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -528,7 +552,7 @@
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 241,
+      "lines": 246,
       "scaffold": "modified"
     },
     {
@@ -572,13 +596,13 @@
       "path": "feltkit/interactions.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 274
+      "lines": 287
     },
     {
       "path": "feltkit/links.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 51
+      "lines": 53
     },
     {
       "path": "feltkit/memory.ts",
@@ -597,7 +621,7 @@
       "path": "feltkit/reminders.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 23
+      "lines": 29
     },
     {
       "path": "feltkit/settings.ts",
@@ -641,13 +665,13 @@
       "path": "package-lock.json",
       "class": "excluded",
       "basis": "lockfile",
-      "lines": 4387
+      "lines": 4531
     },
     {
       "path": "package.json",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 40,
+      "lines": 42,
       "scaffold": "modified"
     },
     {
@@ -714,7 +738,7 @@
       "path": "src/screens.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 567
+      "lines": 601
     },
     {
       "path": "src/styles.css",
@@ -749,6 +773,12 @@
       "lines": 19
     },
     {
+      "path": "tests/fixtures/anywhere.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 92
+    },
+    {
       "path": "tests/fixtures/streaming-model.ts",
       "class": "tests",
       "basis": "path: tests",
@@ -758,7 +788,7 @@
       "path": "tests/interactions.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 287
+      "lines": 427
     },
     {
       "path": "tests/interpret.test.ts",
