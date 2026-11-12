@@ -10,10 +10,10 @@
  *         verification: { method, challengeId, verifiedAt }, linkedAt }
  *
  * One reference per link, never reused (Resolver never reuses a revoked name), so relinking after a
- * revocation is a new reference and the history of the old one stays. Resolution lists the active
- * references under the sender's prefix and requires exactly one whose stored external identity
- * matches the sender exactly: none is unresolved, more than one is ambiguous, and both fail closed.
- * Hashes only make names; matching is on the stored values.
+ * revocation is a new reference and the history of the old one stays. Each link is created with an
+ * exact lookup entry for the external identity; resolution is one indexed `resolver.lookup` (no
+ * listing), and requires exactly one active link whose stored external identity matches the sender
+ * exactly: none is unresolved, more than one is ambiguous, and both fail closed.
  *
  * Resolver resolves; it grants nothing. Whether the resolved account may do what it asks is
  * AuthBoundry's decision (feltkit/_authority.ts), and the adapter's authenticity is FeltKit's session.
@@ -92,19 +92,30 @@ async function withResolver<T>(use: (r: ResolverClient) => Promise<T>): Promise<
 
 const same = (a: External, b: External) => a.adapter === b.adapter && a.instance === b.instance && a.principalId === b.principalId;
 
+/**
+ * The lookup entry a link is created with (Resolver `PutInput.lookup`): the external identity, exact.
+ * The key names the adapter and installation (hashed: installations are URLs), the value is the
+ * principal id itself, so matching is exact and done by Resolver's index (`resolver.lookup`).
+ */
+export async function lookupEntry(e: External): Promise<{ key: string; value: string }> {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(e.adapter)) fail("INVALID_ARGUMENT", "Adapter ids are lowercase letters, digits and dashes.");
+  return { key: `identity.personalos:${e.adapter}:${(await hex(e.instance)).slice(0, 64)}`, value: e.principalId };
+}
+
 /** The canonical identity a sender resolves to: exactly one active, exactly matching link, or none. */
 export async function resolveExternal(e: External): Promise<Resolution> {
-  const prefix = await prefixOf(e);
+  const entry = await lookupEntry(e);
   return withResolver(async (r) => {
-    const { refs } = await r.list(prefix);
+    // One indexed lookup: the active link references for exactly this external identity that this key may read.
+    const { refs } = await r.lookup(entry.key, entry.value);
     const matches: Array<{ ref: string; value: LinkValue; revision: number }> = [];
-    for (const s of refs.filter((x) => x.state === "active")) {
+    for (const s of refs) {
       try {
         const got = await r.resolve(s.ref);
         const value = got.selected.value as unknown as LinkValue;
         if (value && same(value.external, e) && ownerOf(value.canonical)) matches.push({ ref: s.ref, value, revision: got.revision });
       } catch (error) {
-        // Revoked between list and resolve: no longer a link.
+        // Revoked between lookup and resolve: no longer a link.
         if ((error as { reason?: string }).reason !== "resolver.revoked") throw error;
       }
     }
@@ -124,7 +135,7 @@ export async function linkExternal(e: External, owner: string, challengeId: stri
   const value: LinkValue = { canonical: canonicalOf(owner), external: { ...e }, verification: { method: "personalos.link-code/dm", challengeId, verifiedAt: new Date(at).toISOString() }, linkedAt: new Date(at).toISOString() };
   return withResolver(async (r) => {
     try {
-      const w = await r.put({ ref, kind: "value", schema: LINK_SCHEMA as any, binding: { value: value as any }, expectedRevision: 0, ttlSeconds: 0, reason: `linked by ${canonicalOf(owner)} (challenge ${challengeId})` });
+      const w = await r.put({ ref, kind: "value", schema: LINK_SCHEMA as any, binding: { value: value as any }, expectedRevision: 0, ttlSeconds: 0, lookup: await lookupEntry(e), reason: `linked by ${canonicalOf(owner)} (challenge ${challengeId})` } as any);
       return { ref: w.ref, revision: w.revision };
     } catch (error) {
       if ((error as { code?: string }).code !== "CONFLICT") throw error;

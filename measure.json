@@ -18,8 +18,8 @@
       "version": "0.3.22",
       "template": "tasks",
       "files": 20,
-      "unmodified": 5,
-      "modified": 14,
+      "unmodified": 4,
+      "modified": 15,
       "missing": 1
     },
     "generated": {
@@ -31,27 +31,27 @@
   "totals": {
     "domain": {
       "files": 27,
-      "lines": 2821
+      "lines": 2811
     },
     "experience": {
       "files": 20,
       "lines": 1914
     },
     "infrastructure": {
-      "files": 1,
-      "lines": 24
+      "files": 2,
+      "lines": 95
     },
     "generated": {
-      "files": 3,
+      "files": 2,
       "lines": 25
     },
     "configuration": {
-      "files": 6,
-      "lines": 158
+      "files": 7,
+      "lines": 172
     },
     "tests": {
-      "files": 12,
-      "lines": 1911
+      "files": 13,
+      "lines": 2129
     },
     "third-party": {
       "files": 0,
@@ -62,7 +62,7 @@
       "lines": 0
     },
     "excluded": {
-      "files": 16,
+      "files": 17,
       "lines": 4531
     },
     "unclassified": {
@@ -71,8 +71,8 @@
     }
   },
   "authored": {
-    "files": 54,
-    "lines": 4917
+    "files": 56,
+    "lines": 4992
   },
   "definitions": {
     "app": {
@@ -97,7 +97,7 @@
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 631,
+      "callSites": 635,
       "files": 19
     },
     {
@@ -107,12 +107,12 @@
     },
     {
       "api": "@feltdb/feltkit fail",
-      "callSites": 33,
+      "callSites": 34,
       "files": 10
     },
     {
       "api": "@feltdb/feltkit MutationCtx",
-      "callSites": 29,
+      "callSites": 30,
       "files": 5
     },
     {
@@ -121,14 +121,14 @@
       "files": 4
     },
     {
-      "api": "@feltdb/feltkit/testing createTestApp",
-      "callSites": 20,
-      "files": 4
+      "api": "@feltdb/feltkit feltkit",
+      "callSites": 21,
+      "files": 1
     },
     {
-      "api": "@feltdb/feltkit feltkit",
-      "callSites": 18,
-      "files": 1
+      "api": "@feltdb/feltkit/testing createTestApp",
+      "callSites": 21,
+      "files": 5
     },
     {
       "api": "@feltdb/feltkit/react useQuery",
@@ -136,14 +136,14 @@
       "files": 3
     },
     {
+      "api": "@feltdb/feltkit/testing TestApp",
+      "callSites": 12,
+      "files": 4
+    },
+    {
       "api": "ctx.auth",
       "callSites": 11,
       "files": 7
-    },
-    {
-      "api": "@feltdb/feltkit/testing TestApp",
-      "callSites": 8,
-      "files": 3
     },
     {
       "api": "@feltdb/feltkit/react useFeltKit",
@@ -159,6 +159,11 @@
       "api": "@feltdb/feltkit/react FeltKitProvider",
       "callSites": 4,
       "files": 2
+    },
+    {
+      "api": "ctx.afterCommit.webhooks",
+      "callSites": 4,
+      "files": 4
     },
     {
       "api": "ctx.runMutation",
@@ -191,7 +196,7 @@
       "files": 3
     },
     {
-      "api": "ctx.afterCommit.webhooks",
+      "api": "ctx.authority",
       "callSites": 3,
       "files": 3
     },
@@ -266,7 +271,7 @@
       "id": "audit-trail",
       "title": "App-built business audit trail",
       "file": "feltkit/app.ts",
-      "line": 220,
+      "line": 235,
       "evidence": "export const actions = app.collection(",
       "platform": "app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence)",
       "acknowledged": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
@@ -303,14 +308,14 @@
       "path": ".github/workflows/ci.yml",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 30
+      "lines": 44
     },
     {
       "path": ".gitignore",
-      "class": "generated",
-      "basis": "scaffold (create-feltkit 0.3.22, unmodified)",
+      "class": "configuration",
+      "basis": "configuration file",
       "lines": 0,
-      "scaffold": "unmodified"
+      "scaffold": "modified"
     },
     {
       "path": "LICENSE",
@@ -324,6 +329,12 @@
       "basis": "documentation",
       "lines": 0,
       "scaffold": "modified"
+    },
+    {
+      "path": "docs/ANYWHERE-M3-REGISTER.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
     },
     {
       "path": "docs/ANYWHERE.md",
@@ -485,7 +496,7 @@
       "path": "feltkit/_authority.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 60
+      "lines": 21
     },
     {
       "path": "feltkit/_briefing.ts",
@@ -540,7 +551,7 @@
       "path": "feltkit/_resolver.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 116
+      "lines": 120
     },
     {
       "path": "feltkit/actions.ts",
@@ -552,7 +563,7 @@
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 246,
+      "lines": 252,
       "scaffold": "modified"
     },
     {
@@ -596,7 +607,7 @@
       "path": "feltkit/interactions.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 287
+      "lines": 306
     },
     {
       "path": "feltkit/links.ts",
@@ -703,6 +714,12 @@
       "scaffold": "modified"
     },
     {
+      "path": "scripts/anywhere-platform.mjs",
+      "class": "infrastructure",
+      "basis": "path: scripts/ (app tooling)",
+      "lines": 71
+    },
+    {
       "path": "scripts/measure-doc.mjs",
       "class": "infrastructure",
       "basis": "path: scripts/ (app tooling)",
@@ -767,6 +784,12 @@
       "lines": 285
     },
     {
+      "path": "tests/authboundry-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 86
+    },
+    {
       "path": "tests/design-foundation.test.ts",
       "class": "tests",
       "basis": "path: tests",
@@ -776,7 +799,7 @@
       "path": "tests/fixtures/anywhere.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 92
+      "lines": 162
     },
     {
       "path": "tests/fixtures/streaming-model.ts",
@@ -788,7 +811,7 @@
       "path": "tests/interactions.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 427
+      "lines": 489
     },
     {
       "path": "tests/interpret.test.ts",

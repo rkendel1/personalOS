@@ -11,7 +11,12 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
+    env:
+      # PersonalOS Anywhere runs on platform changes not yet released on npm (docs/ANYWHERE-M3-REGISTER.md):
+      # scripts/anywhere-platform.mjs builds FeltKit, Resolver and AuthBoundry from pinned commits.
+      # FeltKit and AuthBoundry are private repositories: PLATFORM_REPOS_TOKEN needs read access to both.
+      PLATFORM_REPOS_TOKEN: ${{ secrets.PLATFORM_REPOS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,14 +24,26 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Cache the AuthBoundry server build (keyed by its pinned commit)
+        uses: actions/cache@v4
+        with:
+          path: .anywhere/src/authboundry/target
+          key: authboundry-${{ runner.os }}-${{ hashFiles('scripts/anywhere-platform.mjs') }}
+      - name: Build the platform at its pinned commits (FeltKit, Resolver, the real AuthBoundry server)
+        run: node scripts/anywhere-platform.mjs build
+      - name: Install it (no-save; installed.json records each package's commit)
+        run: node scripts/anywhere-platform.mjs install . && cat .anywhere/installed.json
       - name: Typecheck
         run: npm run typecheck
       - name: What the app is made of (feltkit measure; measure.json is current)
         run: npx feltkit measure --check
       - name: The measured section of docs/WHAT-FELTKIT-GIVES-YOU.md matches it
         run: npm run measure:doc -- --check
-      - name: Tests (the app on FeltKit's real runtime and an isolated database)
+      - name: Tests, including delegated execution against the real AuthBoundry server (never skipped here)
         run: npm test
+        env:
+          AUTHBOUNDRY_DIR: .anywhere/src/authboundry
+          REQUIRE_REAL_AUTHBOUNDRY: "1"
       - name: Build the web app
         run: npm run build
       - name: Build the Chrome extension

@@ -21,8 +21,9 @@ const OWNER = [
   "feltkit.agent.*",
   // Documents: files the owner keeps, stored by AppPort Services Files (feltkit/documents.ts).
   "documents.*", "files.read", "files.write", "files.delete",
-  // Outbound events (task.completed, reminder.fired) to endpoints the operator registers.
-  "webhooks.emit",
+  // Outbound events (task.completed, reminder.fired, interaction.updated) to endpoints the operator
+  // registers; each delivery is authorized again as the emitter (webhooks.deliver, runtime-internal).
+  "webhooks.emit", "webhooks.deliver",
   // Connected surfaces (feltkit/links.ts, interactions.ts): link and unlink them, see what they asked.
   "links.*", "interactions.read",
   // A reminder job fires as whoever queued it: the owner, or a surface's bridge acting for the owner.
@@ -36,7 +37,7 @@ const OWNER = [
  * Inside interactions:receive it works for the PersonalOS account an *active link* names
  * (feltkit/_ops.ts actingFor). It can never approve: actions:approve is `approval: "required"`.
  */
-const BRIDGE = ["interactions.receive", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "reminders.fire"];
+const BRIDGE = ["interactions.receive", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
 
 export const app = feltkit({
   name: "personalos",
@@ -47,7 +48,8 @@ export const app = feltkit({
     viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read", "documents.read"],
     // Operators configure the model and services in Studio. Never granted to the assistant itself.
     bridge: BRIDGE,
-    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "feltkit.operations.*"],
+    // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
+    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
   },
   auth: { accounts: { roles: ["owner"] } },
   dev: {
@@ -56,6 +58,16 @@ export const app = feltkit({
       { id: "grace", name: "Grace Hopper", roles: ["owner"] },
       { id: "guest", name: "Read-only guest", roles: ["viewer"] },
     ],
+  },
+  // AuthBoundry decides delegated work from connected surfaces (ctx.authority, feltkit/interactions.ts):
+  // PersonalOS's executor `agent:personalos` acts on behalf of a person, under that person's
+  // delegation to it, never under its own rules. Credentials are custody references
+  // (`feltkit credential set credential-ref:authboundry-check`, or FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK).
+  authority: {
+    url: { env: "AUTHBOUNDRY_URL" },
+    application: "personalos",
+    checkCredential: "credential-ref:authboundry-check",
+    executor: { principal: "agent:personalos", type: "agent" },
   },
   // Production decides with whatever this Resolver reference points to; change the model there,
   // without a redeploy (docs/RESOLVER.md in @feltdb/feltkit). Development uses Studio → Models.
@@ -71,7 +83,10 @@ export const app = feltkit({
     // Documents the owner keeps (feltkit/documents.ts). 10 MB each.
     files: { maxBytes: 10 * 1024 * 1024 },
     // Signed outbound events to endpoints an operator registers (Studio → Webhooks).
-    webhooks: { events: ["task.completed", "reminder.fired", "document.added"] },
+    // interaction.updated: an interaction from a connected surface changed (approved, declined,
+    // cancelled). It names the interaction only; the surface fetches the content with its bridge
+    // session (interactions:status), which refuses once the person disconnected that surface.
+    webhooks: { events: ["task.completed", "reminder.fired", "document.added", "interaction.updated"] },
     intelligence: true,
   },
 });
@@ -322,7 +337,11 @@ export const interactions = app.collection(
       canonical: s.optional(s.string()),
     }),
     /** AuthBoundry's decision on the capability this request needed (feltkit/_authority.ts): the evidence it was allowed. */
-    authority: s.optional(s.object({ capability: s.string(), outcome: s.string(), principal: s.string(), decisionId: s.optional(s.string()), reason: s.optional(s.string()) })),
+    /**
+     * AuthBoundry's decision (feltkit/_authority.ts): the executor (`principal`, PersonalOS's agent),
+     * the requester it acted for (`onBehalfOf`), the delegation that decided, and the decision id.
+     */
+    authority: s.optional(s.object({ capability: s.string(), outcome: s.string(), principal: s.string(), onBehalfOf: s.optional(s.string()), delegationId: s.optional(s.string()), decisionId: s.optional(s.string()), reason: s.optional(s.string()) })),
     audience: s.enum(["private", "shared"] as const),
     state: s.string(),
     intent: s.optional(s.string()),

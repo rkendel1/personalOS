@@ -405,7 +405,9 @@ test("Resolver: an ambiguous identity (two active links for one sender) fails cl
   const { refs } = await resolver.admin.list("ref://identity/personalos/multiplayer/");
   let prefix = "";
   for (const r of refs.filter((x) => x.state === "active")) if (((await resolver.admin.resolve(r.ref)).selected.value as any).external.instance === INSTANCE) prefix = r.ref.slice(0, r.ref.lastIndexOf("/") + 1);
-  await resolver.admin.put({ ref: `${prefix}forged`, kind: "value", binding: { value: { canonical: "personalos:account:grace", external: { adapter: "multiplayer", instance: INSTANCE, principalId: "ada" }, verification: { method: "operator", challengeId: "x", verifiedAt: new Date().toISOString() }, linkedAt: new Date().toISOString() } } as any, expectedRevision: 0, ttlSeconds: 0 } as any);
+  // It carries the same lookup entry, so Resolver's indexed lookup returns both.
+  const { lookupEntry } = await import("../feltkit/_resolver.js");
+  await resolver.admin.put({ ref: `${prefix}forged`, kind: "value", binding: { value: { canonical: "personalos:account:grace", external: { adapter: "multiplayer", instance: INSTANCE, principalId: "ada" }, verification: { method: "operator", challengeId: "x", verifiedAt: new Date().toISOString() }, linkedAt: new Date().toISOString() } } as any, expectedRevision: 0, ttlSeconds: 0, lookup: await lookupEntry({ adapter: "multiplayer", instance: INSTANCE, principalId: "ada" }) } as any);
   const r = await deliver(t, "@personalos add buy milk to my list", { from: "ada" });
   assert.deepEqual([r.state, r.refusal?.code], ["refused", "AMBIGUOUS_IDENTITY"]);
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length + (await t.as("grace").query(api.tasks.list, {})).length, 0);
@@ -470,7 +472,8 @@ test("AuthBoundry: each request is decided on its exact capability before it run
   const ok = await deliver(t, "@personalos remind me to call the bank tomorrow at 9am", { from: "ada" });
   assert.equal(ok.state, "completed");
   const d = authority.decisions.at(-1)!;
-  assert.deepEqual([d.principal, d.capability, d.decision], ["user:ada", "personalos.reminders.create", "allow"]);
+  // Requester and executor stay distinct: PersonalOS's agent asks, on behalf of Ada, under Ada's delegation.
+  assert.deepEqual([d.principal, d.onBehalfOf, d.capability, d.decision, d.delegationId], ["agent:personalos", "user:ada", "personalos.reminders.create", "allow", "delegation-user:ada"]);
   const [i] = (await t.as("ada").query(api.interactions.list, {})).filter((x) => x.intent === "task.create");
   assert.ok(i);
   // Not granted: refused, nothing created, the denial recorded with its decision id.
@@ -509,6 +512,77 @@ test("AuthBoundry: Grace's grant never covers Ada's account; the decision is abo
   authority.grant("grace");
   const r = await deliver(t, "@personalos add sneak to my list", { from: "ada", name: "Grace Hopper", claimed: { principal: "grace" } });
   assert.equal(r.state, "refused");
-  assert.equal(authority.decisions.at(-1)!.principal, "user:ada");
+  assert.equal(authority.decisions.at(-1)!.onBehalfOf, "user:ada");
+  assert.equal(authority.decisions.at(-1)!.principal, "agent:personalos");
   assert.equal((await t.as("grace").query(api.tasks.list, {})).length, 0);
+}));
+
+// ── M3: delegated identity, approval binding, durable events ────────────────
+
+test("delegation: the interaction records requester, executor, delegation and decision, distinctly", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  const r = await deliver(t, "@personalos add pay the invoice to my list", { from: "ada" });
+  assert.equal(r.state, "completed");
+  const [i] = (await t.as("ada").query(api.interactions.list, {})).filter((x) => x.intent === "task.create");
+  assert.deepEqual(i!.identity.source, "ada", "the source identity the surface authenticated");
+  assert.equal(i!.identity.canonical, "personalos:account:ada", "the canonical requester Resolver resolved");
+  assert.deepEqual([i!.authority!.principal, i!.authority!.onBehalfOf, i!.authority!.delegationId, i!.authority!.outcome], ["agent:personalos", "user:ada", "delegation-user:ada", "allow"], "executor, requester, delegation");
+  assert.match(i!.authority!.decisionId!, /^test-decision-/);
+  // The resource affected is Ada's: the task is hers, and the action log says which interaction caused it.
+  const [task] = await t.as("ada").query(api.tasks.list, {});
+  assert.equal(task!.owner, "ada");
+}));
+
+test("delegation: an allow that does not name the requester and a delegation fails closed; a requester without delegation is refused", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  authority.mode = "no-echo";
+  await rejects(deliver(t, "@personalos add one to my list", { from: "ada" }), "UNAVAILABLE");
+  authority.mode = "up";
+  authority.policy.delete("user:ada"); // Ada is known to the authority but delegated nothing
+  const r = await deliver(t, "@personalos add two to my list", { from: "ada" });
+  assert.equal(r.state, "refused");
+  assert.match(r.reply, /delegation_missing/);
+  assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 0);
+}));
+
+test("approval: seeing the conversation is not authority; only the requester approves, in PersonalOS, the exact proposed action", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  await link(t, "grace", "grace");
+  await t.as("ada").mutation(api.tasks.create, { title: "Budget draft" });
+  const r = await deliverKeyed(t, "@personalos delete budget draft", { from: "ada" });
+  assert.equal(r.state, "awaiting_approval");
+  // Grace was in the conversation; the proposal does not exist for her.
+  await rejects(t.as("grace").mutation(api.actions.approve, { id: r.approval!.actionId }), "NOT_FOUND");
+  // The bridge cannot approve; the executor cannot approve.
+  await rejects(t.as(BRIDGE).mutation(api.actions.approve, { id: r.approval!.actionId }), "FORBIDDEN");
+  // The proposal is bound to the exact action and its input, and to the interaction that made it.
+  const proposal = (await t.as("ada").query(api.actions.list, { status: "proposed" }))[0]!;
+  assert.deepEqual([proposal.kind, proposal.input.title], ["task.delete", "Budget draft"]);
+  const [i] = (await t.as("ada").query(api.interactions.list, {})).filter((x) => x.intent === "task.delete");
+  assert.deepEqual(i!.actionIds, [proposal.id]);
+  assert.equal(i!.authority!.capability, "personalos.tasks.delete");
+  await t.as("ada").mutation(api.actions.approve, { id: proposal.id });
+  assert.equal((await t.as(BRIDGE).query(api.interactions.status, { key: r.key, afterSeq: 0 })).state, "completed");
+}));
+
+test("events: an approval or cancellation emits interaction.updated naming the interaction only, for the surface's endpoint", () => withApp(async (t) => {
+  await link(t, "ada", "ada");
+  await t.as("ada").mutation(api.tasks.create, { title: "Old plan" });
+  const r = await deliverKeyed(t, "@personalos delete old plan", { from: "ada" });
+  const emitted: any[] = [];
+  const operator = { id: "op", type: "user" as const, roles: ["admin"] };
+  const http = await import("node:http");
+  const receiver = http.createServer((req, res) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { emitted.push(JSON.parse(b)); res.writeHead(200).end("{}"); }); });
+  await new Promise<void>((resolve) => receiver.listen(0, "127.0.0.1", resolve));
+  process.env.FELTKIT_CREDENTIAL_SURFACE_SIGNING = "whsec_surface_signing_secret_0123456789";
+  try {
+    await (t.runtime as any).services.invoke("webhooks.register", { url: `http://127.0.0.1:${(receiver.address() as any).port}/hook`, events: ["interaction.updated"], signingCredentialRef: "credential-ref:surface-signing" }, operator);
+    await t.as("ada").mutation(api.actions.approve, { id: r.approval!.actionId });
+    for (let k = 0; k < 40 && !emitted.length; k++) { await (t.runtime as any).runServices(); await new Promise((x) => setTimeout(x, 100)); }
+    const event = emitted[0]!;
+    const data = event.data ?? event.payload ?? event;
+    assert.deepEqual([data.adapter, data.key, data.state, data.seq], ["multiplayer", r.key, "completed", 2]);
+    assert.equal(typeof data.workspaceId, "string");
+    assert.ok(!JSON.stringify(event).includes("Old plan"), "the event carries no content; the surface fetches it with its bridge session");
+  } finally { receiver.close(); }
 }));

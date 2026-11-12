@@ -32,7 +32,7 @@ import { interpret } from "./_interpret.js";
 import { clockFor } from "./_clock.js";
 import * as ops from "./_ops.js";
 import { linkActive, linkExternal, resolveExternal } from "./_resolver.js";
-import { capabilityFor, decide } from "./_authority.js";
+import { authorityPrincipal, capabilityFor } from "./_authority.js";
 
 /** How a surface's adapter id reads to people. */
 const LABELS: Record<string, string> = { multiplayer: "Multiplayer" };
@@ -153,8 +153,16 @@ export const receive = app.mutation({
 
     // ── Authority: AuthBoundry decides on the exact capability, before anything runs ──
     const capability = capabilityFor(about?.kind ?? understood!.kind, { reminder: understood?.kind === "task.create" ? understood.reminder : false });
-    const decision = await decide(owner, capability, { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) });
-    const authority = { capability, outcome: decision.outcome, decisionId: decision.decisionId ?? undefined, principal: decision.principal, reason: decision.reason ?? undefined };
+    // PersonalOS's executor asks to act on behalf of the resolved account: AuthBoundry decides from
+    // that person's delegation to PersonalOS for exactly this capability, or denies.
+    const decision = await ctx.authority.decide({ capability, onBehalfOf: authorityPrincipal(owner), context: { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) } });
+    const authority = {
+      capability, outcome: decision.outcome, principal: decision.executor,
+      ...(decision.onBehalfOf ? { onBehalfOf: decision.onBehalfOf } : {}),
+      ...(decision.delegationId ? { delegationId: decision.delegationId } : {}),
+      ...(decision.decisionId ? { decisionId: decision.decisionId } : {}),
+      ...(decision.reason ? { reason: decision.reason } : {}),
+    };
     if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); nothing was done.`);
     if (!decision.allowed) {
       const message = `You aren't allowed to do that through ${label(adapter)} (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
@@ -318,9 +326,30 @@ export const cancel = app.mutation({
     if (i.conversationId) await appendMessage(octx, i.conversationId, { role: "assistant", text, actionIds: i.actionIds });
     const update = { seq: (i.updates.at(-1)?.seq ?? 0) + 1, state: "cancelled", text: "Cancelled. Nothing was changed.", at: Date.now() };
     await ctx.db.patch(interactions, i.id, { state: "cancelled", updates: [...i.updates, update], updatedAt: Date.now() });
+    announce(ctx, i, update);
     return { state: "cancelled", updates: [update], revoked: false };
   },
 });
+
+/**
+ * The durable event a surface receives when one of its interactions changes (Studio → Webhooks: the
+ * surface's inbound endpoint). It is emitted in the transaction that records the update, so it exists
+ * exactly when the update does; AppPort Services signs, retries and records each delivery. It names
+ * the interaction only (the surface's own idempotency key, workspace, seq, state): the surface fetches
+ * the content with its bridge session (interactions:status), which refuses once the person
+ * disconnected that surface, so no private result travels in an event.
+ */
+function announce(ctx: MutationCtx, i: { adapter: string; key: string; envelope: unknown }, update: { seq: number; state: string }) {
+  const e = i.envelope as EnvelopeT;
+  ctx.afterCommit.webhooks.emit("interaction.updated", {
+    adapter: i.adapter,
+    key: i.key.slice(i.adapter.length + 1),
+    instance: e.source.instance,
+    workspaceId: e.conversation.workspaceId,
+    seq: update.seq,
+    state: update.state,
+  });
+}
 
 /**
  * Called by actions:approve / actions:reject (as the owner): the decision on a proposal an
@@ -341,6 +370,7 @@ export async function settle(ctx: MutationCtx, proposal: { id: string; messageId
       : shared ? "Approved, but it couldn't be done (what it referred to no longer exists). Nothing was changed." : `Approved, but it couldn't be done: ${detail}. Nothing was changed.`;
   const update = { seq: (i.updates.at(-1)?.seq ?? 0) + 1, state, text, at: Date.now(), actionId: proposal.id };
   await ctx.db.patch(interactions, i.id, { state, updates: [...i.updates, update], updatedAt: Date.now() });
+  announce(ctx, i, update);
 }
 
 /** What connected surfaces asked of you, newest first, with where it came from and what informed it. */
