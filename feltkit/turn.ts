@@ -20,14 +20,19 @@ import type { GenerationMessage, ToolCall } from "@feltdb/feltkit";
 import { api } from "./_generated/api.js";
 import { app } from "./app.js";
 import { clockFor, offsetFor, type Clock } from "./_clock.js";
+import { outcomeOf } from "./_research.js";
+import { retryResearch, startResearch } from "./research.js";
+import { declaredCapabilities, PROSPECT_NEEDS, describeDiscovery, discover } from "./_capabilities.js";
 
 /** The capabilities the model may use, as tools. Everything else stays with the person. */
 const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "memory.add", "memory.list", "briefing.today", "projects.list", "documents.list"];
 /** Inputs the app fills in itself (from the caller's clock), so the model never guesses them. */
 const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset"], "tasks.update": ["tzOffset"], "briefing.today": ["today"] };
 const MAX_ROUNDS = 3;
+/** A question about whether PersonalOS can reach the web (search, browse, look things up online). */
+const CAPABILITY_QUESTION = /\b(can|could|are|do|don'?t|can'?t|cannot|able)\b.*\b(search|browse|google|look (?:things |it )?up|access|use)\b.*\b(web|internet|online)\b|\bweb access\b|\binternet access\b/i;
 
-function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[]; openTaskCount: number; memories: Array<{ content: string; status: string }> }): string {
+function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[]; openTaskCount: number; memories: Array<{ content: string; status: string }> }, landscape: string): string {
   return [
     `You are PersonalOS, ${info.name ? `${info.name}'s` : "the user's"} personal assistant: warm, direct, occasionally dry-witted, never corporate. Keep replies short unless asked for more.`,
     `Now: ${clock.weekday} ${clock.today} ${clock.time} (${clock.timeZone}). Resolve "today", "tomorrow", weekdays and times in this time zone. Dates are YYYY-MM-DD, times HH:MM (24h).`,
@@ -37,7 +42,10 @@ function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[
     "- A reminder is tasks.create with reminder: true, a due date and a time.",
     "- Reading tools (tasks.list, briefing.today, memory.list, projects.list, documents.list) run immediately; use them when you need facts you don't have below.",
     "- Never invent tasks, people, dates or facts. Unconfirmed memories are guesses; say so if you rely on one.",
-    "- You can list the user's saved documents but cannot read their contents. You cannot send messages, email, or manage calendars: there is no such integration. Say so plainly if asked.",
+    "- You can list the user's saved documents but cannot read their contents.",
+    "- What PersonalOS can do is not limited to the tools in this turn. Research outcomes (for example finding customers, prospects or leads for a product) are run by PersonalOS's research, which the user starts by asking for the outcome in words; it discovers and uses what the platform offers. What it can use right now, as discovered from the platform's catalog:",
+    landscape,
+    "- Never say a capability does not exist, or that you have no web access, unless the list above says so; if it says something is not configured or not permitted, say exactly that and what would enable it. Never claim you searched, sent or did anything you did not do in this turn.",
     "",
     `Open tasks (${info.openTaskCount}, soonest first): ${JSON.stringify(info.tasks)}`,
     `What you know about the user (status "confirmed" = they said so): ${JSON.stringify(info.memories)}`,
@@ -78,9 +86,40 @@ export const turn = app.action({
   returns: Result,
   handler: async (ctx, { conversationId, clientId, text }) => {
     const clock = clockFor(ctx.auth.context.timeZone);
+    // An outcome to research ("find me new customers for FeltKit") is pursued by research, with or
+    // without a model: discovery decides what can run, not the tools a model turn would be given.
+    if (outcomeOf(text) && ctx.auth.has("research.run")) {
+      const r = await startResearch(ctx, text, conversationId);
+      return { mode: "rules" as const, conversationId: r.conversationId, messageId: r.messageId, replyId: r.replyId, replayed: false, reason: `research ${r.status}` };
+    }
+    const control = /^(retry|resume|continue|stop|cancel) (the )?research\b/i.exec(text.trim());
+    if (control && ctx.auth.has("research.run")) {
+      const runs = (await ctx.runQuery(api.research.list, {})) as Array<{ id: string; status: string; conversationId: string | null }>;
+      const target = runs.find((r) => (/^(stop|cancel)/i.test(control[1]!) ? r.status === "running" || r.status === "blocked" : r.status !== "completed" && r.status !== "running"));
+      if (target) {
+        const r = /^(stop|cancel)/i.test(control[1]!) ? await ctx.runMutation(api.research.cancel, { runId: target.id }) : await retryResearch(ctx, target.id);
+        return { mode: "rules" as const, conversationId: r.conversationId ?? target.conversationId ?? conversationId ?? "", messageId: r.messageId ?? "", replyId: r.replyId ?? "", replayed: false, reason: `research ${control[1]!.toLowerCase()}` };
+      }
+    }
     const prefs = await ctx.runQuery(api.settings.get, {});
     const status = await ctx.model.status();
     const useModel = prefs.modelAssist && status.ready && ctx.auth.has("feltkit.agent.write");
+    // "Can you search the web?" without a model: answered from what discovery finds, not a fixed list.
+    if (!useModel && CAPABILITY_QUESTION.test(text)) {
+      const d = await discover(ctx.agent, PROSPECT_NEEDS, { declared: declaredCapabilities() });
+      const search = d.needs[0]!;
+      const reply = [
+        search.state === "available" && search.problems.length
+          ? "Web search is set up in this PersonalOS; whether its provider is configured is checked when research first uses it. Ask for the outcome (for example, \"find me new customers for <product>\") and I'll run it, or tell you exactly what is missing."
+          : search.state === "available"
+          ? "Yes. Web search is available to me here, so I can research things for you: ask for the outcome (for example, \"find me new customers for <product>\") and I'll run it."
+          : `Not right now, and it isn't a fixed limit: ${search.need} is ${search.state === "needs-configuration" ? "set up but not configured" : search.state === "needs-authorization" ? "not permitted for your account" : "not connected"}.${search.howToEnable ? ` ${search.howToEnable}` : ""}`,
+        `What I checked (${d.capabilitiesSeen} capabilities):`,
+        describeDiscovery(d),
+      ].join("\n");
+      const r = await ctx.runMutation(api.researchstate.answer, { text, reply, ...(conversationId ? { conversationId } : {}) });
+      return { mode: "rules" as const, ...r, replayed: false, reason: "capabilities" };
+    }
     if (!useModel) {
       // The deterministic assistant: still fully working without a model.
       const reason = !prefs.modelAssist ? "model turned off in Settings" : !status.ready ? (status.problems[0]?.message ?? "no model is configured") : "this account may not use the model";
@@ -89,6 +128,7 @@ export const turn = app.action({
     }
 
     const user = await ctx.runMutation(api.turnstate.recordUser, { ...(conversationId ? { conversationId } : {}), clientId, text });
+    const landscape = describeDiscovery(await discover(ctx.agent, PROSPECT_NEEDS, { declared: declaredCapabilities() }));
     if (user.replyId) return { mode: "model" as const, conversationId: user.conversationId, messageId: user.messageId, replyId: user.replyId, replayed: true };
     const { taskId } = await ctx.agent.openTask({ key: user.messageId, objective: text.slice(0, 500) });
     ctx.emit({ type: "turn", conversationId: user.conversationId, messageId: user.messageId, taskId });
@@ -106,7 +146,7 @@ export const turn = app.action({
         return { ...t, inputSchema: schema as Record<string, unknown> };
       });
     const conversation: GenerationMessage[] = [
-      { role: "system", content: systemPrompt(clock, info) },
+      { role: "system", content: systemPrompt(clock, info, landscape) },
       ...info.history.map((m) => ({ role: m.role as "user" | "assistant", content: m.text })),
       { role: "user", content: text },
     ];

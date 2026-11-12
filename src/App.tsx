@@ -1,3 +1,4 @@
+import { Research } from "./research";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConnectionState, useFeltKit, useMutation, useQuery, useSession } from "@feltdb/feltkit/react";
 import { api } from "../feltkit/_generated/api";
@@ -8,7 +9,7 @@ import { Chat, type Compose } from "./chat";
 import { Activity, Files, MemoryScreen, Projects, Settings, Tasks, Today } from "./screens";
 import { clientDay } from "./ui";
 
-type Tab = "chat" | "today" | "tasks" | "memory" | "projects" | "files" | "activity" | "settings";
+type Tab = "chat" | "today" | "tasks" | "memory" | "research" | "projects" | "files" | "activity" | "settings";
 const PRIMARY: Array<{ tab: Tab; label: string }> = [
   { tab: "chat", label: "Chat" },
   { tab: "today", label: "Today" },
@@ -16,6 +17,7 @@ const PRIMARY: Array<{ tab: Tab; label: string }> = [
   { tab: "memory", label: "Memory" },
 ];
 const SECONDARY: Array<{ tab: Tab; label: string }> = [
+  { tab: "research", label: "Research" },
   { tab: "projects", label: "Projects" },
   { tab: "files", label: "Files" },
   { tab: "activity", label: "Activity" },
@@ -175,6 +177,7 @@ function Workspace(props: {
       {tab === "today" && <Today onError={props.onError} onAsk={ask} />}
       {tab === "tasks" && <Tasks onError={props.onError} />}
       {tab === "memory" && <MemoryScreen onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
+      {tab === "research" && <Research onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}
       {tab === "projects" && <Projects onError={props.onError} onAsk={ask} />}
       {tab === "files" && <Files onError={props.onError} />}
       {tab === "activity" && <Activity onError={props.onError} onOpenConversation={(id) => go("chat", id)} />}

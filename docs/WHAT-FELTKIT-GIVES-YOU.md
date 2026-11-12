@@ -16,39 +16,40 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.26 (installed 0.3
 
 | Class | Files | Lines of code | Meaning |
 |---|--:|--:|---|
-| domain | 27 | 2875 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
-| experience | 20 | 1925 | What people see and use: UI, styles, HTML, browser extension. |
+| domain | 31 | 3475 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
+| experience | 21 | 2050 | What people see and use: UI, styles, HTML, browser extension. |
 | infrastructure | 1 | 24 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
-| generated | 3 | 25 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
+| generated | 3 | 27 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
 | configuration | 6 | 177 | Build, package, deployment and tool configuration. |
-| tests | 16 | 2283 | Tests, fixtures and acceptance scripts. |
-| excluded | 18 | 6311 | Not code: documentation, images, fonts, lockfiles, licences. |
+| tests | 18 | 2684 | Tests, fixtures and acceptance scripts. |
+| excluded | 20 | 7422 | Not code: documentation, images, fonts, lockfiles, licences. |
 
-**Authored by the application** (domain + experience + infrastructure + configuration): 5001 lines in 54 files. Tests: 2283 lines.
+**Authored by the application** (domain + experience + infrastructure + configuration): 5726 lines in 59 files. Tests: 2684 lines.
 
 **Provenance.** Scaffolded by create-feltkit 0.3.22 (tasks): 20 files, 5 unchanged, 14 changed, 1 removed. Generated API: matches regeneration.
 
-**Definitions** (`app.*` in feltkit/): 2 action, 1 agent, 10 collection, 2 integration, 38 mutation, 13 query. Collections: documents, conversations, messages, memories, tasks, projects, actions, settings, identityLinks, interactions.
+**Definitions** (`app.*` in feltkit/): 4 action, 2 agent, 13 collection, 3 integration, 42 mutation, 15 query. Collections: documents, conversations, messages, memories, tasks, projects, actions, settings, identityLinks, interactions, researchRuns, researchSources, prospects.
 
 ### Platform consumption (static call sites)
 
 | API | Call sites | Files |
 |---|--:|--:|
-| `@feltdb/feltkit s` | 670 | 19 |
-| `ctx.db` | 169 | 16 |
-| `@feltdb/feltkit fail` | 36 | 10 |
+| `@feltdb/feltkit s` | 789 | 21 |
+| `ctx.db` | 185 | 18 |
+| `@feltdb/feltkit fail` | 38 | 12 |
+| `@feltdb/feltkit/react useMutation` | 31 | 5 |
 | `@feltdb/feltkit MutationCtx` | 30 | 5 |
-| `@feltdb/feltkit/react useMutation` | 30 | 4 |
-| `@feltdb/feltkit feltkit` | 24 | 1 |
-| `@feltdb/feltkit/testing createTestApp` | 21 | 5 |
-| `@feltdb/feltkit/react useQuery` | 17 | 3 |
-| `@feltdb/feltkit/testing TestApp` | 13 | 4 |
-| `ctx.auth` | 11 | 7 |
-| `@feltdb/feltkit/react useFeltKit` | 7 | 4 |
-| `ctx.agent` | 5 | 1 |
+| `@feltdb/feltkit/testing createTestApp` | 29 | 6 |
+| `@feltdb/feltkit feltkit` | 28 | 1 |
+| `@feltdb/feltkit/react useQuery` | 19 | 4 |
+| `@feltdb/feltkit/testing TestApp` | 19 | 5 |
+| `ctx.agent` | 16 | 3 |
+| `ctx.auth` | 13 | 7 |
+| `@feltdb/feltkit/react useFeltKit` | 8 | 5 |
+| `ctx.runMutation` | 8 | 2 |
+| `ctx.afterCommit.agent` | 5 | 3 |
 | `@feltdb/feltkit/react FeltKitProvider` | 4 | 2 |
 | `ctx.afterCommit.webhooks` | 4 | 4 |
-| `ctx.runMutation` | 4 | 1 |
 | `ctx.services.files` | 4 | 1 |
 | `@feltdb/feltkit/client createClient` | 3 | 2 |
 | `@feltdb/feltkit/react useSession` | 3 | 3 |
@@ -56,10 +57,11 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.26 (installed 0.3
 | `ctx.afterCommit.notifications` | 3 | 3 |
 | `ctx.authority` | 3 | 3 |
 | `ctx.model` | 3 | 1 |
-| `ctx.afterCommit.agent` | 2 | 1 |
+| `ctx.runQuery` | 3 | 1 |
+| `@feltdb/feltkit ActionCtx` | 2 | 1 |
 | `ctx.crypto` | 2 | 2 |
 | `ctx.emit` | 2 | 1 |
-| `ctx.runQuery` | 2 | 1 |
+| `ctx.integrations` | 2 | 2 |
 | `ctx.services.notifications` | 2 | 1 |
 | `@feltdb/feltkit GenerationMessage` | 1 | 1 |
 | `@feltdb/feltkit ToolCall` | 1 | 1 |
@@ -69,13 +71,12 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.26 (installed 0.3
 | `@feltdb/feltkit/react useAction` | 1 | 1 |
 | `@feltdb/feltkit/react useConnectionState` | 1 | 1 |
 | `@feltdb/feltkit/react useOwnActions` | 1 | 1 |
-| `ctx.integrations` | 1 | 1 |
 
 ### Infrastructure findings (candidates for review)
 
 | Finding | Where | Evidence | Platform alternative |
 |---|---|---|---|
-| App-built business audit trail (acknowledged: the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part) | `feltkit/app.ts:291` | `export const actions = app.collection(` | app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence) |
+| App-built business audit trail (acknowledged: the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part) | `feltkit/app.ts:322` | `export const actions = app.collection(` | app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence) |
 
 ### Checks
 
