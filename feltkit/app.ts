@@ -21,9 +21,23 @@ const OWNER = [
   "feltkit.agent.*",
   // Documents: files the owner keeps, stored by AppPort Services Files (feltkit/documents.ts).
   "documents.*", "files.read", "files.write", "files.delete",
-  // Outbound events (task.completed, reminder.fired) to endpoints the operator registers.
-  "webhooks.emit",
+  // Outbound events (task.completed, reminder.fired, interaction.updated) to endpoints the operator
+  // registers; each delivery is authorized again as the emitter (webhooks.deliver, runtime-internal).
+  "webhooks.emit", "webhooks.deliver",
+  // Connected surfaces (feltkit/links.ts, interactions.ts): link and unlink them, see what they asked.
+  "links.*", "interactions.read",
+  // A reminder job fires as whoever queued it: the owner, or a surface's bridge acting for the owner.
+  "reminders.fire",
 ];
+
+/**
+ * A connected surface's bridge (Multiplayer today): an operator-issued session
+ * (`feltkit session create --type service --id multiplayer --role bridge`). It may hand PersonalOS
+ * interactions and read their outcome, and nothing else: it holds no owner's data permissions.
+ * Inside interactions:receive it works for the PersonalOS account an *active link* names
+ * (feltkit/_ops.ts actingFor). It can never approve: actions:approve is `approval: "required"`.
+ */
+const BRIDGE = ["interactions.receive", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
 
 export const app = feltkit({
   name: "personalos",
@@ -33,7 +47,9 @@ export const app = feltkit({
     // Read-only access (used to prove refusals in tests; useful for a shared view later).
     viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read", "documents.read"],
     // Operators configure the model and services in Studio. Never granted to the assistant itself.
-    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "feltkit.operations.*"],
+    bridge: BRIDGE,
+    // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
+    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
   },
   auth: { accounts: { roles: ["owner"] } },
   dev: {
@@ -42,6 +58,16 @@ export const app = feltkit({
       { id: "grace", name: "Grace Hopper", roles: ["owner"] },
       { id: "guest", name: "Read-only guest", roles: ["viewer"] },
     ],
+  },
+  // AuthBoundry decides delegated work from connected surfaces (ctx.authority, feltkit/interactions.ts):
+  // PersonalOS's executor `agent:personalos` acts on behalf of a person, under that person's
+  // delegation to it, never under its own rules. Credentials are custody references
+  // (`feltkit credential set credential-ref:authboundry-check`, or FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK).
+  authority: {
+    url: { env: "AUTHBOUNDRY_URL" },
+    application: "personalos",
+    checkCredential: "credential-ref:authboundry-check",
+    executor: { principal: "agent:personalos", type: "agent" },
   },
   // Production decides with whatever this Resolver reference points to; change the model there,
   // without a redeploy (docs/RESOLVER.md in @feltdb/feltkit). Development uses Studio → Models.
@@ -57,7 +83,10 @@ export const app = feltkit({
     // Documents the owner keeps (feltkit/documents.ts). 10 MB each.
     files: { maxBytes: 10 * 1024 * 1024 },
     // Signed outbound events to endpoints an operator registers (Studio → Webhooks).
-    webhooks: { events: ["task.completed", "reminder.fired", "document.added"] },
+    // interaction.updated: an interaction from a connected surface changed (approved, declined,
+    // cancelled). It names the interaction only; the surface fetches the content with its bridge
+    // session (interactions:status), which refuses once the person disconnected that surface.
+    webhooks: { events: ["task.completed", "reminder.fired", "document.added", "interaction.updated"] },
     intelligence: true,
   },
 });
@@ -246,4 +275,89 @@ export const settings = app.collection(
     updatedAt: s.number(),
   },
   { unique: [{ fields: ["owner"] }] },
+);
+
+/**
+ * The owner's side of linking a surface identity (feltkit/links.ts): the pending one-time code (a
+ * digest only) and, once verified, the Resolver reference that *is* the link. This is an index for
+ * the owner's Settings screen, not an authority: resolution reads Resolver only (feltkit/_resolver.ts),
+ * and revocation goes to Resolver first.
+ */
+export const identityLinks = app.collection(
+  "identityLinks",
+  {
+    owner,
+    /** The bridge principal of the surface (its adapter id), e.g. "multiplayer". */
+    adapter: s.string({ minLength: 1, maxLength: 100 }),
+    status: s.enum(["pending", "active", "revoked"] as const),
+    codeDigest: s.optional(s.string()),
+    codeExpiresAt: s.optional(s.number()),
+    sourcePrincipalId: s.optional(s.string()),
+    sourceDisplayName: s.optional(s.string({ maxLength: 120 })),
+    sourceInstance: s.optional(s.string()),
+    /** The link in Resolver (ref://identity/personalos/…): the authoritative record. */
+    resolverRef: s.optional(s.string()),
+    createdAt: s.number(),
+    linkedAt: s.optional(s.number()),
+    revokedAt: s.optional(s.number()),
+    lastUsedAt: s.optional(s.number()),
+  },
+  { indexes: [{ fields: ["owner"] }, { fields: ["adapter", "sourcePrincipalId", "status"] }, { fields: ["codeDigest"] }] },
+);
+
+const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s.string({ maxLength: 8000 }), at: s.number(), actionId: s.optional(s.string()) });
+
+/**
+ * One request from a connected surface (personalos.interaction/1, feltkit/_interaction.ts): the
+ * envelope as delivered (provenance), who it resolved to, what PersonalOS did, and the updates the
+ * surface posts back. Exactly one per (adapter, idempotency key): a repeated delivery is answered
+ * from here and never executed again. The conversation, actions and evidence it produced are the
+ * ordinary PersonalOS records, so there is one history, not a copy per surface.
+ */
+export const interactions = app.collection(
+  "interactions",
+  {
+    /** The PersonalOS account it was done for; absent when the sender resolved to none (refused). */
+    owner: s.optional(s.string()),
+    adapter: s.string(),
+    key: s.string(),
+    envelope: s.record(s.unknown()),
+    /**
+     * Who asked. `sourcePrincipalId` is the adapter-authenticated source identity; `canonical` the
+     * PersonalOS identity Resolver resolved it to (`resolverRef` at `resolverRevision`); `displayName`
+     * is presentation only.
+     */
+    identity: s.object({
+      sourcePrincipalId: s.string(),
+      displayName: s.string(),
+      resolution: s.enum(["linked", "link_completed", "unlinked"] as const),
+      linkId: s.optional(s.string()),
+      resolverRef: s.optional(s.string()),
+      resolverRevision: s.optional(s.number()),
+      canonical: s.optional(s.string()),
+    }),
+    /** AuthBoundry's decision on the capability this request needed (feltkit/_authority.ts): the evidence it was allowed. */
+    /**
+     * AuthBoundry's decision (feltkit/_authority.ts): the executor (`principal`, PersonalOS's agent),
+     * the requester it acted for (`onBehalfOf`), the delegation that decided, and the decision id.
+     */
+    authority: s.optional(s.object({ capability: s.string(), outcome: s.string(), principal: s.string(), onBehalfOf: s.optional(s.string()), delegationId: s.optional(s.string()), decisionId: s.optional(s.string()), reason: s.optional(s.string()) })),
+    audience: s.enum(["private", "shared"] as const),
+    state: s.string(),
+    intent: s.optional(s.string()),
+    threadKey: s.string(),
+    sourceSequence: s.optional(s.number()),
+    conversationId: s.optional(s.string()),
+    messageId: s.optional(s.string()),
+    replyId: s.optional(s.string()),
+    actionIds: s.array(s.string()),
+    /** The proposal waiting for the owner, when the interaction needs approval. */
+    approval: s.optional(s.object({ actionId: s.string(), summary: s.string(), reason: s.string() })),
+    provenance: s.object({ messageIds: s.array(s.string()), attachmentIds: s.array(s.string()), privateDataUsed: s.boolean() }),
+    updates: s.array(InteractionUpdate),
+    error: s.optional(s.object({ code: s.string(), message: s.string() })),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+  },
+  { unique: [["key"]], indexes: [{ fields: ["owner"] }, { fields: ["threadKey"] }, { fields: ["owner", "messageId"] }] },
 );

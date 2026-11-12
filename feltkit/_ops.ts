@@ -19,14 +19,28 @@ export interface Meta {
   messageId?: string;
 }
 
+/**
+ * The owner a call works for. Normally the caller. The one exception is an interaction from a
+ * connected surface (feltkit/interactions.ts): the surface's bridge principal works for the
+ * PersonalOS account that linked that sender, and only inside the handler that verified the link.
+ * FeltKit has no on-behalf-of identity (docs/ANYWHERE.md, platform gaps), so the link is the grant.
+ */
+const ACTING_OWNER = Symbol("personalos.actingOwner");
+
 export function me(ctx: { auth: { requirePrincipal(): { id: string } } }): string {
-  return ctx.auth.requirePrincipal().id;
+  const acting = (ctx as { [ACTING_OWNER]?: string })[ACTING_OWNER];
+  return acting ?? ctx.auth.requirePrincipal().id;
+}
+
+/** A view of `ctx` that works for `owner`. Only interactions.ts calls this, after resolving an active link. */
+export function actingFor<C extends object>(ctx: C, owner: string): C {
+  return Object.create(ctx, { [ACTING_OWNER]: { value: owner, enumerable: false } }) as C;
 }
 
 /** A record of `collection` that belongs to the caller, or NOT_FOUND (another person's record does not exist for them). */
 export async function own<T extends { owner: string }>(ctx: { db: { get(c: any, id: string): Promise<any> }; auth: any }, collection: unknown, id: string, what: string): Promise<T & { id: string; __version: number }> {
   const record = await ctx.db.get(collection, id);
-  if (!record || record.owner !== me(ctx)) fail("NOT_FOUND", `No ${what} ${id}.`);
+  if (!record || record.owner !== me(ctx as any)) fail("NOT_FOUND", `No ${what} ${id}.`);
   return record;
 }
 

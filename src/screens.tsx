@@ -513,6 +513,7 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
           {/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && <p className="muted small">This is a development address. Deploy the app (see the README) to use the extension anywhere.</p>}
         </section>
       )}
+      <ConnectedSurfaces onError={onError} />
       <section>
         <h2>Weekly review</h2>
         <label className="toggle">
@@ -558,6 +559,45 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
       </section>
       {children && <section>{children}</section>}
     </div>
+  );
+}
+
+/**
+ * Connected surfaces (PersonalOS Anywhere): link your account on another app (Multiplayer) so
+ * mentioning @personalos there works in this account, as you. A one-time code proves this side;
+ * sending it to @personalos in a direct message there proves the other. The link lives in Resolver.
+ */
+function ConnectedSurfaces({ onError }: Err) {
+  const links = useQuery(api.links.list) ?? [];
+  const recent = useQuery(api.interactions.list, { limit: 5 }) ?? [];
+  const start = useMutation(api.links.start);
+  const revoke = useMutation(api.links.revoke);
+  const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
+  const active = links.filter((l) => l.status === "active");
+  return (
+    <section data-testid="connected-surfaces">
+      <h2>Connected surfaces</h2>
+      <p className="muted small">Mention @personalos in Multiplayer and I'll work here, in your account. In shared conversations I keep your private details out of my replies; anything destructive still waits for your approval here.</p>
+      {active.map((l) => (
+        <div key={l.id} className="row">
+          <span><strong>Multiplayer</strong> <span className="muted small">as {l.sourceDisplayName ?? l.sourcePrincipalId}{l.lastUsedAt ? ` · last used ${new Date(l.lastUsedAt).toLocaleString()}` : ""}</span></span>
+          <button className="ghost tiny" onClick={() => void revoke({ id: l.id }).catch(onError)}>Disconnect</button>
+        </div>
+      ))}
+      {code ? (
+        <p className="small" data-testid="link-code">Send <code className="kindcode">link {code.code}</code> to @personalos in a <strong>direct message</strong> in Multiplayer (never in a shared channel). It works once, until {new Date(code.expiresAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}.</p>
+      ) : (
+        <button className="secondary" onClick={() => void start({ adapter: "multiplayer" }).then((c) => setCode(c)).catch(onError)}>{active.length ? "Connect another Multiplayer account" : "Connect Multiplayer"}</button>
+      )}
+      {recent.length > 0 && (
+        <>
+          <h3 className="small">Recent requests from connected surfaces</h3>
+          <ul className="small">
+            {recent.map((i) => <li key={i.id}><span className="muted">{i.where}:</span> “{i.text.slice(0, 80)}” — {i.state.replace(/_/g, " ")}</li>)}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 

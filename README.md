@@ -96,6 +96,13 @@ the chat. In production, point `ref://prod/personalos/model` at a model with
 | Chrome extension | The same app in the side panel: ask about the page, save it to Files, add a task from a selection | [`extension/`](extension/README.md) |
 | Agents | 13 capabilities published over AppPort and MCP, under the same permissions as the UI | `capability:` in `feltkit/*.ts` |
 
+## PersonalOS Anywhere
+
+Mention @personalos in another app (the first is [Multiplayer](https://github.com/rkendel1/multiplayer))
+and it works here, in your account. Resolver resolves who is asking, AuthBoundry decides what they may do,
+and shared conversations never get your private data. Approvals stay here. See
+[docs/ANYWHERE.md](docs/ANYWHERE.md) and the contract, [docs/INTERACTION-CONTRACT.md](docs/INTERACTION-CONTRACT.md).
+
 ## Tour of the code
 
 ```

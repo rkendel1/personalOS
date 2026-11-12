@@ -1,6 +1,7 @@
 import { s } from "@feltdb/feltkit";
-import { app, tasks } from "./app.js";
-import { record } from "./_ops.js";
+import { app, identityLinks, tasks } from "./app.js";
+import { actingFor, me, record } from "./_ops.js";
+import { linkActive } from "./_resolver.js";
 
 /**
  * Job "reminder.fire": queued (after commit) when a reminder is set, to run at its time, as the
@@ -8,13 +9,24 @@ import { record } from "./_ops.js";
  * queues a new job and leaves the old one to find a different remindAt and do nothing).
  */
 export const fire = app.mutation({
-  access: "tasks.write",
+  access: "reminders.fire",
   args: { taskId: s.string(), remindAt: s.number() },
   retry: { sequenceConflicts: 3 },
-  handler: async (ctx, { taskId, remindAt }) => {
-    const task = await ctx.db.get(tasks, taskId);
-    const who = ctx.auth.requirePrincipal().id;
-    if (!task || task.owner !== who || task.status !== "open" || task.remindAt !== remindAt || task.remindedAt) return { fired: false };
+  handler: async (rawCtx, { taskId, remindAt }) => {
+    const task = await rawCtx.db.get(tasks, taskId);
+    if (!task) return { fired: false };
+    // Queued by the owner, or by a connected surface's bridge for the owner: then it fires only while
+    // that surface is still linked to the task's owner (authority is checked when it runs, not when queued).
+    const caller = rawCtx.auth.requirePrincipal().id;
+    let viaBridge = false;
+    if (caller !== task.owner) {
+      for (const l of await rawCtx.db.find(identityLinks, { owner: task.owner })) {
+        if (l.adapter === caller && l.status === "active" && l.resolverRef && (await linkActive(l.resolverRef, task.owner))) { viaBridge = true; break; }
+      }
+    }
+    const ctx = viaBridge ? actingFor(rawCtx, task.owner) : rawCtx;
+    const who = me(ctx);
+    if (task.owner !== who || task.status !== "open" || task.remindAt !== remindAt || task.remindedAt) return { fired: false };
     await ctx.db.patch(tasks, taskId, { remindedAt: Date.now() });
     ctx.afterCommit.notifications.send({ recipient: who, type: "reminder.due", title: task.title, data: { taskId }, idempotencyKey: `reminder:${taskId}:${remindAt}` });
     ctx.afterCommit.webhooks.emit("reminder.fired", { taskId, title: task.title, remindAt });
