@@ -3,6 +3,6 @@
   "private": true,
   "description": "The AuthBoundry server PersonalOS's tests and acceptance run against: the published package at an exact version, installed apart from the app (it is a separate process, not a library of the app). npm ci --prefix tests/authboundry",
   "dependencies": {
-    "@authboundry/core": "1.17.0"
+    "@authboundry/core": "1.17.3"
   }
 }

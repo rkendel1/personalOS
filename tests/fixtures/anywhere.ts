@@ -162,15 +162,17 @@ export function authboundryInstalled(): string | null {
   return existsSync(join(AUTHBOUNDRY_PACKAGE, "bin", "authboundry.js")) ? AUTHBOUNDRY_PACKAGE : null;
 }
 /**
- * The package's native server, resolved as its own `bin/authboundry.js` does (AUTHBOUNDRY_CLI_PATH,
- * then `@authboundry/core-<platform>`, then the bundled copy). Run directly, not through that wrapper:
+ * The package's native server for this platform: AUTHBOUNDRY_CLI_PATH (the package's own override,
+ * local development only), else the binary @authboundry/core bundles (`native/<platform>`). Not the
+ * optional `@authboundry/core-<platform>` package its wrapper prefers: in 1.17.3, three of those four
+ * packages (linux-x64, linux-arm64, darwin-x64) carry the 1.16.0 binary, byte for byte, without the
+ * delegated check; the bundled copies are the 1.17.3 build. Run directly, not through the wrapper:
  * the wrapper waits on a child it does not forward signals to, so stopping it would orphan the server.
+ * Its environment names the package's own bridges (FeltDB through bridge/feltdb-store.cjs, the server's
+ * default in source) and this Node.
  */
-function authboundryExecutable(pkg: string): string {
-  if (process.env.AUTHBOUNDRY_CLI_PATH) return process.env.AUTHBOUNDRY_CLI_PATH;
-  const platform = `${process.platform}-${process.arch}`;
-  const optional = join(AUTHBOUNDRY_HOME, "node_modules", "@authboundry", `core-${platform}`, "bin", "authboundry");
-  return existsSync(optional) ? optional : join(pkg, "native", platform, "authboundry");
+export function authboundryExecutable(pkg: string): string {
+  return process.env.AUTHBOUNDRY_CLI_PATH ?? join(pkg, "native", `${process.platform}-${process.arch}`, "authboundry");
 }
 /** The installed server's version (what the tests ran against). */
 export function authboundryVersion(): string | null {
