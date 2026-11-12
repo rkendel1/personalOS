@@ -14,6 +14,8 @@ import type * as links_module from "../links.js";
 import type * as memory_module from "../memory.js";
 import type * as projects_module from "../projects.js";
 import type * as reminders_module from "../reminders.js";
+import type * as research_module from "../research.js";
+import type * as researchstate_module from "../researchstate.js";
 import type * as settings_module from "../settings.js";
 import type * as tasks_module from "../tasks.js";
 import type * as turn_module from "../turn.js";
@@ -21,4 +23,4 @@ import type * as turnstate_module from "../turnstate.js";
 import type * as weekly_module from "../weekly.js";
 
 /** Typed references to every query and mutation. Type-only imports: no backend code reaches the browser. */
-export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "conversations": typeof conversations_module; "documents": typeof documents_module; "inbox": typeof inbox_module; "interactions": typeof interactions_module; "links": typeof links_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "settings": typeof settings_module; "tasks": typeof tasks_module; "turn": typeof turn_module; "turnstate": typeof turnstate_module; "weekly": typeof weekly_module }>();
+export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "conversations": typeof conversations_module; "documents": typeof documents_module; "inbox": typeof inbox_module; "interactions": typeof interactions_module; "links": typeof links_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "research": typeof research_module; "researchstate": typeof researchstate_module; "settings": typeof settings_module; "tasks": typeof tasks_module; "turn": typeof turn_module; "turnstate": typeof turnstate_module; "weekly": typeof weekly_module }>();

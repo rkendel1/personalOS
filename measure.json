@@ -30,12 +30,12 @@
   },
   "totals": {
     "domain": {
-      "files": 27,
-      "lines": 2875
+      "files": 31,
+      "lines": 3475
     },
     "experience": {
-      "files": 20,
-      "lines": 1925
+      "files": 21,
+      "lines": 2050
     },
     "infrastructure": {
       "files": 1,
@@ -43,15 +43,15 @@
     },
     "generated": {
       "files": 3,
-      "lines": 25
+      "lines": 27
     },
     "configuration": {
       "files": 6,
       "lines": 177
     },
     "tests": {
-      "files": 16,
-      "lines": 2283
+      "files": 18,
+      "lines": 2684
     },
     "third-party": {
       "files": 0,
@@ -62,8 +62,8 @@
       "lines": 0
     },
     "excluded": {
-      "files": 18,
-      "lines": 6311
+      "files": 20,
+      "lines": 7422
     },
     "unclassified": {
       "files": 0,
@@ -71,17 +71,17 @@
     }
   },
   "authored": {
-    "files": 54,
-    "lines": 5001
+    "files": 59,
+    "lines": 5726
   },
   "definitions": {
     "app": {
-      "action": 2,
-      "agent": 1,
-      "collection": 10,
-      "integration": 2,
-      "mutation": 38,
-      "query": 13
+      "action": 4,
+      "agent": 2,
+      "collection": 13,
+      "integration": 3,
+      "mutation": 42,
+      "query": 15
     },
     "collections": [
       "documents",
@@ -93,24 +93,32 @@
       "actions",
       "settings",
       "identityLinks",
-      "interactions"
+      "interactions",
+      "researchRuns",
+      "researchSources",
+      "prospects"
     ]
   },
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 670,
-      "files": 19
+      "callSites": 789,
+      "files": 21
     },
     {
       "api": "ctx.db",
-      "callSites": 169,
-      "files": 16
+      "callSites": 185,
+      "files": 18
     },
     {
       "api": "@feltdb/feltkit fail",
-      "callSites": 36,
-      "files": 10
+      "callSites": 38,
+      "files": 12
+    },
+    {
+      "api": "@feltdb/feltkit/react useMutation",
+      "callSites": 31,
+      "files": 5
     },
     {
       "api": "@feltdb/feltkit MutationCtx",
@@ -118,44 +126,49 @@
       "files": 5
     },
     {
-      "api": "@feltdb/feltkit/react useMutation",
-      "callSites": 30,
-      "files": 4
+      "api": "@feltdb/feltkit/testing createTestApp",
+      "callSites": 29,
+      "files": 6
     },
     {
       "api": "@feltdb/feltkit feltkit",
-      "callSites": 24,
+      "callSites": 28,
       "files": 1
     },
     {
-      "api": "@feltdb/feltkit/testing createTestApp",
-      "callSites": 21,
-      "files": 5
-    },
-    {
       "api": "@feltdb/feltkit/react useQuery",
-      "callSites": 17,
-      "files": 3
-    },
-    {
-      "api": "@feltdb/feltkit/testing TestApp",
-      "callSites": 13,
+      "callSites": 19,
       "files": 4
     },
     {
+      "api": "@feltdb/feltkit/testing TestApp",
+      "callSites": 19,
+      "files": 5
+    },
+    {
+      "api": "ctx.agent",
+      "callSites": 16,
+      "files": 3
+    },
+    {
       "api": "ctx.auth",
-      "callSites": 11,
+      "callSites": 13,
       "files": 7
     },
     {
       "api": "@feltdb/feltkit/react useFeltKit",
-      "callSites": 7,
-      "files": 4
+      "callSites": 8,
+      "files": 5
     },
     {
-      "api": "ctx.agent",
+      "api": "ctx.runMutation",
+      "callSites": 8,
+      "files": 2
+    },
+    {
+      "api": "ctx.afterCommit.agent",
       "callSites": 5,
-      "files": 1
+      "files": 3
     },
     {
       "api": "@feltdb/feltkit/react FeltKitProvider",
@@ -166,11 +179,6 @@
       "api": "ctx.afterCommit.webhooks",
       "callSites": 4,
       "files": 4
-    },
-    {
-      "api": "ctx.runMutation",
-      "callSites": 4,
-      "files": 1
     },
     {
       "api": "ctx.services.files",
@@ -208,7 +216,12 @@
       "files": 1
     },
     {
-      "api": "ctx.afterCommit.agent",
+      "api": "ctx.runQuery",
+      "callSites": 3,
+      "files": 1
+    },
+    {
+      "api": "@feltdb/feltkit ActionCtx",
       "callSites": 2,
       "files": 1
     },
@@ -223,9 +236,9 @@
       "files": 1
     },
     {
-      "api": "ctx.runQuery",
+      "api": "ctx.integrations",
       "callSites": 2,
-      "files": 1
+      "files": 2
     },
     {
       "api": "ctx.services.notifications",
@@ -271,11 +284,6 @@
       "api": "@feltdb/feltkit/react useOwnActions",
       "callSites": 1,
       "files": 1
-    },
-    {
-      "api": "ctx.integrations",
-      "callSites": 1,
-      "files": 1
     }
   ],
   "findings": [
@@ -283,7 +291,7 @@
       "id": "audit-trail",
       "title": "App-built business audit trail",
       "file": "feltkit/app.ts",
-      "line": 291,
+      "line": 322,
       "evidence": "export const actions = app.collection(",
       "platform": "app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence)",
       "acknowledged": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
@@ -367,6 +375,12 @@
       "lines": 0
     },
     {
+      "path": "docs/RESEARCH.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
       "path": "docs/WHAT-FELTKIT-GIVES-YOU.md",
       "class": "excluded",
       "basis": "documentation",
@@ -413,6 +427,12 @@
       "class": "tests",
       "basis": "path: tests",
       "lines": 83
+    },
+    {
+      "path": "e2e/research.mjs",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 88
     },
     {
       "path": "e2e/ui.mjs",
@@ -517,6 +537,12 @@
       "lines": 113
     },
     {
+      "path": "feltkit/_capabilities.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 89
+    },
+    {
       "path": "feltkit/_clock.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -538,7 +564,7 @@
       "path": "feltkit/_generated/api.ts",
       "class": "generated",
       "basis": "codegen (matches regeneration)",
-      "lines": 20,
+      "lines": 22,
       "scaffold": "modified"
     },
     {
@@ -560,6 +586,12 @@
       "lines": 256
     },
     {
+      "path": "feltkit/_research.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 154
+    },
+    {
       "path": "feltkit/_resolver.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -575,7 +607,7 @@
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 289,
+      "lines": 376,
       "scaffold": "modified"
     },
     {
@@ -647,6 +679,18 @@
       "lines": 29
     },
     {
+      "path": "feltkit/research.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 139
+    },
+    {
+      "path": "feltkit/researchstate.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 95
+    },
+    {
       "path": "feltkit/settings.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -663,7 +707,7 @@
       "path": "feltkit/turn.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 142
+      "lines": 178
     },
     {
       "path": "feltkit/turnstate.ts",
@@ -735,7 +779,7 @@
       "path": "src/App.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 193,
+      "lines": 196,
       "scaffold": "modified"
     },
     {
@@ -756,6 +800,12 @@
       "basis": "path: src/ (UI)",
       "lines": 16,
       "scaffold": "modified"
+    },
+    {
+      "path": "src/research.tsx",
+      "class": "experience",
+      "basis": "path: src/ (UI)",
+      "lines": 122
     },
     {
       "path": "src/screens.tsx",
@@ -802,6 +852,12 @@
       "lines": 0
     },
     {
+      "path": "tests/authboundry/package-lock.json",
+      "class": "excluded",
+      "basis": "lockfile",
+      "lines": 1111
+    },
+    {
       "path": "tests/authboundry/package.json",
       "class": "tests",
       "basis": "path: tests",
@@ -817,7 +873,7 @@
       "path": "tests/fixtures/anywhere.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 184
+      "lines": 181
     },
     {
       "path": "tests/fixtures/streaming-model.ts",
@@ -842,6 +898,12 @@
       "class": "tests",
       "basis": "path: tests",
       "lines": 49
+    },
+    {
+      "path": "tests/research.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 316
     },
     {
       "path": "tests/resolver/package-lock.json",

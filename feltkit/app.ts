@@ -30,6 +30,9 @@ const OWNER = [
   // owner confirms or disconnects here; no person's session holds identity.resolve or identity.link.
   // A reminder job fires as whoever queued it: the owner, or a surface's bridge acting for the owner.
   "reminders.fire",
+  // Research (feltkit/research.ts): start, follow, cancel and retry research; read its sources and
+  // prospects; and use the web search integration, which the research agent runs for the owner.
+  "research.*",
 ];
 
 /**
@@ -55,6 +58,9 @@ export const app = feltkit({
     // it, so those integrations' capabilities, which FeltKit also serves on /appport, are refused to
     // every person and to the bridge (whose identity.resolve covers reads only).
     identitylinker: ["identity.resolve", "identity.link", "links.write"],
+    // The `research` agent (feltkit/research.ts): runs one research step at a time for the run's owner.
+    // It searches the web (research.search) and records what it found; it has no way to contact anyone.
+    researcher: ["research.search", "research.work"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
     admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
   },
@@ -144,6 +150,31 @@ export const identityLinker = app.integration("identitylinks", {
       output: ResolverResponse, effect: "consequential", access: "identity.link", description: "Create one identity link (never change one: expectedRevision is 0).",
     },
     revoke: { method: "POST", path: "/appport", input: resolverRequest("resolver.revoke", { ref: REF, expectedRevision: s.integer({ minimum: 1 }), reason: s.string({ maxLength: 500 }) } as any), output: ResolverResponse, effect: "consequential", access: "identity.link", description: "Revoke one identity link; it never resolves again." },
+  },
+});
+
+/**
+ * Web search, for research (feltkit/research.ts): the Brave Search API's web search
+ * (`GET /res/v1/web/search?q=&count=`, key in `X-Subscription-Token`, results at `web.results[]`).
+ * Which provider answers is configuration, not code: WEBSEARCH_URL (https://api.search.brave.com, or
+ * any service that answers the same request) and the credential `websearch`. Until both are set the
+ * capability is declared but not ready, and research says so instead of claiming it cannot search.
+ */
+export const websearch = app.integration("websearch", {
+  description: "Web search (Brave Search API compatible): results with title, URL and description.",
+  baseUrl: { env: "WEBSEARCH_URL" },
+  credential: { ref: "credential-ref:websearch", header: "x-subscription-token", scheme: "" },
+  timeoutMs: 15000,
+  operations: {
+    search: {
+      method: "GET",
+      path: "/res/v1/web/search",
+      input: { q: s.string({ minLength: 1, maxLength: 400 }), count: s.integer({ minimum: 1, maximum: 20 }), extra_snippets: s.optional(s.boolean()) },
+      output: s.record(s.unknown()),
+      effect: "observation",
+      access: "research.search",
+      description: "Search the web; reading only.",
+    },
   },
 });
 
@@ -423,4 +454,85 @@ export const interactions = app.collection(
     updatedAt: s.number(),
   },
   { unique: [["key"]], indexes: [{ fields: ["owner"] }, { fields: ["threadKey"] }, { fields: ["owner", "messageId"] }] },
+);
+
+/**
+ * A research run: one outcome the person asked for ("find me new customers for FeltKit"), how
+ * PersonalOS pursues it, and where it stands. What the platform could do for it (discovery) is
+ * recorded when it starts, so "I couldn't" is always backed by what was looked for.
+ */
+export const researchRuns = app.collection(
+  "researchRuns",
+  {
+    owner,
+    kind: s.enum(["prospects"] as const),
+    request: s.string({ maxLength: 4000 }),
+    product: s.string({ maxLength: 120 }),
+    objective: s.string({ maxLength: 1000 }),
+    status: s.enum(["running", "blocked", "completed", "partial", "failed", "cancelled"] as const),
+    /** What the platform offers for each need, as discovered (feltkit/_capabilities.ts). */
+    discovery: s.record(s.unknown()),
+    /** The profile the search works from: the person's own statements about the product. */
+    profile: s.object({ statements: s.array(s.object({ id: s.string(), text: s.string() })), keywords: s.array(s.string()) }),
+    queries: s.array(s.object({
+      text: s.string(),
+      state: s.enum(["pending", "done", "failed"] as const),
+      attempts: s.number(),
+      results: s.optional(s.number()),
+      error: s.optional(s.string({ maxLength: 500 })),
+      at: s.optional(s.number()),
+    })),
+    /** Why it stopped short, in the person's terms, with what would unblock it. */
+    blocker: s.optional(s.object({ need: s.string(), state: s.string(), detail: s.string({ maxLength: 1000 }), howToEnable: s.optional(s.string({ maxLength: 1000 })) })),
+    cancelRequested: s.optional(s.boolean()),
+    conversationId: s.optional(s.string()),
+    prospectCount: s.optional(s.number()),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+    completedAt: s.optional(s.number()),
+  },
+  { indexes: [{ fields: ["owner", "createdAt"] }] },
+);
+
+/** What a source returned, verbatim, and when: the evidence. Never edited by an assessment. */
+export const researchSources = app.collection(
+  "researchSources",
+  {
+    owner,
+    runId: s.string(),
+    url: s.string({ maxLength: 1000 }),
+    title: s.string({ maxLength: 300 }),
+    text: s.string({ maxLength: 4000 }),
+    query: s.string({ maxLength: 400 }),
+    provider: s.string(),
+    retrievedAt: s.number(),
+  },
+  { indexes: [{ fields: ["runId"] }, { fields: ["owner"] }] },
+);
+
+/** A prospect: facts (each citing a source) apart from the assessment (and how it was reached). */
+export const prospects = app.collection(
+  "prospects",
+  {
+    owner,
+    runId: s.string(),
+    rank: s.number(),
+    company: s.string({ maxLength: 200 }),
+    domain: s.string({ maxLength: 200 }),
+    website: s.string({ maxLength: 300 }),
+    facts: s.array(s.object({ sourceId: s.string(), url: s.string(), text: s.string({ maxLength: 4000 }) })),
+    assessment: s.object({
+      basis: s.enum(["rules", "model"] as const),
+      method: s.string({ maxLength: 500 }),
+      fit: s.enum(["high", "medium", "low"] as const),
+      score: s.number(),
+      whyFeltKit: s.string({ maxLength: 1000 }),
+      rationale: s.array(s.object({ text: s.string({ maxLength: 500 }), sourceIds: s.array(s.string()) })),
+      confidence: s.enum(["high", "medium", "low"] as const),
+    }),
+    openQuestions: s.array(s.string({ maxLength: 300 })),
+    nextAction: s.string({ maxLength: 500 }),
+    researchedAt: s.number(),
+  },
+  { indexes: [{ fields: ["runId"] }, { fields: ["owner"] }] },
 );
