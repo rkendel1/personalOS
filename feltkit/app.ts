@@ -23,7 +23,20 @@ const OWNER = [
   "documents.*", "files.read", "files.write", "files.delete",
   // Outbound events (task.completed, reminder.fired) to endpoints the operator registers.
   "webhooks.emit",
+  // Connected surfaces (feltkit/links.ts, interactions.ts): link and unlink them, see what they asked.
+  "links.*", "interactions.read",
+  // A reminder job fires as whoever queued it: the owner, or a surface's bridge acting for the owner.
+  "reminders.fire",
 ];
+
+/**
+ * A connected surface's bridge (Multiplayer today): an operator-issued session
+ * (`feltkit session create --type service --id multiplayer --role bridge`). It may hand PersonalOS
+ * interactions and read their outcome, and nothing else: it holds no owner's data permissions.
+ * Inside interactions:receive it works for the PersonalOS account an *active link* names
+ * (feltkit/_ops.ts actingFor). It can never approve: actions:approve is `approval: "required"`.
+ */
+const BRIDGE = ["interactions.receive", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "reminders.fire"];
 
 export const app = feltkit({
   name: "personalos",
@@ -33,6 +46,7 @@ export const app = feltkit({
     // Read-only access (used to prove refusals in tests; useful for a shared view later).
     viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read", "documents.read"],
     // Operators configure the model and services in Studio. Never granted to the assistant itself.
+    bridge: BRIDGE,
     admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "feltkit.operations.*"],
   },
   auth: { accounts: { roles: ["owner"] } },
@@ -246,4 +260,72 @@ export const settings = app.collection(
     updatedAt: s.number(),
   },
   { unique: [{ fields: ["owner"] }] },
+);
+
+/**
+ * A connected surface's identity bound to a PersonalOS account (feltkit/links.ts). The owner starts
+ * it here (a one-time code, stored only as a digest); the sender completes it from the surface, in a
+ * direct message to PersonalOS, authenticated by that surface. Revoking it stops the next request.
+ */
+export const identityLinks = app.collection(
+  "identityLinks",
+  {
+    owner,
+    /** The bridge principal of the surface (its adapter id), e.g. "multiplayer". */
+    adapter: s.string({ minLength: 1, maxLength: 100 }),
+    status: s.enum(["pending", "active", "revoked"] as const),
+    codeDigest: s.optional(s.string()),
+    codeExpiresAt: s.optional(s.number()),
+    sourcePrincipalId: s.optional(s.string()),
+    sourceDisplayName: s.optional(s.string({ maxLength: 120 })),
+    sourceInstance: s.optional(s.string()),
+    createdAt: s.number(),
+    linkedAt: s.optional(s.number()),
+    revokedAt: s.optional(s.number()),
+    lastUsedAt: s.optional(s.number()),
+  },
+  { indexes: [{ fields: ["owner"] }, { fields: ["adapter", "sourcePrincipalId", "status"] }, { fields: ["codeDigest"] }] },
+);
+
+const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s.string({ maxLength: 8000 }), at: s.number(), actionId: s.optional(s.string()) });
+
+/**
+ * One request from a connected surface (personalos.interaction/1, feltkit/_interaction.ts): the
+ * envelope as delivered (provenance), who it resolved to, what PersonalOS did, and the updates the
+ * surface posts back. Exactly one per (adapter, idempotency key): a repeated delivery is answered
+ * from here and never executed again. The conversation, actions and evidence it produced are the
+ * ordinary PersonalOS records, so there is one history, not a copy per surface.
+ */
+export const interactions = app.collection(
+  "interactions",
+  {
+    /** The PersonalOS account it was done for; absent when the sender resolved to none (refused). */
+    owner: s.optional(s.string()),
+    adapter: s.string(),
+    key: s.string(),
+    envelope: s.record(s.unknown()),
+    identity: s.object({
+      sourcePrincipalId: s.string(),
+      displayName: s.string(),
+      resolution: s.enum(["linked", "link_completed", "unlinked"] as const),
+      linkId: s.optional(s.string()),
+    }),
+    audience: s.enum(["private", "shared"] as const),
+    state: s.string(),
+    intent: s.optional(s.string()),
+    threadKey: s.string(),
+    sourceSequence: s.optional(s.number()),
+    conversationId: s.optional(s.string()),
+    messageId: s.optional(s.string()),
+    replyId: s.optional(s.string()),
+    actionIds: s.array(s.string()),
+    /** The proposal waiting for the owner, when the interaction needs approval. */
+    approval: s.optional(s.object({ actionId: s.string(), summary: s.string(), reason: s.string() })),
+    provenance: s.object({ messageIds: s.array(s.string()), attachmentIds: s.array(s.string()), privateDataUsed: s.boolean() }),
+    updates: s.array(InteractionUpdate),
+    error: s.optional(s.object({ code: s.string(), message: s.string() })),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+  },
+  { unique: [["key"]], indexes: [{ fields: ["owner"] }, { fields: ["threadKey"] }, { fields: ["owner", "messageId"] }] },
 );

@@ -2,6 +2,7 @@ import { fail, s } from "@feltdb/feltkit";
 import { actions, app } from "./app.js";
 import * as ops from "./_ops.js";
 import { appendMessage } from "./assistant.js";
+import { settle } from "./interactions.js";
 
 export const list = app.query({
   access: "actions.read",
@@ -26,11 +27,14 @@ export const approve = app.mutation({
       const result = await ops.execute(ctx, proposal.kind, proposal.input, meta);
       await ctx.db.patch(actions, id, { status: "succeeded", decidedAt: Date.now(), ...(result.evidence ? { evidence: result.evidence } : {}) });
       if (proposal.conversationId) await appendMessage(ctx, proposal.conversationId, { role: "assistant", text: `Approved and done: ${result.summary}.`, actionIds: [id] });
+      // A request from a connected surface: its surface posts this outcome back (interactions.ts).
+      await settle(ctx, proposal, "approved", result.summary);
     } catch (error) {
       // A proposal whose target vanished is recorded as failed, visibly, rather than retried or hidden.
       const e = error as { code?: string; message?: string };
       if (e.code !== "NOT_FOUND") throw error;
       await ctx.db.patch(actions, id, { status: "failed", decidedAt: Date.now(), error: { code: e.code, message: e.message ?? "Not found" } });
+      await settle(ctx, proposal, "failed", e.message ?? "not found");
     }
     return (await ctx.db.get(actions, id))!;
   },
@@ -46,6 +50,7 @@ export const reject = app.mutation({
     if (proposal.status !== "proposed") fail("FAILED_PRECONDITION", `This action is already ${proposal.status}.`);
     await ctx.db.patch(actions, id, { status: "rejected", decidedAt: Date.now() });
     if (proposal.conversationId) await appendMessage(ctx, proposal.conversationId, { role: "assistant", text: `Okay, not doing it: ${proposal.summary.replace(/^\w/, (c: string) => c.toLowerCase())}. Nothing changed.`, actionIds: [id] });
+    await settle(ctx, proposal, "rejected", proposal.summary);
     return (await ctx.db.get(actions, id))!;
   },
 });

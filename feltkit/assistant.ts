@@ -385,6 +385,15 @@ export function when(ctx: { auth: { context: { timeZone: string | null } } }, ar
 }
 
 async function converse(ctx: MutationCtx, conversationId: string, text: string, today: Day, tzOffset: number) {
+  const { messageId, replyId } = await respond(ctx, conversationId, text, today, tzOffset);
+  return { conversationId, messageId, replyId };
+}
+
+/**
+ * One deterministic turn in a conversation, with what it understood and did: the same turn the chat
+ * runs, reused by interactions from connected surfaces (feltkit/interactions.ts).
+ */
+export async function respond(ctx: MutationCtx, conversationId: string, text: string, today: Day, tzOffset: number) {
   const { intent, missing } = interpret(text, today);
   const messageId = await appendMessage(ctx, conversationId, { role: "user", text, interpretation: { intent: intent.kind, source: "rules", ...(missing.length ? { missing } : {}) } });
   const reply = await handle(ctx, intent, missing, { via: "chat", conversationId, messageId }, today, tzOffset, text);
@@ -395,7 +404,7 @@ async function converse(ctx: MutationCtx, conversationId: string, text: string, 
     ...(reply.actionIds ? { actionIds: reply.actionIds } : {}),
     ...(reply.suggestions ? { suggestions: reply.suggestions } : {}),
   });
-  return { conversationId, messageId, replyId };
+  return { messageId, replyId, intent, missing, reply };
 }
 
 /**
