@@ -21,7 +21,7 @@ export const fire = app.mutation({
     let viaBridge = false;
     if (caller !== task.owner) {
       for (const l of await rawCtx.db.find(identityLinks, { owner: task.owner })) {
-        if (l.adapter === caller && l.status === "active" && l.resolverRef && (await linkActive(l.resolverRef, task.owner))) { viaBridge = true; break; }
+        if (l.adapter === caller && l.status === "active" && l.resolverRef && (await linkActive(rawCtx, l.resolverRef, task.owner))) { viaBridge = true; break; }
       }
     }
     const ctx = viaBridge ? actingFor(rawCtx, task.owner) : rawCtx;

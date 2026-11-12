@@ -26,6 +26,8 @@ const OWNER = [
   "webhooks.emit", "webhooks.deliver",
   // Connected surfaces (feltkit/links.ts, interactions.ts): link and unlink them, see what they asked.
   "links.*", "interactions.read",
+  // Identity links in Resolver are written only by the `identity` agent (feltkit/links.ts), after the
+  // owner confirms or disconnects here; no person's session holds identity.resolve or identity.link.
   // A reminder job fires as whoever queued it: the owner, or a surface's bridge acting for the owner.
   "reminders.fire",
 ];
@@ -37,7 +39,7 @@ const OWNER = [
  * Inside interactions:receive it works for the PersonalOS account an *active link* names
  * (feltkit/_ops.ts actingFor). It can never approve: actions:approve is `approval: "required"`.
  */
-const BRIDGE = ["interactions.receive", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
+const BRIDGE = ["interactions.receive", "identity.resolve", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
 
 export const app = feltkit({
   name: "personalos",
@@ -48,6 +50,11 @@ export const app = feltkit({
     viewer: ["conversations.read", "tasks.read", "memory.read", "projects.read", "actions.read", "briefing.read", "settings.read", "documents.read"],
     // Operators configure the model and services in Studio. Never granted to the assistant itself.
     bridge: BRIDGE,
+    // The `identity` agent (feltkit/links.ts), and nobody else: it reads and writes identity links in
+    // Resolver through the `identity` and `identitylinks` integrations. No session can be signed in as
+    // it, so those integrations' capabilities, which FeltKit also serves on /appport, are refused to
+    // every person and to the bridge (whose identity.resolve covers reads only).
+    identitylinker: ["identity.resolve", "identity.link", "links.write"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
     admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
   },
@@ -88,6 +95,55 @@ export const app = feltkit({
     // session (interactions:status), which refuses once the person disconnected that surface.
     webhooks: { events: ["task.completed", "reminder.fired", "document.added", "interaction.updated"] },
     intelligence: true,
+  },
+});
+
+/**
+ * Resolver, for identity links (feltkit/_resolver.ts): its HTTP endpoint (`POST /appport`, one AppPort
+ * request envelope per call). Two integrations, two keys, so that resolving can never write:
+ *
+ *   identity        a key with `read` on ref://identity/personalos/* only (credential resolver-resolve)
+ *   identitylinks  a key with `write` on that prefix only (credential resolver-link); `put` can only
+ *                   create (expectedRevision 0), never change a link; the `identity` agent only
+ *                   (identity.link, held by no session)
+ *
+ * Each operation names exactly one Resolver capability in its input schema, so it cannot be used for
+ * another. They are `consequential` because FeltKit observations must be GETs, and Resolver's
+ * endpoint is POST-only; lookup and resolve change nothing.
+ */
+const resolverRequest = (capability: string, input: Record<string, ReturnType<typeof s.string> | ReturnType<typeof s.unknown> | ReturnType<typeof s.optional>>) => ({
+  protocol: s.literal("appport/1"),
+  type: s.literal("request"),
+  requestId: s.string({ minLength: 1, maxLength: 100 }),
+  capability: s.object({ name: s.literal(capability), version: s.literal(1) }),
+  input: s.object(input as any),
+});
+const ResolverResponse = s.record(s.unknown());
+const REF = s.string({ minLength: 1, maxLength: 500, pattern: "^ref://identity/personalos/" });
+
+export const identityResolver = app.integration("identity", {
+  description: "Resolver, read-only: find and resolve identity links.",
+  baseUrl: { env: "RESOLVER_URL" },
+  credential: "credential-ref:resolver-resolve",
+  timeoutMs: 5000,
+  operations: {
+    lookup: { method: "POST", path: "/appport", input: resolverRequest("resolver.lookup", { key: s.string({ minLength: 1, maxLength: 300 }), value: s.string({ minLength: 1, maxLength: 300 }) }), output: ResolverResponse, effect: "consequential", access: "identity.resolve", description: "The active link references with exactly this lookup entry (indexed)." },
+    resolve: { method: "POST", path: "/appport", input: resolverRequest("resolver.resolve", { ref: REF }), output: ResolverResponse, effect: "consequential", access: "identity.resolve", description: "One link reference's current value (404 when revoked)." },
+  },
+});
+
+export const identityLinker = app.integration("identitylinks", {
+  description: "Resolver, write-only: create and revoke identity links. Only the identity agent.",
+  baseUrl: { env: "RESOLVER_URL" },
+  credential: "credential-ref:resolver-link",
+  timeoutMs: 5000,
+  operations: {
+    put: {
+      method: "POST", path: "/appport",
+      input: resolverRequest("resolver.put", { ref: REF, kind: s.literal("value"), schema: s.unknown(), binding: s.unknown(), expectedRevision: s.literal(0), ttlSeconds: s.literal(0), lookup: s.object({ key: s.string({ minLength: 1, maxLength: 300 }), value: s.string({ minLength: 1, maxLength: 300 }) }), reason: s.string({ maxLength: 500 }) } as any),
+      output: ResolverResponse, effect: "consequential", access: "identity.link", description: "Create one identity link (never change one: expectedRevision is 0).",
+    },
+    revoke: { method: "POST", path: "/appport", input: resolverRequest("resolver.revoke", { ref: REF, expectedRevision: s.integer({ minimum: 1 }), reason: s.string({ maxLength: 500 }) } as any), output: ResolverResponse, effect: "consequential", access: "identity.link", description: "Revoke one identity link; it never resolves again." },
   },
 });
 
@@ -289,13 +345,20 @@ export const identityLinks = app.collection(
     owner,
     /** The bridge principal of the surface (its adapter id), e.g. "multiplayer". */
     adapter: s.string({ minLength: 1, maxLength: 100 }),
-    status: s.enum(["pending", "active", "revoked"] as const),
+    // pending: a code was issued. presented: the code was sent from a surface account, which waits
+    // for the owner to confirm it here (links:confirm). confirming / revoking: the owner decided and
+    // the identity agent is recording it in Resolver. active: recorded in Resolver. revoked: done.
+    status: s.enum(["pending", "presented", "confirming", "active", "revoking", "revoked"] as const),
+    /** Why the identity agent could not record the owner's decision (shown to the owner). */
+    error: s.optional(s.string({ maxLength: 500 })),
+    confirmedAt: s.optional(s.number()),
     codeDigest: s.optional(s.string()),
     codeExpiresAt: s.optional(s.number()),
     sourcePrincipalId: s.optional(s.string()),
     sourceDisplayName: s.optional(s.string({ maxLength: 120 })),
     sourceInstance: s.optional(s.string()),
     /** The link in Resolver (ref://identity/personalos/…): the authoritative record. */
+    presentedAt: s.optional(s.number()),
     resolverRef: s.optional(s.string()),
     createdAt: s.number(),
     linkedAt: s.optional(s.number()),
@@ -330,7 +393,7 @@ export const interactions = app.collection(
     identity: s.object({
       sourcePrincipalId: s.string(),
       displayName: s.string(),
-      resolution: s.enum(["linked", "link_completed", "unlinked"] as const),
+      resolution: s.enum(["linked", "link_presented", "link_completed", "unlinked"] as const),
       linkId: s.optional(s.string()),
       resolverRef: s.optional(s.string()),
       resolverRevision: s.optional(s.number()),

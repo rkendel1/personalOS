@@ -43,7 +43,7 @@ a fixed JSON Schema (`LINK_SCHEMA`) and `ttlSeconds: 0`:
 ref://identity/personalos/<adapter>/<sha256(instance)>/<sha256(principal)>/<challenge>
   → { canonical: "personalos:account:<owner>",
       external: { adapter, instance, principalId },
-      verification: { method: "personalos.link-code/dm", challengeId, verifiedAt },
+      verification: { method: "personalos.link-code/dm+owner-confirmed", challengeId, verifiedAt },
       linkedAt }
 ```
 
@@ -52,15 +52,19 @@ ref://identity/personalos/<adapter>/<sha256(instance)>/<sha256(principal)>/<chal
 | Resolve | `resolver.lookup` on the indexed entry `identity.personalos:<adapter>:<sha256(instance)>` = the sender's principal id, fixed when the link is created; exactly one active reference whose stored `external` equals the sender exactly. No prefix scan. |
 | Unknown | None matches: `NOT_LINKED`. |
 | Ambiguous | More than one matches: `AMBIGUOUS_IDENTITY`. Fails closed for everyone. |
-| Proof of control of both sides | The PersonalOS session issues a code; the surface's authenticated sender redeems it in a DM. A code posted in a shared conversation is refused and burned. |
+| Proof of control of both sides | The PersonalOS session issues a code. The surface's authenticated sender presents it in a DM, which uses it up and records which account presented it. The signed-in owner then confirms that account in PersonalOS. A code someone else saw and sent first shows *their* account, which the owner does not confirm. A code posted in a shared conversation is refused and burned. |
 | Many-to-one | Several external identities (other principals, other installations) may each resolve to one account. |
 | Durable, auditable | Resolver revisions record actor, reason and time; `identityLinks` in PersonalOS is the owner's index (codes, listing), not an authority. |
-| Revocable | `links:revoke` revokes the Resolver reference first. Every later resolution fails, and in-flight interactions report `revoked`. A revoked name is never reused; relinking creates a new reference. |
+| Revocable | `links:revoke` marks the link disconnected, so the next request is refused at once, and the identity agent revokes the Resolver reference. Every later resolution fails, and in-flight interactions report `revoked`. A revoked name is never reused; relinking creates a new reference. |
+| Who writes links | Only the `identity` agent (`feltkit/links.ts`), after the owner's confirmation or disconnection commits. It runs as its own principal with the only role that holds `identity.link`, so no person's or bridge's session can call the Resolver integrations directly (FeltKit also serves them on `/appport`). The `put` operation's input schema allows only `expectedRevision: 0`: it can create a link, never change one. |
 | Spoofing | Names are hashes for layout only; matching is on stored values. Display names, case variants, claims and planted references under another sender's prefix do not resolve. |
 | Fail closed | Resolver unconfigured or unreachable: `UNAVAILABLE`, nothing recorded, and the surface retries the same key. |
-| Least privilege | PersonalOS's Resolver key holds `read, write` on `ref://identity/personalos/*` only. |
+| Least privilege | Two Resolver keys, both on `ref://identity/personalos/*` only: one holds `read` (resolving), one holds `write` (linking) and cannot read. Resolver itself refuses a write with the first and a read with the second. |
+| Credentials | Both keys are FeltKit credentials (custody references), used only through the declared `identity` and `identitylinks` integrations. App code never holds them. Rotation is a new credential version; revocation is revoking the key in Resolver. |
 
-Configuration: `RESOLVER_URL`, `RESOLVER_API_KEY`.
+Configuration: `RESOLVER_URL`, and the two keys as FeltKit credentials `resolver-resolve` and
+`resolver-link` (`feltkit credential set`, or `FELTKIT_CREDENTIAL_RESOLVER_RESOLVE` /
+`FELTKIT_CREDENTIAL_RESOLVER_LINK`).
 
 ## Authority through AuthBoundry
 
@@ -157,7 +161,8 @@ By hand, with the same services:
    - the owner's delegation to the agent
    - a check credential
 2. Start PersonalOS (`npx feltkit dev --port 3110`) with these set:
-   - `RESOLVER_URL` and `RESOLVER_API_KEY`
+   - `RESOLVER_URL`, and the two Resolver keys as `FELTKIT_CREDENTIAL_RESOLVER_RESOLVE` (grant `read`) and
+     `FELTKIT_CREDENTIAL_RESOLVER_LINK` (grant `write`), both on `ref://identity/personalos/*`
    - `AUTHBOUNDRY_URL` and `FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK`
    - the event signing secret, as `FELTKIT_CREDENTIAL_SURFACE_EVENTS`
 3. Create the bridge session:
@@ -173,7 +178,7 @@ By hand, with the same services:
      `{ url: "<multiplayer>/webhooks/inbound/<integration id>", events: ["interaction.updated"], signingCredentialRef: "credential-ref:surface-events" }`.
 6. In Multiplayer, choose **✦ Add @personalos**.
 7. In PersonalOS, choose **Settings → Connected surfaces → Connect Multiplayer**.
-8. Send `link XXXX-XXXX` to PersonalOS in a Multiplayer direct message.
+8. Send `link XXXX-XXXX` to PersonalOS in a Multiplayer direct message, then in PersonalOS confirm the account that sent it ("This is me").
 9. In a channel, write `@PersonalOS remind me to follow up with Sarah tomorrow at 9am`.
 
 ## Platform gaps: Milestone 2 → Milestone 3
@@ -197,7 +202,6 @@ Still open (owners are in the register):
 
 - These commits are not released.
 - The cross-app conversation classifier (`_conversation.ts` / `_compose.ts`) has no shared home.
-- `RESOLVER_API_KEY` is still read from the environment.
 - An AuthBoundry administrator creates the delegations. The owner has no federated sign-in to do it.
 - The executor is asserted under the application's check credential. It is not proven by its own
   agent credential.

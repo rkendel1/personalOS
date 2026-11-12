@@ -2,8 +2,8 @@
   "schema": "feltkit.measure/1",
   "app": {
     "name": "personalos",
-    "feltkit": "0.3.25",
-    "installed": "0.3.25"
+    "feltkit": "0.3.26",
+    "installed": "0.3.26"
   },
   "method": {
     "files": "git ls-files (tracked, and untracked files that are not ignored); node_modules, dist, .feltkit and .git are never counted",
@@ -18,8 +18,8 @@
       "version": "0.3.22",
       "template": "tasks",
       "files": 20,
-      "unmodified": 4,
-      "modified": 15,
+      "unmodified": 5,
+      "modified": 14,
       "missing": 1
     },
     "generated": {
@@ -31,27 +31,27 @@
   "totals": {
     "domain": {
       "files": 27,
-      "lines": 2811
+      "lines": 2875
     },
     "experience": {
       "files": 20,
-      "lines": 1914
+      "lines": 1925
     },
     "infrastructure": {
-      "files": 2,
-      "lines": 95
+      "files": 1,
+      "lines": 24
     },
     "generated": {
-      "files": 2,
+      "files": 3,
       "lines": 25
     },
     "configuration": {
-      "files": 7,
-      "lines": 172
+      "files": 6,
+      "lines": 176
     },
     "tests": {
-      "files": 13,
-      "lines": 2129
+      "files": 15,
+      "lines": 2275
     },
     "third-party": {
       "files": 0,
@@ -63,7 +63,7 @@
     },
     "excluded": {
       "files": 17,
-      "lines": 4531
+      "lines": 4410
     },
     "unclassified": {
       "files": 0,
@@ -71,15 +71,17 @@
     }
   },
   "authored": {
-    "files": 56,
-    "lines": 4992
+    "files": 54,
+    "lines": 5000
   },
   "definitions": {
     "app": {
       "action": 2,
+      "agent": 1,
       "collection": 10,
-      "mutation": 36,
-      "query": 14
+      "integration": 2,
+      "mutation": 38,
+      "query": 13
     },
     "collections": [
       "documents",
@@ -97,17 +99,17 @@
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 635,
+      "callSites": 670,
       "files": 19
     },
     {
       "api": "ctx.db",
-      "callSites": 162,
+      "callSites": 169,
       "files": 16
     },
     {
       "api": "@feltdb/feltkit fail",
-      "callSites": 34,
+      "callSites": 36,
       "files": 10
     },
     {
@@ -117,12 +119,12 @@
     },
     {
       "api": "@feltdb/feltkit/react useMutation",
-      "callSites": 29,
+      "callSites": 30,
       "files": 4
     },
     {
       "api": "@feltdb/feltkit feltkit",
-      "callSites": 21,
+      "callSites": 24,
       "files": 1
     },
     {
@@ -137,7 +139,7 @@
     },
     {
       "api": "@feltdb/feltkit/testing TestApp",
-      "callSites": 12,
+      "callSites": 13,
       "files": 4
     },
     {
@@ -206,6 +208,11 @@
       "files": 1
     },
     {
+      "api": "ctx.afterCommit.agent",
+      "callSites": 2,
+      "files": 1
+    },
+    {
       "api": "ctx.crypto",
       "callSites": 2,
       "files": 2
@@ -264,6 +271,11 @@
       "api": "@feltdb/feltkit/react useOwnActions",
       "callSites": 1,
       "files": 1
+    },
+    {
+      "api": "ctx.integrations",
+      "callSites": 1,
+      "files": 1
     }
   ],
   "findings": [
@@ -271,7 +283,7 @@
       "id": "audit-trail",
       "title": "App-built business audit trail",
       "file": "feltkit/app.ts",
-      "line": 235,
+      "line": 291,
       "evidence": "export const actions = app.collection(",
       "platform": "app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence)",
       "acknowledged": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
@@ -308,14 +320,14 @@
       "path": ".github/workflows/ci.yml",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 44
+      "lines": 48
     },
     {
       "path": ".gitignore",
-      "class": "configuration",
-      "basis": "configuration file",
+      "class": "generated",
+      "basis": "scaffold (create-feltkit 0.3.22, unmodified)",
       "lines": 0,
-      "scaffold": "modified"
+      "scaffold": "unmodified"
     },
     {
       "path": "LICENSE",
@@ -551,7 +563,7 @@
       "path": "feltkit/_resolver.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 120
+      "lines": 102
     },
     {
       "path": "feltkit/actions.ts",
@@ -563,7 +575,7 @@
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 252,
+      "lines": 289,
       "scaffold": "modified"
     },
     {
@@ -607,13 +619,13 @@
       "path": "feltkit/interactions.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 306
+      "lines": 307
     },
     {
       "path": "feltkit/links.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 53
+      "lines": 97
     },
     {
       "path": "feltkit/memory.ts",
@@ -676,7 +688,7 @@
       "path": "package-lock.json",
       "class": "excluded",
       "basis": "lockfile",
-      "lines": 4531
+      "lines": 4410
     },
     {
       "path": "package.json",
@@ -714,12 +726,6 @@
       "scaffold": "modified"
     },
     {
-      "path": "scripts/anywhere-platform.mjs",
-      "class": "infrastructure",
-      "basis": "path: scripts/ (app tooling)",
-      "lines": 71
-    },
-    {
       "path": "scripts/measure-doc.mjs",
       "class": "infrastructure",
       "basis": "path: scripts/ (app tooling)",
@@ -755,7 +761,7 @@
       "path": "src/screens.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 601
+      "lines": 612
     },
     {
       "path": "src/styles.css",
@@ -781,13 +787,25 @@
       "path": "tests/assistant.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 285
+      "lines": 290
     },
     {
       "path": "tests/authboundry-real.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 86
+      "lines": 88
+    },
+    {
+      "path": "tests/authboundry/authboundry.flow",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 0
+    },
+    {
+      "path": "tests/authboundry/package.json",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 8
     },
     {
       "path": "tests/design-foundation.test.ts",
@@ -799,7 +817,7 @@
       "path": "tests/fixtures/anywhere.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 162
+      "lines": 184
     },
     {
       "path": "tests/fixtures/streaming-model.ts",
@@ -811,7 +829,7 @@
       "path": "tests/interactions.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 489
+      "lines": 598
     },
     {
       "path": "tests/interpret.test.ts",

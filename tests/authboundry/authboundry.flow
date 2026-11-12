@@ -1,0 +1,26 @@
+# PersonalOS's AuthBoundry configuration for tests and local acceptance: sign-in for the bootstrap
+# owner, agents (PersonalOS's executor), durable FeltDB authority. Capabilities are not declared
+# here: they are the application contract registered through the control API.
+use auth {
+  providers = [local]
+  tenant = true
+  isolation = "strict"
+  agents = true
+
+  claims = {
+    role = enum["owner", "admin", "member", "user"]
+  }
+
+  policy = {}
+
+  storage = {
+    authority = "feltdb"
+    audit = "feltdb"
+    reporting = "authboundry_projection"
+  }
+}
+
+use control_plane {
+  authoritative_state = [organization, deployment, provisioning, subscription_reference, billing_account_reference]
+  storage = "feltdb"
+}
