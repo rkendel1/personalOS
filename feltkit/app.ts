@@ -89,7 +89,7 @@ export const app = feltkit({
   services: {
     notifications: { types: ["reminder.due", "checkin.daily", "review.weekly"] },
     configuration: true,
-    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire" } },
+    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step" } },
     // Recurring jobs an operator sets up in Studio. Per-person recurrence (reminders, check-ins) is a
     // job chain owned by the person, so it runs as them (feltkit/checkins.ts).
     schedules: true,
@@ -170,6 +170,42 @@ export const websearch = app.integration("websearch", {
       method: "GET",
       path: "/res/v1/web/search",
       input: { q: s.string({ minLength: 1, maxLength: 400 }), count: s.integer({ minimum: 1, maximum: 20 }), extra_snippets: s.optional(s.boolean()) },
+      output: s.record(s.unknown()),
+      effect: "observation",
+      access: "research.search",
+      description: "Search the web; reading only.",
+    },
+  },
+});
+
+/**
+ * Web search from OpenAI (the Responses API with its `web_search` tool), the other provider of the same
+ * need (feltkit/_search.ts reads its answer as results). OPENAISEARCH_URL: https://api.openai.com, or any
+ * service answering the same request (Vercel AI Gateway: https://ai-gateway.vercel.sh, with
+ * OPENAISEARCH_MODEL=openai/gpt-4.1-mini); its key is the credential `openaisearch`
+ * (FELTKIT_CREDENTIAL_OPENAISEARCH), its own custody entry, apart from the model's. Its input
+ * admits only the web_search tool, so the key cannot be borrowed for anything but a search; like the
+ * Brave operation it needs research.search. It stays a catalog capability (not `expose: false`) because
+ * FeltKit's catalog leaves app-only operations out, and discovery needs its readiness before any call.
+ */
+export const openaisearch = app.integration("openaisearch", {
+  description: "Web search through OpenAI's Responses API web_search tool: cited pages and the search's sources.",
+  baseUrl: { env: "OPENAISEARCH_URL" },
+  credential: "credential-ref:openaisearch",
+  timeoutMs: 60000,
+  operations: {
+    search: {
+      method: "POST",
+      path: "/v1/responses",
+      readOnly: true,
+      input: {
+        model: s.string({ minLength: 1, maxLength: 80 }),
+        input: s.string({ minLength: 1, maxLength: 1000 }),
+        tools: s.array(s.object({ type: s.enum(["web_search"] as const) }), { minItems: 1, maxItems: 1 }),
+        tool_choice: s.enum(["required"] as const),
+        include: s.array(s.enum(["web_search_call.action.sources"] as const)),
+        max_output_tokens: s.integer({ minimum: 100, maximum: 4000 }),
+      },
       output: s.record(s.unknown()),
       effect: "observation",
       access: "research.search",
@@ -465,7 +501,8 @@ export const researchRuns = app.collection(
   "researchRuns",
   {
     owner,
-    kind: s.enum(["prospects"] as const),
+    /** What is being looked for: customers for the subject, its competitors, or organizations matching the objective. */
+    kind: s.enum(["prospects", "competitors", "organizations"] as const),
     request: s.string({ maxLength: 4000 }),
     product: s.string({ maxLength: 120 }),
     objective: s.string({ maxLength: 1000 }),
@@ -481,7 +518,47 @@ export const researchRuns = app.collection(
       results: s.optional(s.number()),
       error: s.optional(s.string({ maxLength: 500 })),
       at: s.optional(s.number()),
+      /** Planned at the start, or added after reading the first results. */
+      origin: s.optional(s.enum(["plan", "refinement"] as const)),
+      provider: s.optional(s.string()),
+      ms: s.optional(s.number()),
     })),
+    /** Which step runs next. Absent on runs from before steps (they run search, then prospects). */
+    phase: s.optional(s.enum(["planning", "searching", "selecting", "reading", "assessing", "finishing", "done"] as const)),
+    /** How the plan was made: rules, or a model proposal (its generation) that the rules accepted. */
+    plan: s.optional(s.object({
+      basis: s.enum(["rules", "model"] as const),
+      criteria: s.array(s.string({ maxLength: 300 })),
+      generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
+      rejected: s.optional(s.array(s.string({ maxLength: 300 }))),
+    })),
+    /** The organizations chosen from the search results for a closer look, and what happened to each. */
+    candidates: s.optional(s.array(s.object({
+      domain: s.string(),
+      name: s.string({ maxLength: 200 }),
+      sourceIds: s.array(s.string()),
+      why: s.string({ maxLength: 500 }),
+      state: s.enum(["pending", "read", "assessed", "rejected", "failed"] as const),
+      pageIds: s.optional(s.array(s.string())),
+      verdict: s.optional(s.string({ maxLength: 500 })),
+      attempts: s.optional(s.number()),
+    }))),
+    selection: s.optional(s.object({ basis: s.enum(["rules", "model"] as const), generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })), rejected: s.optional(s.array(s.string({ maxLength: 300 }))) })),
+    /** The FeltKit agent task holding this run's model generations. */
+    taskId: s.optional(s.string()),
+    /** Model calls that met a transient refusal (a rate limit) in the current step, and were tried again later. */
+    modelRetries: s.optional(s.number()),
+    /** What the run used: model generations and tokens, searches, pages, and time. */
+    usage: s.optional(s.object({
+      generations: s.number(), inputTokens: s.number(), outputTokens: s.number(), costUsd: s.optional(s.number()), modelMs: s.number(),
+      searches: s.number(), searchFailures: s.number(), searchMs: s.number(),
+      /** Tokens the search provider reports for its own model (OpenAI web search), apart from the research model's. */
+      searchInputTokens: s.optional(s.number()), searchOutputTokens: s.optional(s.number()),
+      pagesRequested: s.number(), pagesRead: s.number(), pageMs: s.number(),
+      quotesOffered: s.number(), quotesVerified: s.number(),
+    })),
+    /** One line per step: when, which, how long, what came of it. The run's observable history. */
+    steps: s.optional(s.array(s.object({ at: s.number(), phase: s.string(), ms: s.number(), outcome: s.string({ maxLength: 500 }) }))),
     /** Why it stopped short, in the person's terms, with what would unblock it. */
     blocker: s.optional(s.object({ need: s.string(), state: s.string(), detail: s.string({ maxLength: 1000 }), howToEnable: s.optional(s.string({ maxLength: 1000 })) })),
     cancelRequested: s.optional(s.boolean()),
@@ -502,10 +579,20 @@ export const researchSources = app.collection(
     runId: s.string(),
     url: s.string({ maxLength: 1000 }),
     title: s.string({ maxLength: 300 }),
-    text: s.string({ maxLength: 4000 }),
+    text: s.string({ maxLength: 20000 }),
     query: s.string({ maxLength: 400 }),
     provider: s.string(),
     retrievedAt: s.number(),
+    /** Where the provider ranked it among that search's results (0 first). */
+    position: s.optional(s.number()),
+    /** A search result, or a page read in full. Absent on older records: a search result. */
+    kind: s.optional(s.enum(["search", "page"] as const)),
+    /** What `text` is: the engine's snippet, a search model's summary (never quoted), or the page's own text. */
+    textKind: s.optional(s.enum(["search-snippet", "provider-summary", "page-text"] as const)),
+    /** For a page: what happened when it was read (feltkit/_pages.ts). */
+    status: s.optional(s.enum(["read", "unavailable", "extraction-failed", "not-allowed"] as const)),
+    httpStatus: s.optional(s.number()),
+    detail: s.optional(s.string({ maxLength: 500 })),
   },
   { indexes: [{ fields: ["runId"] }, { fields: ["owner"] }] },
 );
@@ -520,10 +607,15 @@ export const prospects = app.collection(
     company: s.string({ maxLength: 200 }),
     domain: s.string({ maxLength: 200 }),
     website: s.string({ maxLength: 300 }),
-    facts: s.array(s.object({ sourceId: s.string(), url: s.string(), text: s.string({ maxLength: 4000 }) })),
+    /** quote: verbatim from a page that was read (checked); search-result: what a search returned about it. */
+    facts: s.array(s.object({ sourceId: s.string(), url: s.string(), text: s.string({ maxLength: 4000 }), kind: s.optional(s.enum(["quote", "search-result"] as const)) })),
     assessment: s.object({
       basis: s.enum(["rules", "model"] as const),
       method: s.string({ maxLength: 500 }),
+      /** For a model assessment: the generation that made it. */
+      generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
+      /** Quotes the model offered that were not found in the cited page, and were dropped. */
+      rejectedQuotes: s.optional(s.number()),
       fit: s.enum(["high", "medium", "low"] as const),
       score: s.number(),
       whyFeltKit: s.string({ maxLength: 1000 }),

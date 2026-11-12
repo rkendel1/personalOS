@@ -1,0 +1,875 @@
+{
+  "at": "2026-11-12T23:21:27.703Z",
+  "model": "openai/gpt-4.1-mini via Vercel AI Gateway (custom provider)",
+  "search": "openai web search (openaisearch) at https://ai-gateway.vercel.sh",
+  "runs": [
+    {
+      "label": "customers",
+      "request": "Find potential customers for FeltKit",
+      "routed": "rules (research running)",
+      "runId": "mwe69fd3b6413f8938c4",
+      "status": "completed",
+      "kind": "prospects",
+      "subject": "FeltKit",
+      "objective": "Identify organizations and teams that build internal tools or agent-ready business applications and would benefit from a TypeScript framework like FeltKit.",
+      "plan": {
+        "basis": "model",
+        "criteria": [
+          "Organizations with development teams focused on building internal tools or business applications",
+          "Teams using or interested in TypeScript and modern web development frameworks",
+          "Companies exploring or implementing AI-assisted workflows or agent-based automation",
+          "Organizations that require embedded databases or lightweight data storage solutions",
+          "Teams that need secure authentication, background job processing, and HTTP integrations",
+          "Companies actively hiring developers for internal tooling, automation, or AI integration roles"
+        ],
+        "rejected": [],
+        "generation": {
+          "generationId": "gen-48c1a878e7a846a6",
+          "memoryId": "task-b5ae3a36-2ee5-5e81-4659-17f9d15dee30.gen-48c1a878e7a846a6.3",
+          "model": "custom/openai/gpt-4.1-mini"
+        }
+      },
+      "searches": [
+        {
+          "text": "companies hiring developers for internal tools TypeScript",
+          "origin": "plan",
+          "state": "done",
+          "results": 12,
+          "provider": "openai-web-search",
+          "ms": 3022,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "teams building AI-assisted business applications",
+          "origin": "plan",
+          "state": "done",
+          "results": 15,
+          "provider": "openai-web-search",
+          "ms": 4761,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "organizations using embedded databases for internal apps",
+          "origin": "plan",
+          "state": "done",
+          "results": 12,
+          "provider": "openai-web-search",
+          "ms": 3335,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "companies with developer blogs about internal tooling frameworks",
+          "origin": "plan",
+          "state": "done",
+          "results": 12,
+          "provider": "openai-web-search",
+          "ms": 5459,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "startups building agent-based automation platforms",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 6328,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "businesses hiring for roles in automation and internal developer tools",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 7406,
+          "attempts": 1,
+          "error": null
+        }
+      ],
+      "selection": {
+        "basis": "model",
+        "rejected": [
+          "Vercel: named on jobleads.com, which is not its own site (its site was not among the results)",
+          "Hook: named on builtin.com, which is not its own site (its site was not among the results)",
+          "Databricks: named on itpro.com, which is not its own site (its site was not among the results)",
+          "Oracle Fusion Cloud Applications: named on itpro.com, which is not its own site (its site was not among the results)"
+        ]
+      },
+      "candidates": [
+        {
+          "name": "Microsoft Teams platform",
+          "domain": "microsoft.com",
+          "state": "rejected",
+          "verdict": "Microsoft Teams platform offers an AI-powered platform with SDKs for building conversational AI agents and business applications, directly competing with FeltKit's TypeScript framework for internal tools and agent-ready apps."
+        },
+        {
+          "name": "TeamAI Enterprise",
+          "domain": "teamai.com",
+          "state": "assessed",
+          "verdict": "TeamAI Enterprise focuses on collaborative AI workflows and multi-LLM access for team collaboration, indicating interest in AI-assisted workflows but lacks clear evidence of building internal tools with TypeScript frameworks or embedding databases."
+        },
+        {
+          "name": "Jinba",
+          "domain": "jinba.io",
+          "state": "rejected",
+          "verdict": "Jinba offers a SOC II compliant enterprise AI workflow automation platform that overlaps significantly with FeltKit's target use cases, making it a competitor rather than a prospect."
+        },
+        {
+          "name": "ICF",
+          "domain": "icf-c.com",
+          "state": "assessed",
+          "verdict": "ICF builds internal developer tooling and platform automation that aligns well with FeltKit's focus on TypeScript frameworks for internal tools and agent-ready business applications."
+        }
+      ],
+      "pages": {
+        "requested": 8,
+        "byStatus": {
+          "read": 6,
+          "unavailable": 2
+        },
+        "failures": [
+          {
+            "url": "https://platform.teamai.com/enterprise-teams/",
+            "status": "unavailable",
+            "detail": "the site answered HTTP 403"
+          },
+          {
+            "url": "https://platform.teamai.com/custom-assistants/",
+            "status": "unavailable",
+            "detail": "the site answered HTTP 403"
+          }
+        ]
+      },
+      "results": [
+        {
+          "rank": 1,
+          "company": "ICF",
+          "website": "https://icf-c.com",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "why": "ICF builds internal developer tooling and platform automation that aligns well with FeltKit's focus on TypeScript frameworks for internal tools and agent-ready business applications.",
+          "generationId": "gen-c62eca3d6cd04821",
+          "rejectedQuotes": 1,
+          "quotes": [
+            {
+              "text": "Internal CLIs and developer tools Kubernetes controllers and operators GitHub Actions and Terraform helpers Automation for the steps nobody documents",
+              "url": "https://icf-c.com/services/internal-tooling"
+            },
+            {
+              "text": "The tooling that sits on the platform rather than on a product roadmap: CLIs, controllers, actions and the automation nobody has time to write.",
+              "url": "https://icf-c.com/services/internal-tooling"
+            },
+            {
+              "text": "Platform engineering for teams that have outgrown ad-hoc CI, runner sprawl and wiki-ops. Kubernetes, GitOps, developer platforms and the migrations that get you there, designed, built and operated by the person you talk to.",
+              "url": "https://icf-c.com/"
+            },
+            {
+              "text": "More of the code, and more of the change volume, now comes from AI-assisted development. The platform has to hold the same DORA bar with tighter guardrails, which is a platform problem rather than an AI one.",
+              "url": "https://icf-c.com/"
+            }
+          ],
+          "searchResults": 1,
+          "rationale": [
+            "ICF provides internal tooling such as CLIs, Kubernetes controllers, GitHub Actions, and Terraform helpers that automate manual platform steps, matching the need for internal tools and automation.",
+            "Their focus on platform automation and developer tooling aligns with teams building internal tools or business applications.",
+            "ICF uses modern technologies like Kubernetes, Terraform, Go, and GitHub Actions, indicating familiarity with modern development frameworks and automation, which complements TypeScript frameworks like FeltKit.",
+            "They acknowledge the rise of AI-assisted development and the need for platforms to support this, indicating relevance to organizations exploring AI-assisted workflows.",
+            "ICF targets product companies with 30 to 200 engineers where infrastructure or CI has become a bottleneck, suggesting a suitable scale and complexity for FeltKit's offerings."
+          ],
+          "openQuestions": [
+            "Does ICF's client base or target customers use or prefer TypeScript specifically for internal tooling?",
+            "What is the extent of ICF's involvement with embedded databases or lightweight data storage solutions?",
+            "Does ICF provide or require secure authentication, background job processing, or HTTP integrations in their tooling?",
+            "Are ICF's clients actively hiring developers focused on internal tooling, automation, or AI integration roles?"
+          ]
+        },
+        {
+          "rank": 2,
+          "company": "TeamAI Enterprise",
+          "website": "https://teamai.com",
+          "fit": "medium",
+          "confidence": "low",
+          "basis": "model",
+          "why": "TeamAI Enterprise focuses on collaborative AI workflows and multi-LLM access for team collaboration, indicating interest in AI-assisted workflows but lacks clear evidence of building internal tools with TypeScript frameworks or embedding databases.",
+          "generationId": "gen-553d10d63a014655",
+          "rejectedQuotes": 0,
+          "quotes": [],
+          "searchResults": 2,
+          "rationale": [
+            "TeamAI Enterprise provides a collaborative AI workspace centralizing multi-LLM access and AI chat for team collaboration, supporting AI-assisted workflows and automation."
+          ],
+          "openQuestions": [
+            "None of its own pages could be read; this rests on search results only.",
+            "Not read: https://platform.teamai.com/custom-assistants/: unavailable (the site answered HTTP 403)",
+            "Not read: https://platform.teamai.com/enterprise-teams/: unavailable (the site answered HTTP 403)",
+            "Does TeamAI Enterprise have development teams focused on building internal tools or business applications?",
+            "Do they use or plan to use TypeScript and modern web development frameworks?",
+            "Do they require embedded databases or lightweight data storage solutions?",
+            "Do they implement secure authentication, background job processing, or HTTP integrations?",
+            "Are they actively hiring developers for internal tooling, automation, or AI integration roles?"
+          ]
+        }
+      ],
+      "usage": {
+        "generations": 6,
+        "inputTokens": 15726,
+        "outputTokens": 2942,
+        "modelMs": 26005,
+        "searches": 6,
+        "searchFailures": 0,
+        "searchMs": 30311,
+        "pagesRequested": 8,
+        "pagesRead": 6,
+        "pageMs": 7031,
+        "quotesOffered": 18,
+        "quotesVerified": 12,
+        "costUsd": 0.0109976,
+        "searchInputTokens": 45932,
+        "searchOutputTokens": 3726
+      },
+      "estimatedCostUsd": 0.0953,
+      "wallMs": 106711,
+      "turnMs": 39,
+      "stepCount": 20,
+      "stepMsByPhase": {
+        "planning": 2828,
+        "searching": 30312,
+        "selecting": 3544,
+        "reading": 7034,
+        "assessing": 19672,
+        "finishing": 0
+      },
+      "events": [
+        {
+          "event": "restart",
+          "phase": "reading",
+          "stepsBefore": 9,
+          "resumedAfterMs": 32684,
+          "nextStep": {
+            "at": 1794525766387,
+            "phase": "reading",
+            "ms": 371,
+            "outcome": "teamai.com: unavailable 403, unavailable 403"
+          }
+        }
+      ],
+      "blocker": null
+    },
+    {
+      "label": "customers, phrased differently",
+      "request": "Which companies would actually pay for something like FeltKit? I want a short list worth reaching out to.",
+      "routed": "model turn (research started mwe6brr3027a7e7babc6)",
+      "runId": "mwe6brr3027a7e7babc6",
+      "status": "completed",
+      "kind": "prospects",
+      "subject": "FeltKit",
+      "objective": "Identify a short list of companies that would be willing to pay for FeltKit by finding organizations that build internal tools or agent-driven business applications and have the need for embedded databases and AI-assisted workflows.",
+      "plan": {
+        "basis": "model",
+        "criteria": [
+          "Companies with internal developer teams building custom internal tools or business applications",
+          "Organizations that use or develop AI-assisted workflows or agent-based automation",
+          "Teams that require embedded databases or lightweight frameworks for internal apps",
+          "Companies with a focus on improving developer productivity and automation",
+          "Organizations that integrate multiple systems via HTTP APIs and need credential management",
+          "Companies actively hiring developers for internal tooling, automation, or AI integration roles"
+        ],
+        "rejected": [],
+        "generation": {
+          "generationId": "gen-26403bb53e114e92",
+          "memoryId": "task-9a3b1530-8432-0268-45c4-161df8837ffa.gen-26403bb53e114e92.3",
+          "model": "custom/openai/gpt-4.1-mini"
+        }
+      },
+      "searches": [
+        {
+          "text": "companies building internal developer tools",
+          "origin": "plan",
+          "state": "done",
+          "results": 13,
+          "provider": "openai-web-search",
+          "ms": 4348,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "organizations using AI agents for business process automation",
+          "origin": "plan",
+          "state": "done",
+          "results": 17,
+          "provider": "openai-web-search",
+          "ms": 5488,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "teams developing embedded database applications",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 6902,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "companies hiring developers for internal tooling and automation",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 6508,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "businesses integrating multiple HTTP APIs with credential management",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 8982,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "case studies of companies using agent-based business applications",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 9791,
+          "attempts": 1,
+          "error": null
+        }
+      ],
+      "selection": {
+        "basis": "model",
+        "rejected": [
+          "Internal: named on prweb.com, which is not its own site (its site was not among the results)",
+          "Cortex: named on ceehire.com, which is not its own site (its site was not among the results)",
+          "Workato: named on axios.com, which is not its own site (its site was not among the results)",
+          "Dropbox: named on itpro.com, which is not its own site (its site was not among the results)"
+        ]
+      },
+      "candidates": [
+        {
+          "name": "BuildPiper",
+          "domain": "buildpiper.io",
+          "state": "assessed",
+          "verdict": "BuildPiper appears to focus on internal developer tooling through its ALM platform and Internal Developer Portal, suggesting some alignment with FeltKit's target, but lack of direct evidence on AI workflows, embedded databases, or credential management limits confidence."
+        },
+        {
+          "name": "Appian Corporation",
+          "domain": "appian.com",
+          "state": "rejected",
+          "verdict": "Appian Corporation offers a platform that integrates AI directly into business processes, which overlaps with FeltKit's domain, making it a competitor rather than a prospect."
+        },
+        {
+          "name": "Celonis and IBM",
+          "domain": "celonis.com",
+          "state": "rejected",
+          "verdict": "Celonis, in partnership with IBM, offers AI agent-driven process automation and orchestration solutions that compete directly with FeltKit's focus on embedded databases and AI-assisted workflows for internal tools."
+        },
+        {
+          "name": "Camunda",
+          "domain": "camunda.com",
+          "state": "rejected",
+          "verdict": "Camunda offers an agentic orchestration platform that directly competes with FeltKit by enabling AI agent orchestration, internal tooling, and automation workflows."
+        }
+      ],
+      "pages": {
+        "requested": 8,
+        "byStatus": {
+          "not-allowed": 2,
+          "unavailable": 2,
+          "read": 4
+        },
+        "failures": [
+          {
+            "url": "https://buildpiper.io/internal-developer-portal/",
+            "status": "not-allowed",
+            "detail": "its robots.txt asks automated readers not to read this page"
+          },
+          {
+            "url": "https://buildpiper.io/",
+            "status": "not-allowed",
+            "detail": "its robots.txt asks automated readers not to read this page"
+          },
+          {
+            "url": "https://careers.appian.com/jobs/8193833-lead-ai-developer-tooling-engineer",
+            "status": "unavailable",
+            "detail": "the site answered HTTP 404"
+          },
+          {
+            "url": "https://investors.appian.com/news-releases/news-release-details/appian-customers-unlock-ais-full-potential-embedding-it-business",
+            "status": "unavailable",
+            "detail": "the site answered HTTP 403"
+          }
+        ]
+      },
+      "results": [
+        {
+          "rank": 1,
+          "company": "BuildPiper",
+          "website": "https://buildpiper.io",
+          "fit": "medium",
+          "confidence": "low",
+          "basis": "model",
+          "why": "BuildPiper appears to focus on internal developer tooling through its ALM platform and Internal Developer Portal, suggesting some alignment with FeltKit's target, but lack of direct evidence on AI workflows, embedded databases, or credential management limits confidence.",
+          "generationId": "gen-e7e18ec9ef144be8",
+          "rejectedQuotes": 0,
+          "quotes": [],
+          "searchResults": 1,
+          "rationale": [],
+          "openQuestions": [
+            "None of its own pages could be read; this rests on search results only.",
+            "Not read: https://buildpiper.io/internal-developer-portal/: not-allowed (its robots.txt asks automated readers not to read this page)",
+            "Not read: https://buildpiper.io/: not-allowed (its robots.txt asks automated readers not to read this page)",
+            "No direct evidence on whether BuildPiper supports AI-assisted workflows or agent-based automation.",
+            "No information on use or support for embedded databases or lightweight frameworks for internal apps.",
+            "No details on integration of multiple systems via HTTP APIs or credential management.",
+            "No data on hiring activity related to internal tooling, automation, or AI integration roles.",
+            "Primary pages are not accessible due to robots.txt, limiting available evidence."
+          ]
+        }
+      ],
+      "usage": {
+        "generations": 6,
+        "inputTokens": 13245,
+        "outputTokens": 2324,
+        "modelMs": 26273,
+        "searches": 6,
+        "searchFailures": 0,
+        "searchMs": 42019,
+        "pagesRequested": 8,
+        "pagesRead": 4,
+        "pageMs": 2838,
+        "quotesOffered": 11,
+        "quotesVerified": 9,
+        "costUsd": 0.0090164,
+        "searchInputTokens": 40877,
+        "searchOutputTokens": 3791
+      },
+      "estimatedCostUsd": 0.0914,
+      "wallMs": 100639,
+      "turnMs": 2696,
+      "stepCount": 20,
+      "stepMsByPhase": {
+        "planning": 6342,
+        "searching": 42019,
+        "selecting": 3065,
+        "reading": 2838,
+        "assessing": 16903,
+        "finishing": 0
+      },
+      "events": [
+        {
+          "event": "stop",
+          "status": "cancelled",
+          "stepsAtStop": 2,
+          "stepsAfter15s": 2,
+          "searchesDone": 1,
+          "searchesPending": 5
+        },
+        {
+          "event": "retry"
+        }
+      ],
+      "blocker": null
+    },
+    {
+      "label": "competitors",
+      "request": "Who are FeltKit's main competitors?",
+      "routed": "model turn (research started mwe6dwhmbf3551251880)",
+      "runId": "mwe6dwhmbf3551251880",
+      "status": "completed",
+      "kind": "competitors",
+      "subject": "FeltKit",
+      "objective": "Identify the main competitors of FeltKit, focusing on similar TypeScript frameworks or platforms that support embedded databases, AI agent runtimes, and internal tool development.",
+      "plan": {
+        "basis": "model",
+        "criteria": [
+          "Offers a TypeScript or JavaScript framework for application development",
+          "Supports embedded or local databases for app data storage",
+          "Includes features for authentication and background job processing",
+          "Provides integrations with external HTTP services and credential management",
+          "Supports AI or agent-based automation or workflows",
+          "Targets developers and teams building internal tools or business applications"
+        ],
+        "rejected": [],
+        "generation": {
+          "generationId": "gen-0290d1c695214a4b",
+          "memoryId": "task-41ddb1da-b7df-bcd9-e02f-00ee2e19f8a6.gen-0290d1c695214a4b.3",
+          "model": "custom/openai/gpt-4.1-mini"
+        }
+      },
+      "searches": [
+        {
+          "text": "TypeScript frameworks for internal tools with embedded databases",
+          "origin": "plan",
+          "state": "done",
+          "results": 14,
+          "provider": "openai-web-search",
+          "ms": 4249,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "platforms with AI agent runtimes for business applications",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 7612,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "developer tools for building internal apps with auth and background jobs",
+          "origin": "plan",
+          "state": "done",
+          "results": 14,
+          "provider": "openai-web-search",
+          "ms": 3268,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "alternatives to FeltKit for embedded database app development",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 10323,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "companies offering TypeScript frameworks with AI automation",
+          "origin": "plan",
+          "state": "done",
+          "results": 13,
+          "provider": "openai-web-search",
+          "ms": 3082,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "text": "comparison of internal tool development frameworks with AI features",
+          "origin": "plan",
+          "state": "done",
+          "results": 11,
+          "provider": "openai-web-search",
+          "ms": 7432,
+          "attempts": 1,
+          "error": null
+        }
+      ],
+      "selection": {
+        "basis": "model",
+        "rejected": [
+          "https://github.com/buildlish/buildlish: a directory, forum or the subject's own site",
+          "AWS Blocks: named on amazon.com, which is not its own site (its site was not among the results)",
+          "Trigger.dev: named on agentindex.app, which is not its own site (its site was not among the results)"
+        ]
+      },
+      "candidates": [
+        {
+          "name": "AxioDB",
+          "domain": "axiodb.in",
+          "state": "assessed",
+          "verdict": "AxioDB offers a TypeScript-native embedded NoSQL database with ACID transactions, AI agent integration, authentication, HTTP API, and tooling that aligns closely with FeltKit's focus on TypeScript frameworks supporting embedded databases, AI agents, and internal tool development."
+        },
+        {
+          "name": "Stacks",
+          "domain": "stacksjs.com",
+          "state": "assessed",
+          "verdict": "Stacks offers a comprehensive full-stack TypeScript framework with embedded database support, authentication, background job processing, AI integrations, and targets developers building internal tools and business applications, matching FeltKit's criteria closely."
+        },
+        {
+          "name": "Appsmith",
+          "domain": "appsmith.com",
+          "state": "assessed",
+          "verdict": "Appsmith offers a developer-focused, open-source low-code platform with TypeScript/JavaScript customization, embedded database connectivity, authentication, background workflows, and AI integrations, targeting internal tool development similar to FeltKit."
+        },
+        {
+          "name": "Appwrite",
+          "domain": "appwrite.io",
+          "state": "assessed",
+          "verdict": "Appwrite offers a comprehensive open-source developer platform with TypeScript/JavaScript support, embedded databases, authentication, background job processing via serverless functions, integrations with external services, and AI agent support, targeting developers building internal tools and business applications."
+        },
+        {
+          "name": "Wasp",
+          "domain": "wasp.sh",
+          "state": "assessed",
+          "verdict": "Wasp offers a full-stack TypeScript framework with embedded database support, authentication, background jobs, HTTP integrations, and targets developers building internal tools, matching FeltKit's criteria closely."
+        }
+      ],
+      "pages": {
+        "requested": 7,
+        "byStatus": {
+          "read": 7
+        },
+        "failures": []
+      },
+      "results": [
+        {
+          "rank": 1,
+          "company": "Appwrite",
+          "website": "https://appwrite.io",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "why": "Appwrite offers a comprehensive open-source developer platform with TypeScript/JavaScript support, embedded databases, authentication, background job processing via serverless functions, integrations with external services, and AI agent support, targeting developers building internal tools and business applications.",
+          "generationId": "gen-b35b0ef354de4035",
+          "rejectedQuotes": 2,
+          "quotes": [
+            {
+              "text": "Appwrite is an open-source developer platform with Auth, Databases, Storage, Functions, Messaging, and Sites. The open-source cloud for agents and developers.",
+              "url": "https://appwrite.io/home"
+            },
+            {
+              "text": "Authenticate users securely with email, SMS, OAuth, anonymous sessions, and magic URLs.",
+              "url": "https://appwrite.io/home"
+            },
+            {
+              "text": "Model, query, and scale with Appwrite databases or managed PostgreSQL and MySQL, so you can match your use case and team needs.",
+              "url": "https://appwrite.io/home"
+            },
+            {
+              "text": "Deploy serverless functions with secure isolated runtimes and event-driven execution.",
+              "url": "https://appwrite.io/home"
+            },
+            {
+              "text": "Send email, SMS, and push notifications through a unified messaging service.",
+              "url": "https://appwrite.io/home"
+            },
+            {
+              "text": "Subscribe and react to events across your project as they happen.",
+              "url": "https://appwrite.io/home"
+            }
+          ],
+          "searchResults": 1,
+          "rationale": [
+            "Appwrite provides a developer platform with authentication, databases, storage, and serverless functions, matching the need for embedded/local databases, authentication, and background job processing.",
+            "It supports integrations with external HTTP services and credential management through its unified messaging and functions features.",
+            "Appwrite explicitly supports AI agents and agent-based workflows, aligning with the AI or agent-based automation requirement.",
+            "The platform targets developers and teams building internal tools and business applications, as evidenced by its positioning and use cases."
+          ],
+          "openQuestions": [
+            "Does Appwrite provide a TypeScript-specific framework or SDK explicitly comparable to FeltKit's framework?",
+            "What is the extent of Appwrite's embedded database support versus managed external databases?",
+            "How does Appwrite's AI agent runtime compare in capabilities and integration depth to FeltKit's?",
+            "What is the size and budget of Appwrite's user base relevant to internal tool development?"
+          ]
+        },
+        {
+          "rank": 2,
+          "company": "Wasp",
+          "website": "https://wasp.sh",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "why": "Wasp offers a full-stack TypeScript framework with embedded database support, authentication, background jobs, HTTP integrations, and targets developers building internal tools, matching FeltKit's criteria closely.",
+          "generationId": "gen-376b74d3691a408f",
+          "rejectedQuotes": 2,
+          "quotes": [
+            {
+              "text": "Full-Stack Auth username · email · social",
+              "url": "https://wasp.sh/"
+            },
+            {
+              "text": "Background Jobs cron · one-off · retry",
+              "url": "https://wasp.sh/"
+            },
+            {
+              "text": "Data Models typed · integrated",
+              "url": "https://wasp.sh/"
+            },
+            {
+              "text": "Custom HTTP API REST · webhooks",
+              "url": "https://wasp.sh/"
+            },
+            {
+              "text": "Declare your data models in Prisma, have them integrated and fully-typed through the whole stack.",
+              "url": "https://wasp.sh/"
+            },
+            {
+              "text": "Cron jobs, one-offs, retries, all working out of the box. No external service needed.",
+              "url": "https://wasp.sh/"
+            }
+          ],
+          "searchResults": 1,
+          "rationale": [
+            "Wasp is a full-stack TypeScript framework for React and Node.js, matching the language and framework criteria.",
+            "It supports embedded/local databases via Prisma data models fully integrated and typed.",
+            "Wasp includes built-in authentication with multiple methods (email, Google, GitHub).",
+            "Background job processing is supported with cron, one-off, and retry jobs out of the box.",
+            "It provides custom HTTP APIs including REST and webhooks, supporting external HTTP service integrations.",
+            "Wasp targets developers building internal tools and business applications, as evidenced by examples like admin dashboards and task apps.",
+            "The framework is open source, deployable anywhere, and includes a cohesive spec layer connecting frontend, backend, database, and deployment."
+          ],
+          "openQuestions": [
+            "Does Wasp explicitly support AI or agent-based automation or workflows beyond being 'AI-friendly'?",
+            "What is the scale and size of the Wasp user base and community?",
+            "What is the budget or commercial model for Wasp?",
+            "Who are the primary decision makers or target customers for Wasp?"
+          ]
+        },
+        {
+          "rank": 3,
+          "company": "AxioDB",
+          "website": "https://axiodb.in",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "why": "AxioDB offers a TypeScript-native embedded NoSQL database with ACID transactions, AI agent integration, authentication, HTTP API, and tooling that aligns closely with FeltKit's focus on TypeScript frameworks supporting embedded databases, AI agents, and internal tool development.",
+          "generationId": "gen-1afef9d28a01421f",
+          "rejectedQuotes": 4,
+          "quotes": [
+            {
+              "text": "A fast, zero-setup embedded database with native vector search for when you need reliable storage without running a separate server. Built for TypeScript apps and AI agents to safely persist, query dynamic JSON state, and perform semantic similarity search.",
+              "url": "https://axiodb.in/"
+            },
+            {
+              "text": "Security & RBAC",
+              "url": "https://axiodb.in/"
+            },
+            {
+              "text": "Perfect for: AI Agents • TypeScript Apps • Desktop & CLI Tools • Local-First Systems",
+              "url": "https://axiodb.in/"
+            }
+          ],
+          "searchResults": 1,
+          "rationale": [
+            "AxioDB is a TypeScript-native embedded NoSQL database designed specifically for TypeScript apps and AI agents, matching the requirement for a TypeScript framework with embedded database support.",
+            "It supports ACID transactions, authentication, HTTP API, and background job processing (worker threads), fulfilling the criteria for authentication and background job features.",
+            "The inclusion of a native MCP server with multiple AI agent tools and vector search capabilities aligns with the AI or agent-based automation or workflow support requirement.",
+            "The Desktop GUI and CLI tooling support internal tool development and management, targeting developers and teams building business applications.",
+            "Security features like RBAC and TCP protocol with credential management indicate integration with external services and secure access."
+          ],
+          "openQuestions": [
+            "Does AxioDB provide built-in background job scheduling or processing beyond worker threads?",
+            "What is the size and scale of the user base or community for AxioDB?",
+            "What is the pricing or licensing model for AxioDB, especially for commercial use?",
+            "Does AxioDB offer direct integrations with external HTTP services beyond its own HTTP API?"
+          ]
+        },
+        {
+          "rank": 4,
+          "company": "Appsmith",
+          "website": "https://appsmith.com",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "why": "Appsmith offers a developer-focused, open-source low-code platform with TypeScript/JavaScript customization, embedded database connectivity, authentication, background workflows, and AI integrations, targeting internal tool development similar to FeltKit.",
+          "generationId": "gen-a66684157edb490b",
+          "rejectedQuotes": 6,
+          "quotes": [
+            {
+              "text": "Build custom applications more quickly and securely with the leader in open-source low-code development.",
+              "url": "https://www.appsmith.com/?via=automationhub"
+            },
+            {
+              "text": "Version control and merge updates with Git. Automatically deploy merged changes from designated environment branches.",
+              "url": "https://www.appsmith.com/"
+            }
+          ],
+          "searchResults": 2,
+          "rationale": [
+            "Appsmith provides a low-code platform that supports JavaScript customization and workflow automation, aligning with FeltKit's TypeScript framework focus.",
+            "It supports embedded or local databases and broad data source connectivity, enabling secure internal data access.",
+            "Appsmith includes authentication features such as SAML and OIDC SSO, fulfilling the authentication criteria.",
+            "Background job processing and workflow automation are supported through workflow scripts and JS code customization.",
+            "Integration with external HTTP services and credential management is enabled via REST/GraphQL API connectivity and secure self-hosting.",
+            "AI and agent-based automation are supported through LLM interactions and natural language prompts for code generation.",
+            "The platform targets developers and teams building internal tools and business applications, matching FeltKit's target audience."
+          ],
+          "openQuestions": [
+            "Does Appsmith use TypeScript specifically as a framework base or primarily JavaScript?",
+            "What is the extent of embedded database support versus external database connectivity?",
+            "Details on the scale and performance of background job processing capabilities.",
+            "Specifics on AI agent runtime capabilities beyond LLM integration.",
+            "Information on pricing and enterprise adoption scale."
+          ]
+        },
+        {
+          "rank": 5,
+          "company": "Stacks",
+          "website": "https://stacksjs.com",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "why": "Stacks offers a comprehensive full-stack TypeScript framework with embedded database support, authentication, background job processing, AI integrations, and targets developers building internal tools and business applications, matching FeltKit's criteria closely.",
+          "generationId": "gen-47fac0488cbc4699",
+          "rejectedQuotes": 6,
+          "quotes": [
+            {
+              "text": "Stacks is a full-stack TypeScript framework. One UI ships to web, desktop, and mobile, with CMS, commerce, AI, auth, queues, and cloud deployment built in.",
+              "url": "https://stacksjs.com/"
+            },
+            {
+              "text": "Pantry installs Bun, the database, the mail server, and every tool a project declares, per project, then starts and migrates the database.",
+              "url": "https://stacksjs.com/"
+            }
+          ],
+          "searchResults": 1,
+          "rationale": [
+            "Stacks is explicitly described as a full-stack TypeScript framework that ships to web, desktop, and mobile, indicating a broad platform for app development.",
+            "It includes models and database migrations, implying embedded or local database support for app data storage.",
+            "Authentication features cover sessions, tokens, social login, and security policies, meeting the authentication criterion.",
+            "Background job processing is supported via queues, jobs, batches, schedules, and worker-ready workflows.",
+            "AI integrations include multiple providers and advanced features like RAG and embeddings, supporting AI or agent-based automation.",
+            "The framework targets developers building internal tools and business applications, as evidenced by generated admin panels and dashboards.",
+            "Integration with external HTTP services and credential management is implied by features like mail server setup and social login."
+          ],
+          "openQuestions": [
+            "What is the scale and size of the Stacks user base and community?",
+            "What is the budget or commercial model for Stacks?",
+            "Who are the primary decision-makers or maintainers of the Stacks framework?",
+            "Are there any limitations or constraints on database types supported beyond the mention of 'the database'?",
+            "How mature and stable is the AI integration and background job processing in production environments?"
+          ]
+        }
+      ],
+      "usage": {
+        "generations": 7,
+        "inputTokens": 17291,
+        "outputTokens": 4364,
+        "modelMs": 39243,
+        "searches": 6,
+        "searchFailures": 0,
+        "searchMs": 35966,
+        "pagesRequested": 7,
+        "pagesRead": 7,
+        "pageMs": 3939,
+        "quotesOffered": 39,
+        "quotesVerified": 19,
+        "costUsd": 0.0138988,
+        "searchInputTokens": 43428,
+        "searchOutputTokens": 3977
+      },
+      "estimatedCostUsd": 0.0976,
+      "wallMs": 94937,
+      "turnMs": 1505,
+      "stepCount": 22,
+      "stepMsByPhase": {
+        "planning": 4039,
+        "searching": 35966,
+        "selecting": 3945,
+        "reading": 3939,
+        "assessing": 31298,
+        "finishing": 0
+      },
+      "events": [],
+      "blocker": null
+    }
+  ]
+}

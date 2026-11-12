@@ -29,6 +29,12 @@ const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "
 /** Inputs the app fills in itself (from the caller's clock), so the model never guesses them. */
 const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset"], "tasks.update": ["tzOffset"], "briefing.today": ["today"] };
 const MAX_ROUNDS = 3;
+/** Not a PersonalOS capability the model can call: a request that PersonalOS starts research (feltkit/research.ts). */
+const START_RESEARCH = {
+  name: "research.start",
+  description: "Start web research for the user's request (find customers, competitors or other organizations; anything that needs current web sources). PersonalOS plans and runs it and reports back here. Reading only; contacts no one.",
+  inputSchema: { type: "object", properties: { goal: { type: "string", description: "What the user wants found, in one sentence." } }, required: ["goal"] } as Record<string, unknown>,
+};
 /** A question about whether PersonalOS can reach the web (search, browse, look things up online). */
 const CAPABILITY_QUESTION = /\b(can|could|are|do|don'?t|can'?t|cannot|able)\b.*\b(search|browse|google|look (?:things |it )?up|access|use)\b.*\b(web|internet|online)\b|\bweb access\b|\binternet access\b/i;
 
@@ -43,7 +49,7 @@ function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[
     "- Reading tools (tasks.list, briefing.today, memory.list, projects.list, documents.list) run immediately; use them when you need facts you don't have below.",
     "- Never invent tasks, people, dates or facts. Unconfirmed memories are guesses; say so if you rely on one.",
     "- You can list the user's saved documents but cannot read their contents.",
-    "- What PersonalOS can do is not limited to the tools in this turn. Research outcomes (for example finding customers, prospects or leads for a product) are run by PersonalOS's research, which the user starts by asking for the outcome in words; it discovers and uses what the platform offers. What it can use right now, as discovered from the platform's catalog:",
+    "- What PersonalOS can do is not limited to the tools in this turn. When the user wants something researched on the web (finding customers, prospects, competitors, partners, vendors or other organizations, or facts that need current web sources), call research.start with their request: PersonalOS then plans and runs the research durably (searches, reads pages, assesses with evidence) and reports back in this conversation. Don't answer such requests from memory. What research can use right now, as discovered from the platform's catalog:",
     landscape,
     "- Never say a capability does not exist, or that you have no web access, unless the list above says so; if it says something is not configured or not permitted, say exactly that and what would enable it. Never claim you searched, sent or did anything you did not do in this turn.",
     "",
@@ -134,7 +140,8 @@ export const turn = app.action({
     ctx.emit({ type: "turn", conversationId: user.conversationId, messageId: user.messageId, taskId });
 
     const info = await ctx.runQuery(api.turnstate.context, { conversationId: user.conversationId, before: user.messageId, query: text });
-    const tools = (await ctx.agent.tools())
+    const research = ctx.auth.has("research.run");
+    const tools = [...(await ctx.agent.tools())
       .filter((t) => TOOLS.includes(t.name))
       .map((t) => {
         const hidden = APP_FILLED[t.name] ?? [];
@@ -144,7 +151,7 @@ export const turn = app.action({
           if (schema.required) schema.required = schema.required.filter((r) => r !== key);
         }
         return { ...t, inputSchema: schema as Record<string, unknown> };
-      });
+      }), ...(research ? [START_RESEARCH] : [])];
     const conversation: GenerationMessage[] = [
       { role: "system", content: systemPrompt(clock, info, landscape) },
       ...info.history.map((m) => ({ role: m.role as "user" | "assistant", content: m.text })),
@@ -155,6 +162,7 @@ export const turn = app.action({
     let model = `${status.provider}/${status.model}`;
     let reference: string | undefined;
     let cancelled = false;
+    let researchRun: string | null = null;
     const generations: string[] = [];
     const proposals: Array<{ taskId: string; actionId: string; capability: string; effect: string; state: string; input: Record<string, unknown> }> = [];
     try {
@@ -174,6 +182,16 @@ export const turn = app.action({
         }
         if (!g.toolCalls.length) break;
         const results: Array<{ call: ToolCall; content: string; observed?: boolean }> = [];
+        // Research: the model only proposes it. PersonalOS checks the permission and starts it with the
+        // person's own words (not the model's paraphrase); its plan is this turn's reply.
+        const asked = g.toolCalls.find((c) => c.name === START_RESEARCH.name);
+        if (asked && research) {
+          const r = await startResearch(ctx, text, user.conversationId, { fromTurn: { messageId: user.messageId } });
+          reply = `${reply.trim()}${reply.trim() ? "\n\n" : ""}${r.reply}`;
+          ctx.emit({ type: "delta", text: r.reply });
+          researchRun = r.runId;
+          break;
+        }
         for (const call of g.toolCalls) {
           if (!TOOLS.includes(call.name)) {
             results.push({ call, content: JSON.stringify({ error: `${call.name} is not available to you.` }) });
@@ -199,7 +217,7 @@ export const turn = app.action({
         if (!results.some((r) => r.observed) && reply.trim()) break;
       }
       const replyId = await ctx.runMutation(api.turnstate.recordReply, { conversationId: user.conversationId, replyTo: user.messageId, text: reply.trim(), taskId, model, ...(reference ? { reference } : {}), generations, proposals, ...(cancelled ? { cancelled: true } : {}) });
-      return { mode: "model" as const, conversationId: user.conversationId, messageId: user.messageId, replyId, replayed: false };
+      return { mode: "model" as const, conversationId: user.conversationId, messageId: user.messageId, replyId, replayed: false, ...(researchRun ? { reason: `research started ${researchRun}` } : {}) };
     } catch (error) {
       // The turn still ends with a reply that says what happened, and what it had already proposed.
       const e = error as { code?: string; message?: string };

@@ -5,7 +5,8 @@
  * Starts a local web search provider that answers the Brave Search API's request and response shape
  * (the stand-in for the external provider only), runs `feltkit dev --port 0` configured to use it
  * (WEBSEARCH_URL, FELTKIT_CREDENTIAL_WEBSEARCH), and drives the UI: tell PersonalOS what FeltKit is,
- * ask for customers, wait for the research agent, review the evidence on the Research tab.
+ * ask for customers, wait for the research steps (jobs), review the evidence on the Research tab. The
+ * stand-in pages are fictional domains, so the real page reader finds them unavailable, and says so.
  */
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
@@ -87,11 +88,11 @@ try {
   assert.ok(count >= 2, `prospects shown: ${count}`);
   const first = prospects.first();
   assert.match(await first.getByTestId("assessment").innerText(), /My assessment/);
-  assert.match(await first.getByTestId("facts").innerText(), /What its pages said/);
+  assert.match(await first.getByTestId("facts").innerText(), /What the sources said/);
   assert.ok((await first.getByTestId("facts").getByRole("link", { name: "source" }).count()) >= 1, "facts link their sources");
   assert.doesNotMatch(await page.getByTestId("research-detail").innerText(), /github\.com/, "a repository host is not a prospect");
   await page.getByText(/What I checked I could use/).click();
-  assert.match(await page.getByTestId("research-needs").innerText(), /web search: available[\s\S]*page retrieval: no provider connected/);
+  assert.match(await page.getByTestId("research-needs").innerText(), /web search: available[\s\S]*page retrieval: available/);
   await page.screenshot({ path: `${shots}/research-2-evidence.png`, fullPage: true });
   log(`Research tab: ${count} prospects, each with its sources apart from my assessment`);
 } finally {

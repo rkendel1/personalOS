@@ -75,24 +75,7 @@ export function planQueries(product: string, knowledge: ProductKnowledge): strin
   return [...new Set(queries)].slice(0, 5);
 }
 
-export interface SearchResult { title: string; url: string; description: string; extra?: string[] }
-
-/** Brave Search's web results (`web.results[]`: title, url, description, extra_snippets); anything else is ignored. */
-export function searchResults(output: unknown): SearchResult[] {
-  const results = (output as { web?: { results?: unknown[] } } | null)?.web?.results;
-  if (!Array.isArray(results)) return [];
-  return results.flatMap((r) => {
-    const x = r as { title?: unknown; url?: unknown; description?: unknown; extra_snippets?: unknown };
-    if (typeof x.url !== "string" || !/^https?:\/\//.test(x.url)) return [];
-    return [{
-      title: typeof x.title === "string" ? strip(x.title).slice(0, 300) : x.url,
-      url: x.url.slice(0, 1000),
-      description: typeof x.description === "string" ? strip(x.description).slice(0, 2000) : "",
-      ...(Array.isArray(x.extra_snippets) ? { extra: x.extra_snippets.filter((s): s is string => typeof s === "string").map((s) => strip(s).slice(0, 1000)).slice(0, 5) } : {}),
-    }];
-  });
-}
-const strip = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+export { braveResults as searchResults, type SearchResult } from "./_search.js";
 
 /** Sites that are about companies, not companies to sell to (directories, forums, social, encyclopedias). */
 const NOT_A_PROSPECT = new Set([
@@ -100,6 +83,9 @@ const NOT_A_PROSPECT = new Set([
   "instagram.com", "ycombinator.com", "stackoverflow.com", "stackexchange.com", "quora.com", "crunchbase.com", "g2.com", "capterra.com",
   "producthunt.com", "dev.to", "npmjs.com", "substack.com", "techcrunch.com", "forbes.com", "glassdoor.com", "indeed.com", "wellfound.com", "slashdot.org", "alternativeto.net", "stackshare.io",
 ]);
+
+/** A directory, forum, social site or encyclopedia: about organizations, never one to approach. */
+export const notAProspect = (domain: string) => NOT_A_PROSPECT.has(domain);
 
 /** The registrable domain of a URL (example.co.uk, example.com), lowercased. */
 export function domainOf(url: string): string | null {
@@ -121,14 +107,21 @@ export function companyName(title: string, domain: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export interface StoredSource { id: string; url: string; title: string; text: string; query: string }
+export interface StoredSource { id: string; url: string; title: string; text: string; query: string; kind?: "search" | "page"; status?: string }
+
+/** Sentences of a page's text that mention one of these words: verbatim, so they quote the page. */
+export function sentencesWith(text: string, words: string[], max = 2): string[] {
+  if (!words.length) return [];
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter((x) => x.length >= 30 && x.length <= 400);
+  return sentences.filter((x) => words.some((w) => x.toLowerCase().includes(w))).slice(0, max);
+}
 
 export interface ProspectDraft {
   company: string;
   domain: string;
   website: string;
   /** Facts: what sources said, verbatim, each citing its source. */
-  facts: Array<{ sourceId: string; url: string; text: string }>;
+  facts: Array<{ sourceId: string; url: string; text: string; kind: "quote" | "search-result" }>;
   assessment: {
     basis: "rules";
     method: string;
@@ -146,7 +139,7 @@ export interface ProspectDraft {
  * Prospects from stored sources: one per company domain (never the product's own, never a directory or
  * forum), with facts quoted from the sources and a rule-based fit assessment that cites them.
  */
-export function prospectsFrom(product: string, knowledge: ProductKnowledge, sources: StoredSource[], options: { ownDomains?: string[]; pagesRead: boolean }): ProspectDraft[] {
+export function prospectsFrom(product: string, knowledge: ProductKnowledge, sources: StoredSource[], options: { ownDomains?: string[]; pagesRead?: boolean; kind?: "prospects" | "competitors" | "organizations" }): ProspectDraft[] {
   const own = new Set((options.ownDomains ?? []).map((d) => d.toLowerCase()));
   const byDomain = new Map<string, StoredSource[]>();
   for (const s of sources) {
@@ -156,19 +149,26 @@ export function prospectsFrom(product: string, knowledge: ProductKnowledge, sour
   }
   const drafts: ProspectDraft[] = [];
   for (const [domain, list] of byDomain) {
-    // One fact per page: a page several searches returned is one piece of evidence (its first stored copy).
-    const pages = [...new Map(list.map((s) => [s.url, s])).values()];
-    const facts = pages.map((s) => ({ sourceId: s.id, url: s.url, text: s.text ? `${s.title}: ${s.text}` : s.title }));
+    // Pages read in full are quoted where they mention what the product is about; search results are
+    // what the search returned. One fact per search-result URL (several searches may return it).
+    const read = list.filter((s) => s.kind === "page" && s.status === "read");
+    const found = [...new Map(list.filter((s) => s.kind !== "page").map((s) => [s.url, s])).values()];
+    const pages = [...read, ...found];
+    const facts: ProspectDraft["facts"] = [
+      ...read.flatMap((s) => sentencesWith(s.text, knowledge.keywords).map((text) => ({ sourceId: s.id, url: s.url, text, kind: "quote" as const }))),
+      ...found.map((s) => ({ sourceId: s.id, url: s.url, text: s.text ? `${s.title}: ${s.text}` : s.title, kind: "search-result" as const })),
+    ];
     const rationale: ProspectDraft["assessment"]["rationale"] = [];
     for (const keyword of knowledge.keywords) {
       const cited = list.filter((s) => `${s.title} ${s.text}`.toLowerCase().includes(keyword)).map((s) => s.id);
       if (cited.length) rationale.push({ text: `Its own pages, as found, mention "${keyword}", which is how ${product} is described.`, sourceIds: cited });
     }
-    const queries = new Set(list.map((s) => s.query));
+    const queries = new Set(list.filter((s) => s.kind !== "page").map((s) => s.query));
+    const pagesRead = options.pagesRead ?? read.length > 0;
     // Matching evidence decides; how many searches found it only separates companies that have some.
     const score = Math.round((rationale.length + (rationale.length ? 0.25 * (queries.size - 1) : 0)) * 100) / 100;
     const fit = rationale.length >= 3 ? "high" : rationale.length >= 1 ? "medium" : "low";
-    const confidence = !options.pagesRead ? (pages.length >= 2 ? "medium" : "low") : pages.length >= 3 ? "high" : "medium";
+    const confidence = !pagesRead ? (pages.length >= 2 ? "medium" : "low") : pages.length >= 3 ? "high" : "medium";
     const matched = rationale.map((r) => r.text.match(/"([^"]+)"/)![1]!);
     drafts.push({
       company: companyName(list[0]!.title, domain),
@@ -177,17 +177,19 @@ export function prospectsFrom(product: string, knowledge: ProductKnowledge, sour
       facts,
       assessment: {
         basis: "rules",
-        method: `Keyword match between what you saved about ${product} and the search results that cite this company; ${queries.size} search${queries.size === 1 ? "" : "es"} found it.`,
+        method: `Keyword match between what you saved about ${product} and ${read.length ? `its pages (${read.length} read) and ` : ""}the search results that cite this company; ${queries.size} search${queries.size === 1 ? "" : "es"} found it.`,
         fit,
         score,
         whyFeltKit: matched.length
-          ? `Works in the same space ${product} serves (${matched.slice(0, 4).join(", ")}), so it may need it.`
+          ? options.kind === "competitors" || options.kind === "organizations"
+            ? `Its pages, as found, use the words ${product} is described with (${matched.slice(0, 4).join(", ")}); a keyword match, not a judgment.`
+            : `Works in the same space ${product} serves (${matched.slice(0, 4).join(", ")}), so it may need it.`
           : `Found by searches about ${product}'s space, but nothing in its results matches how ${product} is described: a weak lead.`,
         rationale,
         confidence,
       },
       openQuestions: [
-        ...(options.pagesRead ? [] : ["Only search-result text was read; its own pages were not."]),
+        ...(pagesRead ? [] : ["Only search-result text was read; its own pages were not."]),
         "Company size, stage and current stack are not verified.",
         "Who decides on tools like this there is unknown (no contact research was done).",
       ],

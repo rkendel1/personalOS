@@ -10,6 +10,10 @@ import { ago } from "./ui";
 
 type Err = { onError: (e: unknown) => void };
 
+const titleOf = (kind: string, subject: string) => (kind === "competitors" ? `Competitors of ${subject}` : kind === "organizations" ? `Research: ${subject}` : `Prospects for ${subject}`);
+const PHASE: Record<string, string> = { planning: "planning", searching: "searching", selecting: "choosing who to read", reading: "reading pages", assessing: "assessing", finishing: "finishing" };
+const PAGE: Record<string, string> = { read: "read", unavailable: "could not be fetched", "extraction-failed": "no readable text", "not-allowed": "not read" };
+
 const STATUS: Record<string, string> = {
   running: "Running",
   blocked: "Blocked",
@@ -34,17 +38,17 @@ export function Research({ onError, onOpenConversation }: Err & { onOpenConversa
     <div className="screen">
       <header className="screen-head">
         <h1>Research</h1>
-        <p className="muted">Ask in Chat for an outcome, like "find me new customers for FeltKit". I check what I can use, search, and keep the sources apart from my assessment. Nothing is sent to anyone without your approval.</p>
+        <p className="muted">Ask in Chat for an outcome, like "find me new customers for FeltKit" or "who competes with us?". I check what I can use, plan, search, read the most promising sites, and keep what they say apart from my assessment. Nothing is sent to anyone without your approval.</p>
       </header>
       {runs.length === 0 && <p className="muted pad">No research yet.</p>}
       <ul className="plain">
         {runs.map((r) => (
           <li key={r.id} className={`project${r.id === selected ? " selected" : ""}`} data-testid="research-run">
             <button className="ghost" onClick={() => setOpen(r.id)} aria-label={`Open research for ${r.product}`}>
-              <div className="task-title">Prospects for {r.product}</div>
+              <div className="task-title">{titleOf(r.kind, r.product)}</div>
               <div className="task-meta">
-                <span>{STATUS[r.status] ?? r.status}</span>
-                <span>{r.prospectCount} prospect{r.prospectCount === 1 ? "" : "s"}</span>
+                <span>{STATUS[r.status] ?? r.status}{r.status === "running" && r.phase ? `: ${PHASE[r.phase] ?? r.phase}` : ""}</span>
+                <span>{r.prospectCount} result{r.prospectCount === 1 ? "" : "s"}</span>
                 <span>{ago(r.createdAt)}</span>
               </div>
             </button>
@@ -66,10 +70,16 @@ function RunDetail({ runId, onError, onOpenConversation }: Err & { runId: string
   const canRetry = ["blocked", "failed", "partial", "cancelled"].includes(run.status);
   return (
     <section data-testid="research-detail">
-      <h2>Prospects for {run.product}</h2>
+      <h2>{titleOf(run.kind, run.product)}</h2>
       <p className="small">{run.objective}</p>
+      {run.plan && (
+        <p className="small muted" data-testid="research-plan">
+          Plan by {run.plan.basis === "model" ? `a model (${run.plan.generation?.model ?? "model"}), checked by rules` : "rules"}
+          {run.plan.criteria?.length ? `: ${run.plan.criteria.join("; ")}` : ""}
+        </p>
+      )}
       <p className="small">
-        <strong>{STATUS[run.status] ?? run.status}</strong>
+        <strong>{STATUS[run.status] ?? run.status}{run.status === "running" && run.phase ? `: ${PHASE[run.phase] ?? run.phase}` : ""}</strong>
         {run.blocker ? <span> · {run.blocker.need}: {run.blocker.detail} {run.blocker.howToEnable ? <em>{run.blocker.howToEnable}</em> : null}</span> : null}
       </p>
       <div className="row">
@@ -93,12 +103,27 @@ function RunDetail({ runId, onError, onOpenConversation }: Err & { runId: string
         <summary className="small">Searches ({run.queries.filter((q: any) => q.state === "done").length} of {run.queries.length})</summary>
         <ul className="small">
           {run.queries.map((q: any) => (
-            <li key={q.text}>“{q.text}”: {q.state}{q.results != null ? `, ${q.results} results` : ""}{q.error ? <span className="muted"> ({q.error})</span> : null}</li>
+            <li key={q.text}>“{q.text}”{q.origin === "refinement" ? " (refined)" : ""}: {q.state}{q.results != null ? `, ${q.results} results` : ""}{q.provider ? <span className="muted"> via {q.provider}</span> : null}{q.error ? <span className="muted"> ({q.error})</span> : null}</li>
           ))}
         </ul>
       </details>
+      {sources.some((x: any) => x.kind === "page") && (
+        <details>
+          <summary className="small">Pages ({sources.filter((x: any) => x.kind === "page" && x.status === "read").length} of {sources.filter((x: any) => x.kind === "page").length} read)</summary>
+          <ul className="small" data-testid="research-pages">
+            {sources.filter((x: any) => x.kind === "page").map((x: any) => (
+              <li key={x.id}><a href={x.url} target="_blank" rel="noreferrer noopener">{x.url}</a>: {PAGE[x.status] ?? x.status}{x.status !== "read" && x.detail ? <span className="muted"> ({x.detail})</span> : null}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {run.usage && (
+        <p className="small muted" data-testid="research-usage">
+          {run.usage.searches} search call(s), {run.usage.pagesRead}/{run.usage.pagesRequested} pages read, {run.usage.generations} model call(s) ({run.usage.inputTokens + run.usage.outputTokens} tokens){run.usage.quotesOffered ? `, ${run.usage.quotesVerified}/${run.usage.quotesOffered} quotes verified` : ""}.
+        </p>
+      )}
 
-      {prospects.length > 0 && <h3>Prospects</h3>}
+      {prospects.length > 0 && <h3>{run.kind === "competitors" ? "Competitors" : run.kind === "organizations" ? "Organizations" : "Prospects"}</h3>}
       <ol className="plain">
         {prospects.map((p: any) => (
           <li key={p.id} className="project" data-testid="prospect">
@@ -107,7 +132,7 @@ function RunDetail({ runId, onError, onOpenConversation }: Err & { runId: string
                 {p.rank}. {p.company} <a href={p.website} target="_blank" rel="noreferrer noopener" className="small">{p.domain}</a>
               </div>
               <div className="small" data-testid="assessment">
-                <strong>My assessment</strong> <span className="muted">({p.assessment.method})</span>: {p.assessment.fit} fit, {p.assessment.confidence} confidence. {p.assessment.whyFeltKit}
+                <strong>{p.assessment.basis === "model" ? "Model assessment" : "My assessment"}</strong> <span className="muted">({p.assessment.method})</span>: {p.assessment.fit} fit, {p.assessment.confidence} confidence. {p.assessment.whyFeltKit}
                 <ul>
                   {p.assessment.rationale.map((r: any, i: number) => (
                     <li key={i}>{r.text} <span className="muted">[{r.sourceIds.map((id: string) => byId.get(id)?.url ?? id).filter((v: string, j: number, all: string[]) => all.indexOf(v) === j).length} source(s)]</span></li>
@@ -115,10 +140,10 @@ function RunDetail({ runId, onError, onOpenConversation }: Err & { runId: string
                 </ul>
               </div>
               <div className="small" data-testid="facts">
-                <strong>What its pages said</strong> <span className="muted">(as returned by search, {ago(p.researchedAt)})</span>
+                <strong>What the sources said</strong> <span className="muted">({ago(p.researchedAt)})</span>
                 <ul>
-                  {p.facts.map((f: any) => (
-                    <li key={f.sourceId}>“{f.text}” <a href={f.url} target="_blank" rel="noreferrer noopener">source</a></li>
+                  {p.facts.map((f: any, i: number) => (
+                    <li key={`${f.sourceId}-${i}`}>{f.kind === "quote" ? "Its page: " : "Search result: "}“{f.text}” <a href={f.url} target="_blank" rel="noreferrer noopener">source</a></li>
                   ))}
                 </ul>
               </div>
@@ -128,6 +153,14 @@ function RunDetail({ runId, onError, onOpenConversation }: Err & { runId: string
           </li>
         ))}
       </ol>
+      {(run.candidates ?? []).some((c: any) => c.state === "rejected") && (
+        <details>
+          <summary className="small">Looked at and ruled out</summary>
+          <ul className="small">
+            {run.candidates.filter((c: any) => c.state === "rejected").map((c: any) => <li key={c.domain}>{c.name} ({c.domain}): {c.verdict}</li>)}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }
