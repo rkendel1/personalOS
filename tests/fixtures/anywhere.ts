@@ -1,7 +1,7 @@
 /**
  * What PersonalOS Anywhere needs around it in tests:
  *
- * - a real Resolver (@appport/resolver, the published server, in a child process with its own state),
+ * - a real Resolver (@appport/resolver, the published server installed apart in tests/resolver, in a child process with its own state),
  *   initialised with an admin key, and PersonalOS's two least-privilege keys on
  *   ref://identity/personalos/*: `read` only (credential resolver-resolve) and `write` only
  *   (credential resolver-link), given to FeltKit as FELTKIT_CREDENTIAL_RESOLVER_RESOLVE / _LINK;
@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { ResolverClient } from "@appport/resolver-client";
 
 /** The package's own bin (`resolver`): its exports name only the library entry. */
-const CLI = join(process.cwd(), "node_modules", "@appport", "resolver", "dist", "cli.js");
+const CLI = join(process.cwd(), "tests", "resolver", "node_modules", "@appport", "resolver", "dist", "cli.js");
 
 async function freePort(): Promise<number> {
   return new Promise((resolve) => {

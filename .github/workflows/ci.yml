@@ -32,6 +32,8 @@ jobs:
             }
             process.exit(bad);'
 
+      - name: The real Resolver server, the published package at its pinned version (tests/resolver)
+        run: npm ci --prefix tests/resolver
       - name: The real AuthBoundry server, the published package at its pinned version (tests/authboundry)
         run: npm ci --prefix tests/authboundry && node -p "'@authboundry/core ' + require('./tests/authboundry/node_modules/@authboundry/core/package.json').version"
       - name: The generated API matches the code (feltkit codegen leaves no change)

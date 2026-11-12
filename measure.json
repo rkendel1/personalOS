@@ -47,11 +47,11 @@
     },
     "configuration": {
       "files": 6,
-      "lines": 176
+      "lines": 177
     },
     "tests": {
-      "files": 15,
-      "lines": 2275
+      "files": 16,
+      "lines": 2283
     },
     "third-party": {
       "files": 0,
@@ -62,8 +62,8 @@
       "lines": 0
     },
     "excluded": {
-      "files": 17,
-      "lines": 4410
+      "files": 18,
+      "lines": 6311
     },
     "unclassified": {
       "files": 0,
@@ -72,7 +72,7 @@
   },
   "authored": {
     "files": 54,
-    "lines": 5000
+    "lines": 5001
   },
   "definitions": {
     "app": {
@@ -320,7 +320,7 @@
       "path": ".github/workflows/ci.yml",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 48
+      "lines": 50
     },
     {
       "path": ".gitignore",
@@ -688,13 +688,13 @@
       "path": "package-lock.json",
       "class": "excluded",
       "basis": "lockfile",
-      "lines": 4410
+      "lines": 4388
     },
     {
       "path": "package.json",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 42,
+      "lines": 41,
       "scaffold": "modified"
     },
     {
@@ -842,6 +842,18 @@
       "class": "tests",
       "basis": "path: tests",
       "lines": 49
+    },
+    {
+      "path": "tests/resolver/package-lock.json",
+      "class": "excluded",
+      "basis": "lockfile",
+      "lines": 1923
+    },
+    {
+      "path": "tests/resolver/package.json",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 8
     },
     {
       "path": "tests/turn.test.ts",
