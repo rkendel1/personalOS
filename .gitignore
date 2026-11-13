@@ -12,3 +12,6 @@ dist/
 *.app/
 ios/*.xcodeproj/
 ios/build/
+
+# Packaged extension builds
+extension/*.zip
