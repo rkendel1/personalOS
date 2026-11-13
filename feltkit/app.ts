@@ -49,6 +49,16 @@ const OWNER = [
  */
 const BRIDGE = ["interactions.receive", "identity.resolve", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
 
+/**
+ * The X adapter (feltkit/xsurface.ts): an operator-issued service session
+ * (`feltkit session create --type service --id x-adapter --role xadapter`), like Multiplayer's bridge.
+ * It polls the bot account's mentions and posts the bot's replies (the `x` integration, whose token is
+ * the BOT's authorization and proves nothing about who mentions it). Each mention's author is a
+ * separate identity, resolved through a link the person confirmed (Resolver). It holds no owner's
+ * data permissions; inside xsurface:receive it works for the account a link names (_ops.ts actingFor).
+ */
+const XADAPTER = ["x.read", "x.post", "x.receive", "x.poll", "identity.resolve", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
+
 export const app = feltkit({
   name: "personalos",
   description: "A personal assistant: conversations, memory, tasks, reminders and a daily briefing, with an auditable action log.",
@@ -64,8 +74,8 @@ export const app = feltkit({
     // every person and to the bridge (whose identity.resolve covers reads only).
     identitylinker: ["identity.resolve", "identity.link", "links.write"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
-    // x.*: running the X adapter (polling @considered_done's mentions, delivering its acknowledgements).
-    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*", "x.*", "identity.resolve", "reminders.fire"],
+    xadapter: XADAPTER,
+    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
   },
   auth: { accounts: { roles: ["owner"] } },
   dev: {
@@ -236,6 +246,7 @@ export const x = app.integration("x", {
       input: {
         id: s.string({ pattern: "^[0-9]{1,19}$" }),
         since_id: s.optional(s.string({ pattern: "^[0-9]{1,19}$" })),
+        pagination_token: s.optional(s.string({ maxLength: 200, pattern: "^[A-Za-z0-9_-]+$" })),
         max_results: s.integer({ minimum: 5, maximum: 100 }),
         expansions: s.string({ maxLength: 200 }),
         "tweet.fields": s.string({ maxLength: 300 }),
@@ -528,7 +539,9 @@ export const invocations = app.collection(
       delegationId: s.optional(s.string()), decisionId: s.optional(s.string()), reason: s.optional(s.string({ maxLength: 500 })), at: s.number(),
     })),
     /** Where the work lives: the research run, the assistant's reply, the action awaiting approval. */
-    work: s.optional(s.object({ researchRunId: s.optional(s.string()), replyId: s.optional(s.string()), actionIds: s.optional(s.array(s.string())) })),
+    // waitingFor "owner": work only the person's own session can run (research, answers from a model,
+    // asked from X): it waits until they run it in PersonalOS (invocations:run).
+    work: s.optional(s.object({ researchRunId: s.optional(s.string()), replyId: s.optional(s.string()), actionIds: s.optional(s.array(s.string())), waitingFor: s.optional(s.enum(["owner"] as const)) })),
     /** What the person sees: one line per state change. */
     updates: s.array(s.object({ seq: s.number(), state: s.string(), text: s.string({ maxLength: 2000 }), at: s.number() })),
     error: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 1000 }) })),
@@ -759,31 +772,54 @@ export const xPosts = app.collection(
     xConversationId: s.optional(s.string({ maxLength: 20 })),
     inReplyToPostId: s.optional(s.string({ maxLength: 20 })),
     text: s.string({ maxLength: 4000 }),
+    /** The posts it replies to or quotes, as X reported them (untrusted data, the thread's context). */
+    referenced: s.array(s.object({ type: s.string({ maxLength: 20 }), id: s.string({ maxLength: 20 }), authorId: s.optional(s.string({ maxLength: 20 })), text: s.optional(s.string({ maxLength: 4000 })) })),
     createdAt: s.optional(s.string({ maxLength: 40 })),
     receivedAt: s.number(),
     state: s.enum(["ignored", "refused", "linking", "invoked"] as const),
     refusal: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 500 }) })),
     owner: s.optional(s.string()),
+    /** The Resolver link the author resolved through, when they did. */
+    resolverRef: s.optional(s.string()),
+    resolverRevision: s.optional(s.number()),
     invocationId: s.optional(s.string()),
     conversationId: s.optional(s.string()),
-    /** The bot's public reply: generic by policy, never a result. */
-    reply: s.optional(s.object({
-      text: s.string({ maxLength: 280 }),
+    /**
+     * The bot's public replies to this post. An acknowledgement is generic by policy and never carries
+     * a result; a publication is text the owner explicitly chose to publish (xsurface:publish).
+     */
+    replies: s.array(s.object({
       kind: s.enum(["acknowledgement", "publication"] as const),
+      text: s.string({ maxLength: 280 }),
       status: s.enum(["pending", "sending", "sent", "failed", "unknown"] as const),
       attempts: s.number(),
+      requestedBy: s.optional(s.string()),
+      authority: s.optional(s.record(s.unknown())),
       replyPostId: s.optional(s.string({ maxLength: 20 })),
       error: s.optional(s.string({ maxLength: 500 })),
+      /** When X last refused it for rate (429): it waits before the next try. */
+      limitedAt: s.optional(s.number()),
+      requestedAt: s.number(),
       at: s.optional(s.number()),
     })),
     updatedAt: s.number(),
   },
-  { unique: [["postId"]], indexes: [{ fields: ["postId"] }, { fields: ["xConversationId", "authorId"] }, { fields: ["owner"] }] },
+  { unique: [["postId"]], indexes: [{ fields: ["postId"] }, { fields: ["xConversationId", "authorId"] }, { fields: ["owner"] }, { fields: ["owner", "invocationId"] }] },
 );
 
 /** Where polling the bot's mentions stands: its account, and the newest mention seen. */
 export const xState = app.collection(
   "xState",
-  { key: s.string(), botUserId: s.optional(s.string()), botUsername: s.optional(s.string()), sinceId: s.optional(s.string()), polledAt: s.optional(s.number()), lastError: s.optional(s.string({ maxLength: 500 })), running: s.boolean(), intervalMs: s.number() },
+  {
+    key: s.string(), botUserId: s.optional(s.string()), botUsername: s.optional(s.string()), sinceId: s.optional(s.string()),
+    polledAt: s.optional(s.number()), lastError: s.optional(s.string({ maxLength: 500 })), running: s.boolean(), intervalMs: s.number(),
+    /** The current polling chain: a job from an older chain (startPolling again) stops itself. */
+    chain: s.optional(s.string()),
+    /** Which poll of the chain is due: a retried job of an earlier tick does nothing. */
+    tick: s.optional(s.integer()),
+    /** When the first poll set the starting point (mentions before it are not requests). */
+    baselineAt: s.optional(s.number()),
+    startedBy: s.optional(s.string()),
+  },
   { unique: [["key"]], indexes: [{ fields: ["key"] }] },
 );

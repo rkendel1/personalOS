@@ -243,5 +243,5 @@ export function acceptIntent(raw: Record<string, unknown> | null): { intent: Inv
 
 /** How a surface is named to the person ("Shared from iOS", "Saved from your browser"). */
 export function surfaceLabel(adapter: string): string {
-  return adapter === "ios-share" ? "iOS" : adapter === "browser" ? "your browser" : adapter;
+  return adapter === "ios-share" ? "iOS" : adapter === "browser" ? "your browser" : adapter === "x" ? "X" : adapter;
 }
