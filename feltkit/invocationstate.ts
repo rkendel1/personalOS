@@ -5,7 +5,7 @@
  */
 import { fail, s, type MutationCtx } from "@feltdb/feltkit";
 import { actions, app, invocations, messages } from "./app.js";
-import { describeContext, INVOCATION_CONTRACT, INVOCATION_TERMINAL, type InvocationState } from "./_invocation.js";
+import { describeContext, surfaceLabel, INVOCATION_CONTRACT, INVOCATION_TERMINAL, type InvocationState } from "./_invocation.js";
 import { appendMessage } from "./assistant.js";
 import * as ops from "./_ops.js";
 
@@ -20,6 +20,8 @@ export const Receipt = s.object({
   /** Where to look in PersonalOS: a path below the app's address (#/chat/<id>, #/research). */
   open: s.string(),
   message: s.string(),
+  /** Where the person goes back to: PersonalOS, or the page they shared (`url`). */
+  returnTo: s.object({ kind: s.string(), url: s.optional(s.string()) }),
   updates: s.array(s.object({ seq: s.number(), state: s.string(), text: s.string(), at: s.number() })),
   error: s.optional(s.object({ code: s.string(), message: s.string() })),
 });
@@ -35,6 +37,7 @@ export function receiptOf(inv: any, replayed: boolean) {
     conversationId: inv.conversationId,
     open: inv.work?.researchRunId ? `#/research` : `#/chat/${inv.conversationId}`,
     message: last?.text ?? "",
+    returnTo: inv.returnUrl ? { kind: "page", url: inv.returnUrl } : { kind: inv.returnTo ?? "personalos" },
     updates: inv.updates.map((u: any) => ({ seq: u.seq, state: u.state, text: u.text, at: u.at })),
     ...(inv.error ? { error: inv.error } : {}),
   };
@@ -165,7 +168,7 @@ export const save = app.mutation({
     if (!inv) fail("NOT_FOUND", `No invocation ${invocationId}.`);
     const c = inv.context[0]!;
     const what = c.kind === "url" ? `${c.title ? `${c.title}: ` : ""}${c.url}` : c.kind === "document" ? `${c.name ?? "a document"}: ${c.text!.slice(0, 300)}` : `${c.text!.slice(0, 400)}${c.url ? ` (from ${c.url})` : ""}`;
-    const content = `Saved from ${inv.surface.adapter === "ios-share" ? "iOS" : inv.surface.adapter}: ${what}`.slice(0, 1000);
+    const content = `Saved from ${surfaceLabel(inv.surface.adapter)}: ${what}`.slice(0, 1000);
     const meta = { via: "job" as const, conversationId: inv.conversationId };
     const messageId = await appendMessage(ctx, inv.conversationId, { role: "user", text: `${inv.instruction || "Keep this"}\n\n${describeContext(inv.context)}`.slice(0, 4000) });
     await ops.remember(ctx, { kind: "fact", subject: (c.title ?? c.name ?? "shared").slice(0, 100), content, status: "confirmed" }, { ...meta, messageId });

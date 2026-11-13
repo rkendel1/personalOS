@@ -551,7 +551,8 @@ function finishStep(view: StepView): Outcome {
     const quotes = p ? p.facts.filter((f: any) => f.kind === "quote" || f.kind === "shared") : [];
     const text = [
       verdict,
-      ...(done ? [`Evidence: ${quotes.length} quote(s) checked word for word against ${pageLine}${p ? `; ${p.assessment.basis === "model" ? "a model's assessment, checked by rules" : "a keyword match"}` : ""}.`] : []),
+      ...(p ? [`Evidence: ${quotes.length} quote(s) checked word for word against ${pageLine}; ${p.assessment.basis === "model" ? "a model's assessment, checked by rules" : "a keyword match"}.`] : []),
+      ...(!p && c?.state === "rejected" ? [`Based on ${pageLine}${run.plan?.basis === "model" ? "; a model's reading, checked by rules" : ""}.`] : []),
       ...quotes.slice(0, 3).map((f: any) => `- "${String(f.text).slice(0, 240)}" (${f.url})`),
       ...(p?.openQuestions?.length ? [`Not established: ${p.openQuestions.slice(0, 3).join(" ")}`] : []),
       "Open Research for the full evidence. Nothing was sent to anyone.",

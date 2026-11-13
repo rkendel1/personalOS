@@ -2,8 +2,8 @@
 
 This contract covers how you hand PersonalOS something from another app, and optionally say what to do
 with it. Examples: a page from Safari, selected text, or a text document. The iOS share extension
-(`ios/`) is the first surface. A browser extension, a desktop shortcut or an e-mail gateway would send
-the same envelope.
+(`ios/`) and the Chrome extension's **Summon PersonalOS** (`extension/`, adapter `browser`) use it. A
+desktop shortcut or an e-mail gateway would send the same envelope.
 
 - Defined in `feltkit/_invocation.ts`.
 - Received by `invocations:submit` and worked by the `invocation.process` job (`feltkit/invocations.ts`).
@@ -47,7 +47,7 @@ X-FeltKit-Time-Zone: America/New_York
 | `submittedAt` | The device's clock, in milliseconds. The server's receipt time is recorded too. |
 | `timeZone` | IANA zone, for dates in the instruction ("tomorrow at 9"). Never authority. |
 | `correlation.conversationId` | Optional: continue a conversation. It must be the person's own, or the request is refused with NOT_FOUND. |
-| `returnTo` | `{ kind: "personalos" }`: results live in PersonalOS (conversation, Research, inbox). |
+| `returnTo` | `{ kind: "personalos" }`: results live in PersonalOS (conversation, Research, inbox). Or `{ kind: "page", url }`: the same, plus a way back to the page you summoned it from. `url` must be one of the shared URLs, so it can never be an arbitrary link. The receipt carries it as `returnTo`. |
 
 Any other field is refused (`INVALID_ARGUMENT`), including any attempt to name a principal or owner.
 

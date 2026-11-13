@@ -1,0 +1,174 @@
+{
+  "at": "2026-11-13T00:32:00.136Z",
+  "page": "https://www.thoughtworks.com/",
+  "steps": [
+    {
+      "step": "platform",
+      "at": 3103,
+      "personalos": "http://localhost:3067",
+      "authboundry": "real (@authboundry/core)",
+      "delegation": "browser-summon: personalos.research.run, personalos.memory.write",
+      "model": "openai/gpt-4.1-mini via AI Gateway"
+    },
+    {
+      "step": "page open, text selected",
+      "at": 7406,
+      "url": "https://www.thoughtworks.com/",
+      "title": "Thoughtworks: A leading technology consultancy | Thoughtworks",
+      "selection": "Thoughtworks is a global technology consultancy that helps enterprises find wher… (293 chars)"
+    },
+    {
+      "step": "panel connected and signed in",
+      "at": 7732,
+      "session": "bearer, in chrome.storage.local (trusted contexts only)"
+    },
+    {
+      "step": "summon form",
+      "at": 7873,
+      "reads": "Summon PersonalOS with Thoughtworks: A leading technology consultancy | Thoughtworks | Include the text you selected (293 characters) | Research this company: could it be a customer for FeltKit?"
+    },
+    {
+      "step": "receipt",
+      "at": 7986,
+      "shown": "Accepted PersonalOS has it: Thoughtworks: A leading technology consultancy | Thoughtworks (https://www.thoughtworks.com/); selected text from https://www.thoughtworks.com/ (293 characters), \"Research this company and tell me whether it could be a customer for FeltKit.\". You can close this; the resul"
+    },
+    {
+      "step": "originating page closed",
+      "at": 8024
+    },
+    {
+      "step": "server killed (SIGKILL) during processing and restarted",
+      "at": 10774,
+      "downMs": 1003
+    },
+    {
+      "step": "outcome in the panel",
+      "at": 22861,
+      "state": "completed",
+      "shown": "Done Thoughtworks (https://thoughtworks.com) could be a customer for FeltKit: high fit, high confidence. Thoughtworks builds and modernizes internal and enterprise systems with AI-driven workflows and platforms, aligning well with FeltKit's focus on frameworks for internal tools and agent-ready applications. Evidence: 3 quote(s) checked word for word against 1 of 1 of its pages read; a model's ass"
+    },
+    {
+      "step": "conversation",
+      "at": 23472,
+      "messages": [
+        "Research this company and tell me whether it could be a customer for FeltKit. (Shared from your browser: Thoughtworks: A leading technology consultancy | Though",
+        "On it. I checked what this PersonalOS can use for research (56 capabilities): web search: declared, not configured (websearch.search): websearch.search: websear",
+        "Plan: find out whether thoughtworks.com could be a potential customer for FeltKit. Determine if Thoughtworks could be a customer for FeltKit by assessing if the",
+        "Thoughtworks (https://thoughtworks.com) could be a customer for FeltKit: high fit, high confidence. Thoughtworks builds and modernizes internal and enterprise s"
+      ]
+    },
+    {
+      "step": "back to the page",
+      "at": 24054,
+      "reopened": "https://www.thoughtworks.com/"
+    },
+    {
+      "step": "durable record",
+      "at": 24067,
+      "state": "completed",
+      "authority": "personalos.research.run allow (delegation browser-summon, decision personalos-decision-1794529928-15361dc8f98d52e6)"
+    },
+    {
+      "step": "second summon continued the conversation",
+      "at": 25147,
+      "conversationId": "mwe8sae1f872e308d17b",
+      "message": "Saved it to your notes: Thoughtworks: A leading technology consultancy | Thoughtworks: https://www.thoughtworks.com/. Ask me about it any time."
+    },
+    {
+      "step": "privacy",
+      "at": 25147,
+      "serverLogBytes": 1555,
+      "requestsChecked": 337
+    }
+  ],
+  "invocation": {
+    "who": "ada",
+    "where": {
+      "adapter": "browser",
+      "device": "Chrome",
+      "version": "0.1.0"
+    },
+    "shared": [
+      {
+        "kind": "url",
+        "url": "https://www.thoughtworks.com/",
+        "title": "Thoughtworks: A leading technology consultancy | Thoughtworks"
+      },
+      {
+        "kind": "selection",
+        "url": "https://www.thoughtworks.com/",
+        "chars": 293
+      }
+    ],
+    "asked": "Research this company and tell me whether it could be a customer for FeltKit.",
+    "interpreted": {
+      "intent": "research",
+      "detail": "research what was shared",
+      "basis": "rules"
+    },
+    "authority": {
+      "capability": "personalos.research.run",
+      "outcome": "allow",
+      "principal": "agent:personalos",
+      "at": 1794529928662,
+      "onBehalfOf": "user:ada",
+      "delegationId": "browser-summon",
+      "decisionId": "personalos-decision-1794529928-15361dc8f98d52e6"
+    },
+    "work": {
+      "researchRunId": "mwe8sauae34d52185d18"
+    },
+    "returnTo": {
+      "kind": "page",
+      "url": "https://www.thoughtworks.com/"
+    },
+    "state": "completed",
+    "updates": [
+      "accepted: PersonalOS has it: Thoughtworks: A leading technology consultancy | Thoughtworks (https://www.thoughtworks.com/); selected text from https://www.thoughtworks.com/ (293 characters), \"Research this company and tell me whether it could be a customer for FeltKit.\". You can close this; the result will be",
+      "processing: Working on it: research what was shared",
+      "processing: Researching it now. The plan is in the conversation; the result will be too.",
+      "completed: Thoughtworks (https://thoughtworks.com) could be a customer for FeltKit: high fit, high confidence. Thoughtworks builds and modernizes internal and enterprise systems with AI-driven workflows and platforms, aligning well with FeltKit's focus on frameworks for internal tools and agent-ready applicati"
+    ],
+    "research": {
+      "status": "completed",
+      "plan": {
+        "basis": "model",
+        "criteria": [
+          "The organization builds or modernizes internal tools or enterprise applications.",
+          "They work with TypeScript or JavaScript technology stacks.",
+          "They develop or integrate agent-ready applications or AI-driven workflows.",
+          "They require embedded databases or lightweight data storage solutions.",
+          "They implement authentication, background jobs, or integration-heavy applications.",
+          "They have a focus on rapid development or frameworks that accelerate internal tooling."
+        ],
+        "generation": {
+          "generationId": "gen-64fff6a208e64b2f",
+          "memoryId": "task-c1f54e7e-33b3-fafc-1d3c-911732c24283.gen-64fff6a208e64b2f.3",
+          "model": "custom/openai/gpt-4.1-mini"
+        },
+        "scope": "this",
+        "summary": "FeltKit is a TypeScript framework for building internal tools and agent-ready applications on an embedded database, with authentication, background jobs, and integrations."
+      },
+      "pages": [
+        [
+          "https://www.thoughtworks.com/",
+          "read"
+        ]
+      ],
+      "results": [
+        {
+          "company": "Thoughtworks",
+          "fit": "high",
+          "confidence": "high",
+          "basis": "model",
+          "quotes": [
+            "quote: Thoughtworks is a global technology consultancy that helps enterprises find where technology will pay off, then build it. We modernize core systems, redesign wo",
+            "quote: We build the infrastructure needed to run an agentic enterprise, helping your business grow without costs rising at the same rate.",
+            "quote: Thoughtworks Agentic Development Platform for building and running industrial-grade enterprise systems with AI. It’s how our engineers work, on any model and an"
+          ]
+        }
+      ],
+      "ruledOut": []
+    }
+  }
+}

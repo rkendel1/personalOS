@@ -72,8 +72,12 @@ export const InvocationEnvelope = s.object({
   timeZone: s.optional(s.string({ maxLength: 64 })),
   /** Continue an existing PersonalOS conversation (it must be the person's own). */
   correlation: s.optional(s.object({ conversationId: s.optional(s.string({ maxLength: 100 })) })),
-  /** Where results go: PersonalOS itself (the conversation, Research, the inbox). */
-  returnTo: s.optional(s.object({ kind: s.enum(["personalos"] as const) })),
+  /**
+   * Where the person goes back to. Results always live in PersonalOS (the conversation, Research, the
+   * inbox); "page" also keeps the page they came from, to offer a way back to it. That page must be one
+   * of the shared URLs: a return address is never an arbitrary link.
+   */
+  returnTo: s.optional(s.object({ kind: s.enum(["personalos", "page"] as const), url: s.optional(s.string({ maxLength: INVOCATION_LIMITS.urlChars })) })),
 });
 
 export interface ContextEntry {
@@ -96,6 +100,8 @@ export interface NormalizedInvocation {
   conversationId?: string;
   /** The URL the context is about, when there is one (the first url, or a selection's page). */
   sourceUrl?: string;
+  /** Where the person goes back to: PersonalOS, or the page they came from. */
+  returnTo: { kind: "personalos" } | { kind: "page"; url: string };
   digest: string;
 }
 
@@ -121,6 +127,7 @@ export function normalizeInvocation(e: {
   invocationId: string; surface: { adapter: string; device?: string; version?: string }; instruction: string;
   context: Array<{ kind: ContextEntry["kind"]; url?: string; title?: string; text?: string; name?: string; mediaType?: string; size?: number }>;
   submittedAt: number; timeZone?: string; correlation?: { conversationId?: string };
+  returnTo?: { kind: "personalos" | "page"; url?: string };
 }): NormalizedInvocation {
   const context: ContextEntry[] = e.context.map((item): ContextEntry => {
     const title = item.title ? clean(item.title).slice(0, INVOCATION_LIMITS.titleChars) : undefined;
@@ -153,9 +160,16 @@ export function normalizeInvocation(e: {
   const instruction = clean(e.instruction);
   const surface = { adapter: e.surface.adapter, ...(e.surface.device ? { device: clean(e.surface.device) } : {}), ...(e.surface.version ? { version: e.surface.version } : {}) };
   const conversationId = e.correlation?.conversationId;
+  let returnTo: NormalizedInvocation["returnTo"] = { kind: "personalos" };
+  if (e.returnTo?.kind === "page") {
+    if (!e.returnTo.url) throw new InvocationRefusal("INVALID_CONTEXT", "A return to the page needs the page's address.");
+    const url = webUrl(e.returnTo.url);
+    if (!context.some((c) => c.url === url)) throw new InvocationRefusal("INVALID_CONTEXT", "The page to return to must be the page that was shared.");
+    returnTo = { kind: "page", url };
+  }
   // What makes two submissions the same invocation: everything the person sent, as normalized.
-  const digest = createHash("sha256").update(JSON.stringify({ surface, instruction, context, submittedAt: e.submittedAt, conversationId: conversationId ?? null })).digest("hex");
-  return { invocationId: e.invocationId, surface, instruction, context, submittedAt: e.submittedAt, ...(e.timeZone ? { timeZone: e.timeZone } : {}), ...(conversationId ? { conversationId } : {}), ...(sourceUrl ? { sourceUrl } : {}), digest };
+  const digest = createHash("sha256").update(JSON.stringify({ surface, instruction, context, submittedAt: e.submittedAt, conversationId: conversationId ?? null, ...(returnTo.kind === "page" ? { returnTo } : {}) })).digest("hex");
+  return { invocationId: e.invocationId, surface, instruction, context, submittedAt: e.submittedAt, ...(e.timeZone ? { timeZone: e.timeZone } : {}), ...(conversationId ? { conversationId } : {}), ...(sourceUrl ? { sourceUrl } : {}), returnTo, digest };
 }
 
 /** A short, human description of what was shared: for the conversation and the surface's confirmation. */
@@ -212,4 +226,9 @@ export function acceptIntent(raw: Record<string, unknown> | null): { intent: Inv
   if (intent !== "research" && intent !== "save" && intent !== "assistant") return null;
   const reason = typeof raw?.reason === "string" ? raw.reason.replace(/\s+/g, " ").trim().slice(0, 300) : "";
   return { intent, detail: reason || intent };
+}
+
+/** How a surface is named to the person ("Shared from iOS", "Saved from your browser"). */
+export function surfaceLabel(adapter: string): string {
+  return adapter === "ios-share" ? "iOS" : adapter === "browser" ? "your browser" : adapter;
 }

@@ -13,6 +13,7 @@ chrome.runtime.onInstalled.addListener(() => {
   void lockStorage();
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: "summon", title: "Summon PersonalOS with this…", contexts: ["selection", "page"] });
     chrome.contextMenus.create({ id: "ask", title: "Ask PersonalOS about “%s”", contexts: ["selection"] });
     chrome.contextMenus.create({ id: "task", title: "Add to my PersonalOS tasks", contexts: ["selection", "link", "page"] });
     chrome.contextMenus.create({ id: "page", title: "Save this page to PersonalOS", contexts: ["page"] });
@@ -22,7 +23,8 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.id) return;
   const pending: Pending =
-    info.menuItemId === "ask" ? { kind: "ask", text: info.selectionText ?? "", url: tab.url, title: tab.title }
+    info.menuItemId === "summon" ? { kind: "summon", text: info.selectionText ?? "", url: tab.url, title: tab.title }
+    : info.menuItemId === "ask" ? { kind: "ask", text: info.selectionText ?? "", url: tab.url, title: tab.title }
     : info.menuItemId === "task" ? { kind: "task", text: info.selectionText || info.linkUrl || "", url: info.linkUrl || tab.url, title: tab.title }
     : { kind: "page", url: tab.url, title: tab.title };
   // Open first, in the same user gesture; then leave the request for the panel (it may already be open).

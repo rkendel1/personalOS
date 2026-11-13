@@ -217,13 +217,13 @@ try {
     await page.screenshot({ path: `${shots}/02-panel-chat.png` });
     await button.click();
     const links = await page.locator(".stack-shell__nav a").allInnerTexts();
-    assert.deepEqual(links.map((l) => l.split(" (")[0]), ["Chat", "Today", "Tasks", "Memory", "Projects", "Files", "Activity", "Settings"]);
+    assert.deepEqual(links.map((l) => l.split(" (")[0]), ["Chat", "Today", "Tasks", "Memory", "Research", "Projects", "Files", "Activity", "Settings"]);
     await page.screenshot({ path: `${shots}/03-panel-menu.png` });
     await page.keyboard.press("Escape");
     assert.equal(await button.getAttribute("aria-expanded"), "false");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(overflow <= 0, `no sideways scroll (${overflow})`);
-    return "stack-ui Shell, menu mode: 8 destinations behind the menu button; Escape closes";
+    return "stack-ui Shell, menu mode: 9 destinations behind the menu button; Escape closes";
   });
 
   await scenario("capabilities: chat creates a task through the app's functions; the Tasks tab shows it", async () => {

@@ -22,7 +22,7 @@
 import { fail, FeltKitError, s, type ActionCtx } from "@feltdb/feltkit";
 import { api } from "./_generated/api.js";
 import { app, conversations, invocations } from "./app.js";
-import { acceptIntent, describeContext, intentByRules, intentPrompt, INVOCATION_CONTRACT, INVOCATION_TERMINAL, InvocationEnvelope, InvocationRefusal, normalizeInvocation, subjectOf } from "./_invocation.js";
+import { acceptIntent, describeContext, surfaceLabel, intentByRules, intentPrompt, INVOCATION_CONTRACT, INVOCATION_TERMINAL, InvocationEnvelope, InvocationRefusal, normalizeInvocation, subjectOf } from "./_invocation.js";
 import { authorityPrincipal, capabilityFor } from "./_authority.js";
 import { declaredCapabilities, discover, PROSPECT_NEEDS } from "./_capabilities.js";
 import { interpret } from "./_interpret.js";
@@ -69,7 +69,7 @@ export const submit = app.mutation({
     const id = await ctx.db.insert(invocations, {
       owner, invocationId: n.invocationId, contract: INVOCATION_CONTRACT, surface: n.surface, instruction: n.instruction, context: n.context,
       ...(n.sourceUrl ? { sourceUrl: n.sourceUrl } : {}), submittedAt: n.submittedAt, receivedAt: now, ...(n.timeZone ? { timeZone: n.timeZone } : {}),
-      digest: n.digest, conversationId, returnTo: "personalos", state: "accepted",
+      digest: n.digest, conversationId, returnTo: n.returnTo.kind, ...(n.returnTo.kind === "page" ? { returnUrl: n.returnTo.url } : {}), state: "accepted",
       updates: [{ seq: 1, state: "accepted", text: `PersonalOS has it: ${describeContext(n.context)}${n.instruction ? `, "${n.instruction.slice(0, 200)}"` : ""}. You can close this; the result will be in PersonalOS.`, at: now }],
       createdAt: now, updatedAt: now,
     });
@@ -92,7 +92,7 @@ function assistantText(inv: any): string {
 /** The words the existing machinery is given: what was asked, then what was shared, labelled as such. */
 function requestText(inv: any): string {
   const shared = describeContext(inv.context);
-  return `${inv.instruction || "Keep this"}\n\n(Shared from ${inv.surface.adapter === "ios-share" ? "iOS" : inv.surface.adapter}: ${shared})`.slice(0, 4000);
+  return `${inv.instruction || "Keep this"}\n\n(Shared from ${surfaceLabel(inv.surface.adapter)}: ${shared})`.slice(0, 4000);
 }
 
 /** Process one invocation (the `invocation.process` job, as the person who submitted it). */

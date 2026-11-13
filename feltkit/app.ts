@@ -472,7 +472,9 @@ export const invocations = app.collection(
     timeZone: s.optional(s.string()),
     digest: s.string(),
     conversationId: s.string(),
+    /** "personalos", or "page": the page the person came from (returnUrl), offered as the way back. */
     returnTo: s.string(),
+    returnUrl: s.optional(s.string({ maxLength: 2000 })),
     state: s.enum(["accepted", "processing", "needs_approval", "completed", "failed"] as const),
     /** What PersonalOS inferred the request to be, and how: never confused with what was asked. */
     interpretation: s.optional(s.object({
