@@ -57,8 +57,8 @@ export async function startXStub(): Promise<XStub> {
   const codes = new Map<string, { challenge: string; redirect: string }>();
   const tok = (p: string) => `${p}-${(next++).toString(36)}-stub-not-a-real-credential`;
   const state: XStub = {
-    url: "", client: { id: "x-stub-client", secret: "x-stub-client-secret-not-real" }, access: new Set(), refresh: new Set(), expiresIn: 7200, tokenRequests: [], revoked: [], bot: { id: "1700000000000000001", username: "considered_done" },
-    users: new Map([["1700000000000000001", "considered_done"]]), posts: [], replies: [], requests: [], replyFailures: [], repeatFrom: null, unauthorized: false,
+    url: "", client: { id: "x-stub-client", secret: "x-stub-client-secret-not-real" }, access: new Set(), refresh: new Set(), expiresIn: 7200, tokenRequests: [], revoked: [], bot: { id: "1700000000000000001", username: "anywhereaide" },
+    users: new Map([["1700000000000000001", "anywhereaide"]]), posts: [], replies: [], requests: [], replyFailures: [], repeatFrom: null, unauthorized: false,
     mention: (o) => {
       const id = nextId();
       if (o.username) state.users.set(o.author, o.username);

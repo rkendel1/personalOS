@@ -156,7 +156,7 @@ Pointers, based on this deployment. These are your stated requirements, and I ha
 
 | | |
 |---|---|
-| PersonalOS on Fly | one machine with a volume; X grant connected as @considered_done; polling running; model `anthropic/claude-sonnet-5-5` resolved through Resolver |
+| PersonalOS on Fly | one machine with a volume; X grant connected as the bot account (being renamed to @anywhereaide); polling running; model `anthropic/claude-sonnet-5-5` resolved through Resolver |
 | Resolver | `https://resolver.boundry.company` on the Hetzner server (`/opt/resolver`), tenant `kendel`, keys in gitignored files under `resolver/deploy/hetzner/` |
 | AuthBoundry | `https://api.authboundry.com` on Hetzner, tenant `default`; the Fly app `authboundry-api` is stale. The new GitHub OAuth app signs you in |
 | PersonalOS in AuthBoundry | application and 14-capability contract registered. Still missing: principals, policy, agent, delegation, check credential |

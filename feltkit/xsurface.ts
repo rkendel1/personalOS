@@ -1,5 +1,5 @@
 /**
- * X as a surface for PersonalOS: mention the bot account (@considered_done) and PersonalOS works for
+ * X as a surface for PersonalOS: mention the bot account (@anywhereaide) and PersonalOS works for
  * you, in your own PersonalOS, with nothing private posted publicly. Not another agent and not another
  * store: a mention becomes a `personalos.invocation/1` record (surface `x`) in your conversation,
  * handled by the same assistant, the same AuthBoundry decisions and the same research as every surface.
@@ -56,6 +56,8 @@ const DEFAULT_INTERVAL_MS = 120_000;
 /** Pages of 100 mentions read per poll (X's maximum page size). */
 const MAX_PAGES = 3;
 /** How long a reply X rate-limited (429) waits before it is tried again (X's limits are per 15 minutes). */
+/** How often the bot's account is read again from X, to pick up a renamed handle. */
+const BOT_RECHECK_MS = 60 * 60_000;
 const retryAfterMs = () => Number(process.env.X_REPLY_RETRY_MS ?? 15 * 60_000);
 const due = (r: { status: string; limitedAt?: number }) => r.status === "pending" && (!r.limitedAt || Date.now() >= r.limitedAt + retryAfterMs());
 /** Attempts to post one reply that never reached X before it is reported failed. */
@@ -103,6 +105,16 @@ export const stopPolling = app.mutation({
   },
 });
 
+/** The token belongs to another account than the one polling began with: stop, and say why. */
+export const stopForOtherAccount = app.mutation({
+  access: "x.poll",
+  args: { message: s.string({ maxLength: 500 }) },
+  handler: async (ctx, { message }) => {
+    const [st] = await ctx.db.find(xState, { key: KEY });
+    if (st) await ctx.db.patch(xState, st.id, { running: false, chain: undefined, lastError: message });
+  },
+});
+
 export const pollState = app.query({ access: "x.poll", handler: async (ctx) => (await ctx.db.find(xState, { key: KEY }))[0] ?? null });
 
 /** The bot account, as X reported it for the token (GET /2/users/me). */
@@ -111,7 +123,7 @@ export const botIs = app.mutation({
   args: { id: ID, username: s.string({ maxLength: 50 }) },
   handler: async (ctx, { id, username }) => {
     const [st] = await ctx.db.find(xState, { key: KEY });
-    if (st) await ctx.db.patch(xState, st.id, { botUserId: id, botUsername: username });
+    if (st) await ctx.db.patch(xState, st.id, { botUserId: id, botUsername: username, botCheckedAt: Date.now() });
   },
 });
 
@@ -167,10 +179,16 @@ export const poll = app.action({
     let handled = 0;
     try {
       let bot = st.botUserId ? { id: st.botUserId as string, username: st.botUsername as string } : null;
-      if (!bot) {
+      if (!bot || !st.botCheckedAt || Date.now() - st.botCheckedAt > BOT_RECHECK_MS) {
         const me = (await ctx.integrations.invoke("x.me", {})) as { data?: { id?: unknown; username?: unknown } };
         const id = me?.data?.id, username = me?.data?.username;
         if (typeof id !== "string" || !/^[0-9]{1,19}$/.test(id) || typeof username !== "string") throw new Error("X did not say which account the token belongs to (GET /2/users/me).");
+        // A renamed account keeps its id, so only the handle changes. A different id means the token now
+        // belongs to another account: its mentions are not this cursor's, so stop rather than mix them.
+        if (bot && bot.id !== id) {
+          await ctx.runMutation(api.xsurface.stopForOtherAccount, { message: `The X token now belongs to a different account (${username}, not ${bot.username}). Polling stopped on purpose: connect the intended account, then start polling again.` });
+          return { stopped: true };
+        }
         bot = { id, username };
         await ctx.runMutation(api.xsurface.botIs, bot);
       }

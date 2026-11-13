@@ -2,7 +2,7 @@
  * X (formerly Twitter) as a PersonalOS surface: the pure parts (feltkit/xsurface.ts does the rest).
  *
  * Two identities, never confused:
- *   the bot     @considered_done, the account whose mentions are read and whose replies are posted.
+ *   the bot     @anywhereaide, the account whose mentions are read and whose replies are posted.
  *               Its OAuth token (credential `x`) authorizes PersonalOS to act AS THE BOT. It proves
  *               nothing about anyone who mentions it.
  *   a person    the author of a mention, as X's API reports it (`author_id`). A person is a PersonalOS

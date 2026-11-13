@@ -578,7 +578,7 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
  */
 const SURFACES = {
   multiplayer: { name: "Multiplayer", how: (code: string) => <>Send <code className="kindcode">link {code}</code> to @personalos in a <strong>direct message</strong> in Multiplayer (never in a shared channel).</> },
-  x: { name: "X", how: (code: string, bot: string | null) => <>From your X account, post <code className="kindcode">@{bot ?? "considered_done"} link {code}</code>. Posts are public: the code works once, and only an account you confirm here is connected. The bot replies with a short acknowledgement and never posts anything private.</> },
+  x: { name: "X", how: (code: string, bot: string | null) => <>From your X account, post <code className="kindcode">@{bot ?? "anywhereaide"} link {code}</code>. Posts are public: the code works once, and only an account you confirm here is connected. The bot replies with a short acknowledgement and never posts anything private.</> },
 } as const;
 type SurfaceId = keyof typeof SURFACES;
 const surfaceName = (adapter: string) => (SURFACES as Record<string, { name: string }>)[adapter]?.name ?? adapter;

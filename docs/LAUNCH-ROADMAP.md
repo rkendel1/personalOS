@@ -33,15 +33,24 @@ Consistency is a product rule: **every user calls the same thing, on every surfa
 
 | Surface | How you summon it |
 |---|---|
-| X | mention the one shared handle: `@<handle> <request>` |
-| Email | write to the one shared address: `<handle>@<our domain>` (forward a message to hand it context) |
-| MCP and API | the tool is named `<handle>`; one personal token per client |
-| Slack, Discord, Multiplayer (later) | `@<handle> <request>`, or `/<handle>` |
+| X | mention the one shared handle: `@anywhereaide <request>` |
+| Email | write to the one shared address: `anywhereaide@<our domain>` (forward a message to hand it context) |
+| MCP and API | the tool is named `anywhereaide`; one personal token per client |
+| Slack, Discord, Multiplayer (later) | `@anywhereaide <request>`, or `/anywhereaide` |
 | Chrome panel, iOS share sheet | the same app, selected text or page passed as context |
 
-`<handle>` is a single name we own on every platform. The current X account is `@considered_done`. It is not
-a launch name. **Decision needed:** pick the handle, check it is free everywhere, and register it before
-anything else is public. One word, one grammar: `@<handle> <request>`.
+**The handle is `@anywhereaide`** (display name "Anywhere Aide"), the existing X bot account renamed from
+`@considered_done`, so its OAuth grant and user id carry over. The same word is used everywhere: the X mention,
+the email address `anywhereaide@<our domain>`, and the MCP tool. One word, one grammar:
+`@anywhereaide <request>`.
+
+Follow-ups for the handle:
+- **Defend the near-miss.** "Aide" and "aid" sound alike, so register `@anywhereaid` too, with a bio that points
+  to the real account. `anywhereaid.com` already has a DNS record (someone else's).
+- Register `anywhereaide.com` and `.ai`, and the GitHub and npm names. DNS, GitHub and npm showed nothing on
+  2026-11-13 (hints, not proof).
+- Search trademarks for "Anywhere Aide" in software ("Anywhere" is a common word).
+- Label the X account as automated. X's current rules on this are not verified here.
 
 ### Private delivery, since nothing is public
 
@@ -127,7 +136,7 @@ pricing decisions, not decided here.
 | AuthBoundry portal deploy and Services bridge fixed; check-credentials panel live | AuthBoundry | M |
 | Backups and a restore drill (Fly volume, Resolver and AuthBoundry hosts); monitoring | Ops | M |
 | Prove the poll chain survives the adapter session expiring and a restart | PersonalOS | S |
-| Pick and register the handle everywhere | You | S |
+| Register the handle's near-misses and domains (see above); trademark search | You | S |
 | Choose the billing provider and plan structure | You | S |
 
 Exit: the X test passes by hand once, and token renewal is confirmed.
@@ -204,8 +213,8 @@ research, Canvas, and code execution in a sandbox. Compete on trust and reach, n
 
 ## Risks and open decisions
 
-- **The handle and brand.** One name everywhere is a promise. If it is not available on a platform, we need a
-  fallback rule before launch.
+- **The handle and brand.** `@anywhereaide` is chosen. One name everywhere is a promise, so any platform where it
+  is not available needs a fallback rule before launch.
 - **X delivery without public replies.** The summon is received with no feedback on X unless direct messages
   are usable. The notification must arrive fast, or people will think it did nothing. Decide whether to test X
   direct messages or accept in-app notification only.

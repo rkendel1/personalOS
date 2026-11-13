@@ -3,7 +3,7 @@
  * a LOCAL STAND-IN for the X API (tests/fixtures/x-api.ts), a real Resolver, and an AuthBoundry
  * stand-in (the same decisions against the real AuthBoundry: tests/x-authboundry-real.test.ts).
  *
- * This is deterministic adapter testing. It is NOT acceptance against X or the @considered_done
+ * This is deterministic adapter testing. It is NOT acceptance against X or the @anywhereaide
  * account: it shows what PersonalOS does given X's documented responses, not that X sends them.
  */
 import { after, before, test } from "node:test";
@@ -34,7 +34,7 @@ const BRIDGE = { id: "multiplayer", type: "service" as const, displayName: "Mult
 const ADA_X = { author: "1001", username: "ada_x" };
 const GRACE_X = { author: "3003", username: "grace_x" };
 const MALLORY_X = { author: "6666", username: "mallory" };
-const bot = "@considered_done";
+const bot = "@anywhereaide";
 
 async function settle(t: TestApp) {
   const jobs = (t.runtime.services as any).jobs;
@@ -99,8 +99,8 @@ const messages = async (t: TestApp, who: string, conversationId: string) => (awa
 test("reading X's mentions response: oldest first, authors from includes, thread context, malformed entries dropped; instruction and commands", () => {
   const r = readMentions({
     data: [
-      { id: "1890000000000000010", text: "@considered_done @bob remind me", author_id: "1001", conversation_id: "1890000000000000001", referenced_tweets: [{ type: "replied_to", id: "1890000000000000001" }] },
-      { id: "1890000000000000002", text: "@considered_done hi", author_id: "1002", conversation_id: "1890000000000000002" },
+      { id: "1890000000000000010", text: "@anywhereaide @bob remind me", author_id: "1001", conversation_id: "1890000000000000001", referenced_tweets: [{ type: "replied_to", id: "1890000000000000001" }] },
+      { id: "1890000000000000002", text: "@anywhereaide hi", author_id: "1002", conversation_id: "1890000000000000002" },
       { id: "not-a-number", text: "x", author_id: "1" },
       { id: "1890000000000000011", author_id: "1003" },
     ],
@@ -113,8 +113,8 @@ test("reading X's mentions response: oldest first, authors from includes, thread
   assert.deepEqual([r.newestId, r.nextToken], ["1890000000000000010", "abc_DEF-1"]);
   assert.equal(readMentions({ meta: { result_count: 0 } }).mentions.length, 0);
 
-  assert.equal(instructionOf("@considered_done @bob remind me to call Sarah &amp; Bob"), "remind me to call Sarah & Bob");
-  assert.equal(instructionOf("ask @considered_done about @bob"), "ask @considered_done about @bob", "only the leading handles are X's addressing");
+  assert.equal(instructionOf("@anywhereaide @bob remind me to call Sarah &amp; Bob"), "remind me to call Sarah & Bob");
+  assert.equal(instructionOf("ask @anywhereaide about @bob"), "ask @anywhereaide about @bob", "only the leading handles are X's addressing");
   assert.deepEqual(commandOf("link ABCD-EFGH"), { kind: "link", code: "ABCDEFGH" });
   assert.deepEqual(commandOf("continue k57abc123def456 what did we find?"), { kind: "continue", conversationId: "k57abc123def456", rest: "what did we find?" });
   assert.deepEqual(commandOf("continue research on this"), { kind: "work", text: "continue research on this" });
@@ -511,5 +511,42 @@ test("the poll chain survives errors: the next poll is queued before the work, f
     assert.equal(ok.error, null);
     assert.equal((await t.as(XA).query(api.xsurface.pollState, {}))!.failures, 0, "reset by a success");
     assert.ok((await invocationsOf(t, "ada")).some((i: any) => i.invocationId === `x-${waiting}`), "nothing was lost meanwhile");
+  });
+});
+
+/** Runs `fn` with the clock `ms` ahead, so an hourly refresh is due without waiting an hour. */
+async function later<T>(ms: number, fn: () => Promise<T>): Promise<T> {
+  const real = Date.now;
+  Date.now = () => real() + ms;
+  try { return await fn(); } finally { Date.now = real; }
+}
+
+test("a renamed bot account is picked up within the hour: the handle changes, the id and the cursor do not", async () => {
+  await stack(async (t) => {
+    const before = await t.as(XA).query(api.xsurface.pollState, {});
+    assert.equal(before!.botUsername, "anywhereaide");
+    const id = before!.botUserId;
+    x.bot.username = "renamed_aide";
+    await poll(t);
+    assert.equal((await t.as(XA).query(api.xsurface.pollState, {}))!.botUsername, "anywhereaide", "not read again inside the hour");
+    await later(90 * 60_000, () => poll(t));
+    const after = await t.as(XA).query(api.xsurface.pollState, {});
+    assert.deepEqual([after!.botUsername, after!.botUserId, after!.running, after!.lastError ?? null], ["renamed_aide", id, true, null]);
+    x.bot.username = "anywhereaide";
+  });
+});
+
+test("a token that now belongs to a different account stops polling, says why, and reads nothing", async () => {
+  await stack(async (t) => {
+    const original = x.bot.id;
+    x.bot.id = "1700000000000000099";
+    try {
+      const mention = x.mention({ ...ADA_X, text: `${bot} add a task to water the plants` });
+      await later(90 * 60_000, () => poll(t));
+      const st = await t.as(XA).query(api.xsurface.pollState, {});
+      assert.equal(st!.running, false);
+      assert.match(st!.lastError!, /different account/);
+      assert.equal((await invocationsOf(t, "ada")).some((i: any) => i.invocationId === `x-${mention}`), false, "nothing was read for the other account");
+    } finally { x.bot.id = original; }
   });
 });
