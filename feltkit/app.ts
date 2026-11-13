@@ -228,15 +228,31 @@ export const openaisearch = app.integration("openaisearch", {
 });
 
 /**
- * X (feltkit/xsurface.ts): the bot account's mentions and its replies. X_API_URL (https://api.x.com)
- * and the credential `x` (FELTKIT_CREDENTIAL_X): a user-context access token for the bot account
- * (tweet.read, users.read, tweet.write), held in custody, never in code. Application code only.
+ * X (feltkit/xsurface.ts): the bot account's mentions and its replies. The credential `x` is the BOT
+ * account's OAuth 2.0 grant (authorization code with PKCE, as X documents it), which FeltKit keeps
+ * current: renewed with the refresh token before it expires, rotated refresh tokens stored atomically,
+ * revoked on disconnect (FeltKit docs/OAUTH-CREDENTIALS.md). PersonalOS never holds a token. It says
+ * nothing about who mentions the bot: each author is linked separately (links.ts, Resolver).
+ *
+ * X's endpoints (docs.x.com, read 2026-11-13): authorize https://x.com/i/oauth2/authorize, token
+ * https://api.x.com/2/oauth2/token, revoke https://api.x.com/2/oauth2/revoke. A bot is a confidential
+ * client (HTTP Basic with the client secret). Scopes: tweet.read users.read (me, mentions), tweet.write
+ * (replies), offline.access (a refresh token at all). Connect: `feltkit credential connect x`.
  */
+const X_OAUTH = {
+  tokenUrl: { env: "X_TOKEN_URL" },
+  authorizeUrl: { env: "X_AUTHORIZE_URL" },
+  revokeUrl: { env: "X_REVOKE_URL" },
+  clientId: { env: "X_CLIENT_ID" },
+  clientSecret: "credential-ref:x-client-secret",
+  clientAuthentication: "basic",
+  scopes: ["tweet.read", "users.read", "tweet.write", "offline.access"],
+} as const;
 const XPost = s.record(s.unknown());
 export const x = app.integration("x", {
   description: "X API v2 for the PersonalOS bot account: who it is, its mentions, and its replies.",
   baseUrl: { env: "X_API_URL" },
-  credential: "credential-ref:x",
+  credential: { ref: "credential-ref:x", oauth2: { ...X_OAUTH, scopes: [...X_OAUTH.scopes] } },
   timeoutMs: 20000,
   expose: false,
   operations: {

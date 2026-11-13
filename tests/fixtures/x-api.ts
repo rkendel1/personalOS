@@ -7,18 +7,31 @@
  *   GET  /2/users/:id/mentions             posts mentioning it: data, includes.users/tweets, meta
  *   POST /2/tweets                         a reply: { text, reply: { in_reply_to_tweet_id } }
  *
+ * And the OAuth 2.0 endpoints X documents for a confidential client (authorize, token with HTTP Basic,
+ * revoke), so the bot's grant goes through FeltKit's OAuth lifecycle as it would against X. Token
+ * response fields and refresh-token rotation are NOT documented by X: here they follow RFC 6749, with
+ * rotation, which is one possibility, not X's established behavior.
+ *
  * It establishes how PersonalOS behaves GIVEN those responses (and given failures the test chooses).
  * It says nothing about X itself: rate limits, pricing, field availability, token scopes and
  * delivery latency are X's, and are not simulated. A test passing here is not real-X acceptance.
  */
 import http from "node:http";
+import { createHash } from "node:crypto";
 import type net from "node:net";
 
 export interface StubPost { id: string; text: string; author_id: string; conversation_id: string; created_at: string; referenced_tweets?: Array<{ type: string; id: string }> }
 
 export interface XStub {
   url: string;
-  token: string;
+  client: { id: string; secret: string };
+  /** Access tokens the API accepts now, and refresh tokens the token endpoint accepts. */
+  access: Set<string>;
+  refresh: Set<string>;
+  /** expires_in the token endpoint answers with. */
+  expiresIn: number;
+  tokenRequests: Array<{ grant: string }>;
+  revoked: string[];
   bot: { id: string; username: string };
   users: Map<string, string>;
   posts: StubPost[];
@@ -41,8 +54,10 @@ export async function startXStub(): Promise<XStub> {
   let next = 1_890_000_000_000_000_000n;
   const nextId = () => String(next++);
   const all = new Map<string, StubPost>();
+  const codes = new Map<string, { challenge: string; redirect: string }>();
+  const tok = (p: string) => `${p}-${(next++).toString(36)}-stub-not-a-real-credential`;
   const state: XStub = {
-    url: "", token: "x-stub-token-not-a-real-credential", bot: { id: "1700000000000000001", username: "considered_done" },
+    url: "", client: { id: "x-stub-client", secret: "x-stub-client-secret-not-real" }, access: new Set(), refresh: new Set(), expiresIn: 7200, tokenRequests: [], revoked: [], bot: { id: "1700000000000000001", username: "considered_done" },
     users: new Map([["1700000000000000001", "considered_done"]]), posts: [], replies: [], requests: [], replyFailures: [], repeatFrom: null, unauthorized: false,
     mention: (o) => {
       const id = nextId();
@@ -71,7 +86,47 @@ export async function startXStub(): Promise<XStub> {
       const u = new URL(req.url ?? "/", "http://stub");
       state.requests.push({ method: req.method ?? "", path: u.pathname, query: Object.fromEntries(u.searchParams) });
       const send = (status: number, value: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); };
-      if (state.unauthorized || req.headers.authorization !== `Bearer ${state.token}`) return send(401, { title: "Unauthorized", type: "about:blank", status: 401, detail: "Unauthorized" });
+      // OAuth 2.0 (docs.x.com: /i/oauth2/authorize, /2/oauth2/token, /2/oauth2/revoke; confidential client = Basic).
+      if (u.pathname === "/i/oauth2/authorize") {
+        const code = tok("code");
+        codes.set(code, { challenge: u.searchParams.get("code_challenge") ?? "", redirect: u.searchParams.get("redirect_uri") ?? "" });
+        const back = new URL(u.searchParams.get("redirect_uri")!);
+        back.searchParams.set("code", code);
+        back.searchParams.set("state", u.searchParams.get("state") ?? "");
+        res.writeHead(302, { location: back.toString() }).end();
+        return;
+      }
+      if (u.pathname === "/2/oauth2/token" || u.pathname === "/2/oauth2/revoke") {
+        const form = Object.fromEntries(new URLSearchParams(body));
+        if (req.headers.authorization !== `Basic ${Buffer.from(`${state.client.id}:${state.client.secret}`).toString("base64")}`) return send(401, { error: "invalid_client" });
+        if (u.pathname === "/2/oauth2/revoke") {
+          state.revoked.push(form.token ?? "");
+          state.access.delete(form.token ?? "");
+          state.refresh.delete(form.token ?? "");
+          return send(200, { revoked: true });
+        }
+        state.tokenRequests.push({ grant: form.grant_type ?? "" });
+        const issue = () => {
+          const access = tok("at");
+          const refresh = tok("rt");
+          state.access.add(access);
+          state.refresh.add(refresh);
+          return { token_type: "bearer", expires_in: state.expiresIn, access_token: access, scope: "tweet.read users.read tweet.write offline.access", refresh_token: refresh };
+        };
+        if (form.grant_type === "authorization_code") {
+          const c = codes.get(form.code ?? "");
+          codes.delete(form.code ?? "");
+          if (!c || c.redirect !== form.redirect_uri || c.challenge !== createHash("sha256").update(form.code_verifier ?? "").digest("base64url")) return send(400, { error: "invalid_request" });
+          return send(200, issue());
+        }
+        if (form.grant_type === "refresh_token") {
+          if (!state.refresh.delete(form.refresh_token ?? "")) return send(400, { error: "invalid_request" });
+          return send(200, issue());
+        }
+        return send(400, { error: "unsupported_grant_type" });
+      }
+      const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
+      if (state.unauthorized || !bearer || !state.access.has(bearer)) return send(401, { title: "Unauthorized", type: "about:blank", status: 401, detail: "Unauthorized" });
       if (req.method === "GET" && u.pathname === "/2/users/me") return send(200, { data: { id: state.bot.id, name: "Considered Done", username: state.bot.username } });
       const m = /^\/2\/users\/([0-9]+)\/mentions$/.exec(u.pathname);
       if (req.method === "GET" && m) {
@@ -104,7 +159,14 @@ export async function startXStub(): Promise<XStub> {
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   state.url = `http://127.0.0.1:${(server.address() as net.AddressInfo).port}`;
   process.env.X_API_URL = state.url;
-  process.env.FELTKIT_CREDENTIAL_X = state.token;
+  process.env.X_TOKEN_URL = `${state.url}/2/oauth2/token`;
+  process.env.X_AUTHORIZE_URL = `${state.url}/i/oauth2/authorize`;
+  process.env.X_REVOKE_URL = `${state.url}/2/oauth2/revoke`;
+  process.env.X_CLIENT_ID = state.client.id;
+  process.env.FELTKIT_CREDENTIAL_X_CLIENT_SECRET = state.client.secret;
+  delete process.env.FELTKIT_CREDENTIAL_X;
+  // Where X sends the operator back after authorizing (FeltKit's /api/integrations/x/oauth/callback).
+  process.env.FELTKIT_PUBLIC_URL ??= "http://127.0.0.1:9";
   state.close = () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); });
   return state;
 }

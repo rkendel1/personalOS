@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@appport/resolver-client": "0.3.0",
-    "@feltdb/feltkit": "0.3.27",
+    "@feltdb/feltkit": "0.3.28",
     "@stack-ui/core": "0.8.1",
     "@stack-ui/react": "0.8.1",
     "@stack-ui/tokens": "0.8.1",

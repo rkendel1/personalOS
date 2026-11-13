@@ -46,6 +46,9 @@ test("real AuthBoundry: a linked X mention runs under Ada's delegation; revoked,
     await settle();
   };
   try {
+    const operator = { id: "ada", type: "user" as const, roles: ["owner", "admin"] };
+    const { url } = await (t.runtime as any).oauth.connect("x", operator, "test");
+    await (t.runtime as any).oauth.complete("x", new URL((await fetch(url, { redirect: "manual" })).headers.get("location")!).searchParams);
     await t.as(XA).mutation(api.xsurface.startPolling, {});
     await settle();
     await poll();

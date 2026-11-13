@@ -46,6 +46,16 @@ async function settle(t: TestApp) {
     for (const j of due) await jobs.executeJob("personalos", j.id, "test-worker");
   }
 }
+/**
+ * The bot's grant, connected the way an operator does it (`feltkit credential connect x`): FeltKit's
+ * authorization code flow with PKCE against the stand-in's /i/oauth2/authorize and /2/oauth2/token.
+ */
+async function connectBot(t: TestApp) {
+  const operator = { id: "ada", type: "user" as const, roles: ["owner", "admin"] };
+  const { url } = await (t.runtime as any).oauth.connect("x", operator, "test");
+  const back = new URL((await fetch(url, { redirect: "manual" })).headers.get("location")!);
+  return (t.runtime as any).oauth.complete("x", back.searchParams);
+}
 /** One poll, now (the chain's own next poll is minutes away), then whatever it queued. */
 async function poll(t: TestApp) {
   const st = await t.as(XA).query(api.xsurface.pollState, {});
@@ -60,8 +70,10 @@ async function stack(fn: (t: TestApp) => Promise<void>) {
   authority.grant("grace");
   x.replyFailures.length = 0;
   x.unauthorized = false;
+  x.expiresIn = 7200;
   const t = await createTestApp();
   try {
+    await connectBot(t);
     await t.as(XA).mutation(api.xsurface.startPolling, {});
     await settle(t);
     await poll(t); // the first poll only sets where polling starts: earlier mentions are history
@@ -137,7 +149,7 @@ test("1-3: a linked account's mention becomes exactly one invocation for that pe
     assert.equal(acks.length, 1, "one public reply");
     assert.match(acks[0]!.text, /^Received \(ref [A-Z0-9]{6}\)/);
     assert.doesNotMatch(acks[0]!.text, /Sarah|budget|Q3|remind|10/i, "no private content and no result in public");
-    assert.equal(acks[0]!.authorization, `Bearer ${x.token}`, "posted with the bot's token, from custody");
+    assert.ok(x.access.has(acks[0]!.authorization!.replace(/^Bearer /, "")), "posted with the bot's access token, from FeltKit's OAuth custody");
     const [mine] = await t.as("ada").query(api.xsurface.mine, {});
     assert.deepEqual([mine!.postId, mine!.state, mine!.replies[0]!.status, mine!.replies[0]!.replyPostId], [post, "invoked", "sent", acks[0]!.id], "the reply's id and delivery status are kept");
   });
@@ -415,7 +427,7 @@ test("12: across a restart the cursor, the waiting work and an unsent reply surv
     const r = (await t.as("ada").query(api.xsurface.post, { postId: second })).replies[0]!;
     assert.equal(r.status, "unknown");
     assert.match(r.error!, /OUTCOME_UNKNOWN/);
-    assert.equal(x.requests.filter((q) => q.method === "POST").length - x.replies.length, 3, "three refused posts (429, 429, 500), no resend of the unclear one");
+    assert.equal(x.requests.filter((q) => q.method === "POST" && q.path === "/2/tweets").length - x.replies.length, 3, "three refused posts (429, 429, 500), no resend of the unclear one");
 
     // An expired or wrong bot token: polling records it and carries on; nothing is lost.
     x.unauthorized = true;
@@ -432,6 +444,7 @@ test("polling: mentions from before polling started are history, not requests; o
   authority.grant("ada");
   const t = await createTestApp();
   try {
+    await connectBot(t);
     const old = x.mention({ ...ADA_X, text: `${bot} add a task from last year` });
     await t.as(XA).mutation(api.xsurface.startPolling, {});
     await settle(t);
@@ -442,4 +455,36 @@ test("polling: mentions from before polling started are history, not requests; o
     await assert.rejects(t.as("ada").mutation(api.xsurface.receive, { mention: { id: old, text: "x", authorId: ADA_X.author, referenced: [] }, bot: x.bot }), /FORBIDDEN|may not|permission/i);
     await assert.rejects(t.as(BRIDGE).mutation(api.xsurface.startPolling, {}), /FORBIDDEN|may not|permission/i);
   } finally { await t.close(); }
+});
+
+test("the bot's grant: renewed by FeltKit as it expires (rotated refresh tokens kept), polling unaffected; revoked at X, polling records it and resumes after reconnecting", async () => {
+  await stack(async (t) => {
+    await linkX(t, "ada", ADA_X);
+    // A grant that is always about to expire: every poll renews it first.
+    x.expiresIn = 60;
+    await connectBot(t);
+    const before = x.tokenRequests.filter((r) => r.grant === "refresh_token").length;
+    const a = x.mention({ ...ADA_X, text: `${bot} add a task to water the plants` });
+    await poll(t);
+    const b = x.mention({ ...ADA_X, text: `${bot} add a task to call the plumber` });
+    await poll(t);
+    assert.ok(x.tokenRequests.filter((r) => r.grant === "refresh_token").length - before >= 2, "renewed (FeltKit), not replaced by hand");
+    assert.equal((await invocationsOf(t, "ada")).filter((i: any) => [`x-${a}`, `x-${b}`].includes(i.invocationId)).length, 2);
+    assert.equal(repliesTo(b).length, 1);
+    const status = (t.runtime as any).integrations.status((t.runtime as any).app.integrations.get("x"));
+    assert.deepEqual([status.problems.length, status.credential.kind, status.credential.oauth.state, status.credential.oauth.renewable], [0, "oauth2", "active", true]);
+    assert.ok(status.credential.oauth.refreshes >= 2);
+
+    // The grant is revoked on X's side (the bot's owner removed the app): nothing is read, nothing lost.
+    x.access.clear();
+    x.refresh.clear();
+    const c = x.mention({ ...ADA_X, text: `${bot} add a task to renew the bot` });
+    const failed = await poll(t);
+    assert.match(failed.error!, /must be connected again/);
+    assert.equal((await invocationsOf(t, "ada")).some((i: any) => i.invocationId === `x-${c}`), false);
+    x.expiresIn = 7200;
+    await connectBot(t);
+    await poll(t);
+    assert.ok((await invocationsOf(t, "ada")).some((i: any) => i.invocationId === `x-${c}`), "read once reconnected: the cursor did not move past it");
+  });
 });
