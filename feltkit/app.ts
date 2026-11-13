@@ -833,6 +833,8 @@ export const xState = app.collection(
     chain: s.optional(s.string()),
     /** Which poll of the chain is due: a retried job of an earlier tick does nothing. */
     tick: s.optional(s.integer()),
+    /** Polls in a row that ended with an error: the next waits longer (xsurface:nextDelay). */
+    failures: s.optional(s.integer()),
     /** When the first poll set the starting point (mentions before it are not requests). */
     baselineAt: s.optional(s.number()),
     startedBy: s.optional(s.string()),
