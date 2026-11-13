@@ -1,6 +1,6 @@
 /** Today, Tasks, Memory, Projects, Activity and Settings: each a live view of durable state. */
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { useFeltKit, useMutation, useQuery } from "@feltdb/feltkit/react";
+import { useAction, useFeltKit, useMutation, useQuery } from "@feltdb/feltkit/react";
 import { api } from "../feltkit/_generated/api";
 import { ago, clientDay, dayLabel, Evidence, Icon, localToday, StatusBadge, timeLabel, type Action } from "./ui";
 
@@ -519,6 +519,7 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
         </section>
       )}
       <ConnectedSurfaces onError={onError} />
+      <Permissions onError={onError} />
       <section>
         <h2>Weekly review</h2>
         <label className="toggle">
@@ -582,6 +583,58 @@ const SURFACES = {
 } as const;
 type SurfaceId = keyof typeof SURFACES;
 const surfaceName = (adapter: string) => (SURFACES as Record<string, { name: string }>)[adapter]?.name ?? adapter;
+
+type Permission = { id: string; label: string; granted: boolean; expiresAt: number | null };
+const DAY = 86_400_000;
+
+/**
+ * What PersonalOS may do for you when you ask from Multiplayer, X, the browser or the share sheet: your
+ * grants, kept by AuthBoundry (feltkit/delegation.ts). What you do here in the app needs none.
+ */
+function Permissions({ onError }: Err) {
+  const list = useAction(api.delegation.list);
+  const set = useAction(api.delegation.set);
+  const [state, setState] = useState<{ available: boolean; reason: string | null; capabilities: Permission[] } | null>(null);
+  const [days, setDays] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => list.run({}).then(setState).catch(onError);
+  useEffect(() => void load(), []);
+  if (!state) return <section><h2>What PersonalOS may do for you</h2><p className="muted small">Loading…</p></section>;
+  const granted = state.capabilities.filter((c) => c.granted).map((c) => c.id);
+  const expiresAt = state.capabilities.find((c) => c.granted)?.expiresAt ?? null;
+  const apply = (next: string[]) => {
+    setBusy(true);
+    void set.run({ capabilities: next, expiresAt: days ? Date.now() + days * DAY : null }).then(load).catch(onError).finally(() => setBusy(false));
+  };
+  return (
+    <section data-testid="permissions">
+      <h2>What PersonalOS may do for you</h2>
+      <p className="muted small">When you ask from Multiplayer, X, the browser or the share sheet, PersonalOS does only what you allow here. What you do in this app yourself needs nothing. Anything destructive still waits for your approval.</p>
+      {!state.available ? (
+        <p className="small" data-testid="permissions-unavailable">{state.reason}</p>
+      ) : (
+        <>
+          {state.capabilities.map((c) => (
+            <label className="toggle" key={c.id}>
+              <input type="checkbox" checked={c.granted} disabled={busy} data-testid={`permission-${c.id}`} onChange={(e) => apply(e.target.checked ? [...granted, c.id] : granted.filter((g) => g !== c.id))} />
+              <span>{c.label}</span>
+            </label>
+          ))}
+          <div className="row" style={{ marginTop: 10 }}>
+            <select value={days ?? ""} onChange={(e) => setDays(e.target.value ? Number(e.target.value) : null)} aria-label="How long" disabled={busy}>
+              <option value="">Until I turn it off</option>
+              <option value="1">For a day</option>
+              <option value="7">For a week</option>
+              <option value="30">For 30 days</option>
+            </select>
+            {granted.length > 0 && <button className="ghost tiny" disabled={busy} onClick={() => apply([])}>Turn all off</button>}
+          </div>
+          <p className="muted small">{granted.length === 0 ? "Nothing is allowed: PersonalOS refuses every request from elsewhere." : expiresAt ? `Allowed until ${new Date(expiresAt).toLocaleString()}.` : "Allowed until you turn it off."}</p>
+        </>
+      )}
+    </section>
+  );
+}
 
 function ConnectedSurfaces({ onError }: Err) {
   const links = useQuery(api.links.list) ?? [];

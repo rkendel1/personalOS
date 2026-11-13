@@ -43,3 +43,21 @@ export const CAPABILITIES = [
   // Publishing something to X from PersonalOS (feltkit/xsurface.ts): the owner's explicit act, decided here too.
   "personalos.x.publish",
 ] as const;
+
+/** What each capability lets PersonalOS do for a person, in their words (Settings → What PersonalOS may do for you). */
+export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = {
+  "personalos.assistant.converse": "Answer you when you mention it",
+  "personalos.conversation.read": "Read the conversation it's mentioned in (summaries, decisions)",
+  "personalos.tasks.read": "See your tasks, plans and projects",
+  "personalos.tasks.create": "Add tasks",
+  "personalos.tasks.update": "Complete and reschedule tasks",
+  "personalos.tasks.delete": "Delete tasks",
+  "personalos.reminders.create": "Set reminders",
+  "personalos.memory.read": "Recall what you've told it",
+  "personalos.memory.write": "Remember what you tell it",
+  "personalos.memory.delete": "Forget things",
+  "personalos.projects.create": "Start projects",
+  "personalos.research.run": "Research for you",
+  "personalos.conversation.continue": "Continue your PersonalOS conversations",
+  "personalos.x.publish": "Publish on X for you, as the bot",
+};
