@@ -40,4 +40,6 @@ export const CAPABILITIES = [
   "personalos.research.run",
   // Continuing a PersonalOS conversation (and reading its work) from a surface (feltkit/interactions.ts).
   "personalos.conversation.continue",
+  // Publishing something to X from PersonalOS (feltkit/xsurface.ts): the owner's explicit act, decided here too.
+  "personalos.x.publish",
 ] as const;
