@@ -29,7 +29,7 @@ import { interpret } from "./_interpret.js";
 import { clockFor } from "./_clock.js";
 import { jsonOf } from "./_researchmodel.js";
 import { modelUsable } from "./research.js";
-import { ownInvocation, Receipt, receiptOf } from "./invocationstate.js";
+import { moveInvocation, ownInvocation, Receipt, receiptOf } from "./invocationstate.js";
 import * as ops from "./_ops.js";
 
 /** How many times processing waits for an unreachable authority before the invocation fails and says so. */
@@ -79,10 +79,29 @@ export const submit = app.mutation({
 });
 
 /**
+ * Run an invocation that waits for its owner (asked from X, where research and model answers can't run
+ * for them): from their own session, so the work runs as them. AuthBoundry decides again when it runs.
+ */
+export const run = app.mutation({
+  access: "invocations.submit",
+  args: { invocationId: s.string({ maxLength: 100 }) },
+  returns: Receipt,
+  handler: async (ctx, { invocationId }) => {
+    const inv = await ownInvocation(ctx, invocationId);
+    if (!inv) fail("NOT_FOUND", `No invocation ${invocationId}.`);
+    if (inv.state !== "needs_approval" || inv.work?.waitingFor !== "owner") fail("FAILED_PRECONDITION", "This isn't waiting for you to run it.");
+    const { waitingFor: _w, ...work } = inv.work as Record<string, unknown>;
+    await moveInvocation(ctx, inv, "accepted", "You ran it from PersonalOS. Working on it now.", { work });
+    ctx.afterCommit.jobs.enqueue("invocation.process", { invocationId }, { maxAttempts: 6 });
+    return receiptOf((await ownInvocation(ctx, invocationId))!, false);
+  },
+});
+
+/**
  * For the assistant: "this" in what they asked means what they shared ("remind me to read this" →
  * "remind me to read <title> (<url>)"), so the task it creates says what to read. Else it is appended.
  */
-function assistantText(inv: any): string {
+export function assistantText(inv: { instruction: string; context: any[] }): string {
   const c = inv.context[0];
   const label = c.kind === "url" ? `${c.title ? `${c.title.slice(0, 120)} ` : ""}(${c.url})` : c.kind === "document" ? `"${c.name ?? "the document"}"` : c.url ? `the text from ${c.url}` : `"${c.text.slice(0, 120)}"`;
   const replaced = inv.instruction.replace(/\b(this|that|it)\b(?!\s+(?:is|was|week|month|morning|afternoon|evening|year)\b)/i, label);
@@ -90,7 +109,7 @@ function assistantText(inv: any): string {
 }
 
 /** The words the existing machinery is given: what was asked, then what was shared, labelled as such. */
-function requestText(inv: any): string {
+export function requestText(inv: { instruction: string; context: any[]; surface: { adapter: string } }): string {
   const shared = describeContext(inv.context);
   return `${inv.instruction || "Keep this"}\n\n(Shared from ${surfaceLabel(inv.surface.adapter)}: ${shared})`.slice(0, 4000);
 }

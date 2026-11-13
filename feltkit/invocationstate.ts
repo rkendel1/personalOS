@@ -166,6 +166,12 @@ export const save = app.mutation({
   handler: async (ctx, { invocationId }) => {
     const inv = await ownInvocation(ctx, invocationId);
     if (!inv) fail("NOT_FOUND", `No invocation ${invocationId}.`);
+    return saveShared(ctx, inv);
+  },
+});
+
+/** Keep what was shared as a note, in the invocation's conversation. `ctx` acts as the invocation's owner. */
+export async function saveShared(ctx: MutationCtx, inv: any): Promise<{ text: string; replyId: string }> {
     const c = inv.context[0]!;
     const what = c.kind === "url" ? `${c.title ? `${c.title}: ` : ""}${c.url}` : c.kind === "document" ? `${c.name ?? "a document"}: ${c.text!.slice(0, 300)}` : `${c.text!.slice(0, 400)}${c.url ? ` (from ${c.url})` : ""}`;
     const content = `Saved from ${surfaceLabel(inv.surface.adapter)}: ${what}`.slice(0, 1000);
@@ -175,8 +181,7 @@ export const save = app.mutation({
     const text = `Saved it to your notes: ${what.slice(0, 300)}. Ask me about it any time.`;
     const replyId = await appendMessage(ctx, inv.conversationId, { role: "assistant", text });
     return { text, replyId };
-  },
-});
+}
 
 /** An answer about what was shared: the request and the model's reply in the conversation, citing its generation. */
 export const answer = app.mutation({
@@ -214,7 +219,7 @@ export const settle = app.mutation({
     state: s.enum(["processing", "needs_approval", "completed", "failed"] as const),
     text: s.string({ maxLength: 2000 }),
     authority: s.optional(s.record(s.unknown())),
-    work: s.optional(s.object({ researchRunId: s.optional(s.string()), replyId: s.optional(s.string()), actionIds: s.optional(s.array(s.string())) })),
+    work: s.optional(s.object({ researchRunId: s.optional(s.string()), replyId: s.optional(s.string()), actionIds: s.optional(s.array(s.string())), waitingFor: s.optional(s.enum(["owner"] as const)) })),
     error: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 1000 }) })),
   },
   handler: async (ctx, a) => {

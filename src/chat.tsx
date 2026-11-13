@@ -310,7 +310,9 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
  */
 function Provenance({ conversationId }: { conversationId: string }) {
   const data = useQuery(api.continuity.of, { conversationId });
+  const run = useMutation(api.invocations.run);
   const [copied, setCopied] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   if (!data) return null;
   const outside = data.entries.filter((e) => e.kind === "interaction" || e.kind === "invocation");
   return (
@@ -325,13 +327,39 @@ function Provenance({ conversationId }: { conversationId: string }) {
             {w.inferred && <div className="muted">Read as: {w.inferred}</div>}
             {w.authority && <div className="muted">Authority: {w.authority.capability}: {w.authority.outcome}{w.authority.delegationId ? ` (delegation ${w.authority.delegationId})` : ""}{w.authority.reason ? ` (${w.authority.reason})` : ""}</div>}
             {w.did && <div className="muted">{w.did}</div>}
+            {w.run && <button className="tiny" data-testid="run-invocation" onClick={() => void run({ invocationId: w.run! }).catch((e) => setProblem(String((e as Error).message ?? e)))}>Run it</button>}
+            {w.xPostId && <PublishOnX postId={w.xPostId} />}
           </li>
         ))}
       </ul>
+      {problem && <p className="small" role="alert">{problem}</p>}
       <p className="small muted">
         Carry this on in Multiplayer: send <code>{data.continueWith}</code> to PersonalOS in a direct message.{" "}
         <button className="link small" onClick={() => void navigator.clipboard?.writeText(data.continueWith).then(() => setCopied(true))}>{copied ? "Copied" : "Copy"}</button>
       </p>
+    </details>
+  );
+}
+
+/**
+ * Replying on X, as the bot, to a post you mentioned it in: only what you type here, only when you
+ * press Publish, and only if you've allowed PersonalOS to publish for you (AuthBoundry). Nothing from
+ * this conversation is ever published by itself.
+ */
+function PublishOnX({ postId }: { postId: string }) {
+  const publish = useMutation(api.xsurface.publish);
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <details className="small" data-testid="publish-on-x">
+      <summary className="muted">Reply publicly on X…</summary>
+      <p className="muted">Everything here stays private unless you publish it. What you type below is posted publicly, as the bot, in reply to your post.</p>
+      <textarea value={text} maxLength={280} rows={3} onChange={(e) => setText(e.target.value)} aria-label="Public reply on X" />
+      <div>
+        <button className="tiny" disabled={!text.trim()} onClick={() => void publish({ postId, text }).then((r) => setResult(r.status === "pending" ? "Queued: it will be posted shortly." : `Not published: ${r.reason}`), (e) => setResult(String((e as Error).message ?? e)))}>Publish on X</button>{" "}
+        <span className="muted">{text.length}/280</span>
+      </div>
+      {result && <p data-testid="publish-result">{result}</p>}
     </details>
   );
 }

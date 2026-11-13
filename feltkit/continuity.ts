@@ -29,11 +29,15 @@ export interface WorkEntry {
   did: string;
   state: string;
   ref: string;
+  /** An invocation waiting for its owner to run it from PersonalOS (asked from X): its id. */
+  run?: string;
+  /** Asked from X: the post, which the owner may explicitly reply to (xsurface:publish). */
+  xPostId?: string;
 }
 
 type Db = { find(c: unknown, f: Record<string, unknown>): Promise<any[]> };
 
-const ADAPTERS: Record<string, string> = { multiplayer: "Multiplayer" };
+const ADAPTERS: Record<string, string> = { multiplayer: "Multiplayer", x: "X" };
 const authorityOf = (a: any) => (a ? { capability: a.capability, outcome: a.outcome, ...(a.delegationId ? { delegationId: a.delegationId } : {}), ...(a.decisionId ? { decisionId: a.decisionId } : {}), ...(a.reason ? { reason: String(a.reason) } : {}) } : null);
 
 /** Everything recorded about this conversation's work, oldest first. The owner must already be checked. */
@@ -50,12 +54,14 @@ export async function workIn(db: Db, owner: string, conversationId: string): Pro
   }
   for (const v of (await db.find(invocations, { owner })).filter((x) => x.conversationId === conversationId)) {
     entries.push({
-      at: v.receivedAt, kind: "invocation", surface: surfaceLabel(v.surface.adapter) === "your browser" ? "Chrome (your browser)" : surfaceLabel(v.surface.adapter),
+      at: v.receivedAt, kind: "invocation", surface: surfaceLabel(v.surface.adapter) === "your browser" ? "Chrome (your browser)" : v.surface.adapter === "x" ? `X${v.surface.device ? ` (${v.surface.device})` : ""}` : surfaceLabel(v.surface.adapter),
       asked: v.instruction || null,
       shared: v.context.map((c: any) => (c.kind === "url" ? `${c.title ? `${c.title} ` : ""}${c.url}` : c.kind === "selection" ? `selected text from ${c.url ?? "a page"} (${(c.text ?? "").length} chars)` : c.kind === "page" ? `the text of ${c.url} (${(c.text ?? "").length} chars)` : c.kind === "document" ? `${c.name ?? "a document"}` : `text (${(c.text ?? "").length} chars)`)),
       inferred: v.interpretation ? `${v.interpretation.intent} (${v.interpretation.basis === "model" ? "a model's reading" : "rules"})` : null,
       authority: authorityOf(v.authority),
       did: (v.updates?.at(-1)?.text ?? "").slice(0, 400), state: v.state, ref: `invocation ${v.invocationId}`,
+      ...(v.state === "needs_approval" && v.work?.waitingFor === "owner" ? { run: v.invocationId } : {}),
+      ...(v.surface.adapter === "x" && /^x-[0-9]{1,19}$/.test(v.invocationId) ? { xPostId: v.invocationId.slice(2) } : {}),
     });
   }
   for (const r of (await db.find(researchRuns, { owner })).filter((x) => x.conversationId === conversationId)) {

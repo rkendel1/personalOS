@@ -568,32 +568,46 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
 }
 
 /**
- * Connected surfaces (PersonalOS Anywhere): link your account on another app (Multiplayer) so
- * mentioning @personalos there works in this account, as you. A one-time code proves this side;
- * sending it to @personalos in a direct message there proves the other. The link lives in Resolver.
+ * Connected surfaces (PersonalOS Anywhere): link your account on another app so PersonalOS works for
+ * you there, as you. A one-time code proves this side; sending it from that app proves the other; you
+ * then confirm here that the account which sent it is yours. The link lives in Resolver.
+ *
+ *   Multiplayer   send `link XXXX-XXXX` to @personalos in a direct message
+ *   X             post `@<bot> link XXXX-XXXX` from your X account (public, so the code works once,
+ *                 and only you can confirm the account that posted it)
  */
+const SURFACES = {
+  multiplayer: { name: "Multiplayer", how: (code: string) => <>Send <code className="kindcode">link {code}</code> to @personalos in a <strong>direct message</strong> in Multiplayer (never in a shared channel).</> },
+  x: { name: "X", how: (code: string, bot: string | null) => <>From your X account, post <code className="kindcode">@{bot ?? "considered_done"} link {code}</code>. Posts are public: the code works once, and only an account you confirm here is connected. The bot replies with a short acknowledgement and never posts anything private.</> },
+} as const;
+type SurfaceId = keyof typeof SURFACES;
+const surfaceName = (adapter: string) => (SURFACES as Record<string, { name: string }>)[adapter]?.name ?? adapter;
+
 function ConnectedSurfaces({ onError }: Err) {
   const links = useQuery(api.links.list) ?? [];
   const recent = useQuery(api.interactions.list, { limit: 5 }) ?? [];
+  const mentions = useQuery(api.xsurface.mine, { limit: 5 }) ?? [];
+  const bot = useQuery(api.xsurface.bot);
   const start = useMutation(api.links.start);
   const revoke = useMutation(api.links.revoke);
   const confirm = useMutation(api.links.confirm);
-  const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
+  const [code, setCode] = useState<{ adapter: SurfaceId; code: string; expiresAt: number } | null>(null);
   const active = links.filter((l) => l.status === "active" || l.status === "confirming" || l.status === "revoking");
   const presented = links.filter((l) => l.status === "presented");
+  const begin = (adapter: SurfaceId) => void start({ adapter }).then((c) => setCode({ adapter, code: c.code, expiresAt: c.expiresAt })).catch(onError);
   return (
     <section data-testid="connected-surfaces">
       <h2>Connected surfaces</h2>
-      <p className="muted small">Mention @personalos in Multiplayer and I'll work here, in your account. In shared conversations I keep your private details out of my replies; anything destructive still waits for your approval here.</p>
+      <p className="muted small">Mention @personalos in Multiplayer, or {bot?.username ? `@${bot.username}` : "the PersonalOS bot"} on X, and I'll work here, in your account. In shared or public places I keep your private details out of my replies; anything destructive still waits for your approval here.</p>
       {active.map((l) => (
-        <div key={l.id} className="row">
-          <span><strong>Multiplayer</strong> <span className="muted small">as {l.sourceDisplayName ?? l.sourcePrincipalId}{l.status === "confirming" ? " · connecting…" : l.status === "revoking" ? " · disconnecting…" : l.lastUsedAt ? ` · last used ${new Date(l.lastUsedAt).toLocaleString()}` : ""}</span></span>
+        <div key={l.id} className="row" data-testid={`link-active-${l.adapter}`}>
+          <span><strong>{surfaceName(l.adapter)}</strong> <span className="muted small">as {l.sourceDisplayName ?? l.sourcePrincipalId}{l.status === "confirming" ? " · connecting…" : l.status === "revoking" ? " · disconnecting…" : l.lastUsedAt ? ` · last used ${new Date(l.lastUsedAt).toLocaleString()}` : ""}</span></span>
           {l.status === "active" && <button className="ghost tiny" onClick={() => void revoke({ id: l.id }).catch(onError)}>Disconnect</button>}
         </div>
       ))}
       {presented.map((l) => (
         <div key={l.id} className="row" data-testid="link-presented">
-          <span className="small">Your code was sent from the Multiplayer account <strong>{l.sourceDisplayName ?? l.sourcePrincipalId}</strong> <span className="muted">({l.sourcePrincipalId})</span>. Is that you?{l.error ? <span className="muted"> {l.error}</span> : null}</span>
+          <span className="small">Your code was sent from the {surfaceName(l.adapter)} account <strong>{l.sourceDisplayName ?? l.sourcePrincipalId}</strong> <span className="muted">({l.adapter === "x" ? `X user id ${l.sourcePrincipalId}` : l.sourcePrincipalId})</span>. Is that you?{l.error ? <span className="muted"> {l.error}</span> : null}</span>
           <span>
             <button className="tiny" onClick={() => void confirm({ id: l.id }).then(() => setCode(null)).catch(onError)}>This is me</button>{" "}
             <button className="ghost tiny" onClick={() => void revoke({ id: l.id }).then(() => setCode(null)).catch(onError)}>Not me</button>
@@ -601,15 +615,33 @@ function ConnectedSurfaces({ onError }: Err) {
         </div>
       ))}
       {code ? (
-        <p className="small" data-testid="link-code">Send <code className="kindcode">link {code.code}</code> to @personalos in a <strong>direct message</strong> in Multiplayer (never in a shared channel). It works once, until {new Date(code.expiresAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}.</p>
+        <p className="small" data-testid="link-code">{SURFACES[code.adapter].how(code.code, bot?.username ?? null)} It works once, until {new Date(code.expiresAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}.</p>
       ) : (
-        <button className="secondary" onClick={() => void start({ adapter: "multiplayer" }).then((c) => setCode(c)).catch(onError)}>{active.length ? "Connect another Multiplayer account" : "Connect Multiplayer"}</button>
+        <p>
+          <button className="secondary" onClick={() => begin("multiplayer")}>{active.some((l) => l.adapter === "multiplayer") ? "Connect another Multiplayer account" : "Connect Multiplayer"}</button>{" "}
+          <button className="secondary" data-testid="connect-x" onClick={() => begin("x")}>{active.some((l) => l.adapter === "x") ? "Connect another X account" : "Connect X"}</button>
+        </p>
       )}
+      {bot && !bot.polling && <p className="muted small">The X bot isn't being read right now, so mentions wait until it is.</p>}
       {recent.length > 0 && (
         <>
           <h3 className="small">Recent requests from connected surfaces</h3>
           <ul className="small">
             {recent.map((i) => <li key={i.id}><span className="muted">{i.where}:</span> “{i.text.slice(0, 80)}” — {i.state.replace(/_/g, " ")}</li>)}
+          </ul>
+        </>
+      )}
+      {mentions.length > 0 && (
+        <>
+          <h3 className="small">Your recent mentions on X</h3>
+          <ul className="small" data-testid="x-mentions">
+            {mentions.map((p) => (
+              <li key={p.postId}>
+                <a href={p.url} target="_blank" rel="noreferrer">post {p.postId}</a> — {p.state}
+                {p.conversationId && <> · <a href={`#/chat/${p.conversationId}`}>open</a></>}
+                {p.replies.map((r, i) => <span key={i} className="muted"> · {r.kind === "publication" ? "published" : "acknowledged"}: {r.status}</span>)}
+              </li>
+            ))}
           </ul>
         </>
       )}
