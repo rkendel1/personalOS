@@ -5,13 +5,13 @@ agent and not a separate store. Each mention becomes a `personalos.invocation/1`
 conversation, handled by the same assistant, AuthBoundry decisions and research as every other surface.
 Nothing private is posted.
 
-**Status: a local adapter, tested. Not a working integration with the real @considered_done account.**
-
-- Everything below is tested against a local stand-in for the X API (`tests/fixtures/x-api.ts`), which
-  answers in the shapes X's documentation gives.
-- Nothing has run against X itself. The bot credential saved in this environment is answered
-  `401 Unauthorized` by `GET /2/users/me` and by `GET /2/users/by/username/considered_done`.
-- See [What real acceptance needs](#what-real-acceptance-needs).
+**Status (2026-11-13):**
+- **Live on Fly** (`https://personalos.fly.dev`): one machine with a volume. The bot's OAuth 2.0 grant is
+  connected as @considered_done, and polling is running.
+- **Not yet shown:** the end-to-end test with a human X account, and a real token renewal (the access token
+  lasts two hours).
+- **In-process tests** run against a local stand-in for the X API (`tests/fixtures/x-api.ts`), which is
+  not X.
 
 ## Two identities, never confused
 
@@ -143,14 +143,9 @@ None of this is real-X acceptance.
 
 ## The bot's credential: an OAuth 2.0 grant FeltKit keeps current
 
-**Status:**
-- **Platform: implemented and tested with simulated providers.** FeltKit commit `5067542` on
-  `claude/affectionate-bardeen-o1xu78` in rkendel1/feltkit. See its docs/OAUTH-CREDENTIALS.md.
-- **PersonalOS adoption: prepared and verified, not applied.** PersonalOS installs only published
-  packages, and the published FeltKit (0.3.27) doesn't have this yet. Applying it waits for a FeltKit
-  release.
+**Status:** adopted. `feltkit/app.ts` declares the bot's grant, on FeltKit 0.3.28.
 
-**What FeltKit now owns** for an integration declared with `credential: { ref, oauth2: {…} }`:
+**What FeltKit owns** for an integration declared with `credential: { ref, oauth2: {…} }`:
 - **Connecting:** `feltkit credential connect x`, which runs X's authorization code flow with PKCE (S256).
 - **Custody:** the access and refresh tokens are kept encrypted. Application code never sees either.
 - **Renewal:** before expiry, or once after a 401.
@@ -160,28 +155,10 @@ None of this is real-X acceptance.
   `reconnect_required`, and nothing more is sent.
 - **Disconnecting** revokes the tokens at X.
 
-There is no operator script and no second process.
-
-**The adoption** is in `docs/pending/x-oauth-adoption.patch`, applied with `git apply`. It changes:
-- **`feltkit/app.ts`:** the `x` integration's credential becomes the bot's grant:
-  - endpoints `X_TOKEN_URL`, `X_AUTHORIZE_URL`, `X_REVOKE_URL`;
-  - client `X_CLIENT_ID`, with the secret `credential-ref:x-client-secret` sent as HTTP Basic;
-  - scopes `tweet.read users.read tweet.write offline.access`.
-- **The local X stand-in** gains X's OAuth endpoints.
-- **The tests:**
-  - they connect the bot through FeltKit's flow;
-  - a new scenario covers the grant renewed (and rotated) across polls, then revoked on X's side;
-  - polling records "must be connected again" and loses nothing, then reads the waiting mention after
-    reconnecting.
-
-**Verified against a local build of that FeltKit commit**, installed only for the run, never saved:
-- `tests/x.test.ts` with the real-AuthBoundry test: **12/12**.
-- The full PersonalOS suite: **140/140, none skipped**.
-
-After a FeltKit release:
-1. Bump `@feltdb/feltkit`.
-2. `git apply docs/pending/x-oauth-adoption.patch`.
-3. Run the suite.
+There is no operator script and no second process. The declaration:
+- endpoints `X_TOKEN_URL`, `X_AUTHORIZE_URL`, `X_REVOKE_URL`;
+- client `X_CLIENT_ID`, with the secret `credential-ref:x-client-secret` sent as HTTP Basic;
+- scopes `tweet.read users.read tweet.write offline.access`.
 
 **The two identities stay separate.**
 - The grant is the bot's authorization to read its mentions and post as itself. It proves nothing about
@@ -218,55 +195,71 @@ Read on 2026-11-13 from docs.x.com:
 The stand-in rotates refresh tokens and answers a bad one with `invalid_request`. That is one plausible
 behaviour, not X's documented one.
 
-## What real acceptance needs
+## Running it in production (Fly)
 
-**A. Platform acceptance: done.**
-- FeltKit's OAuth lifecycle passes 12 tests against a simulated provider: valid token, renewal,
-  rotation, concurrency, atomic persistence, transient failure, rate limit, invalid grant, disconnect,
-  restart, no secret exposure, and authority at execution.
-- Existing integrations are unchanged (full FeltKit suite: see the FeltKit commit).
+This is what took the bot live, with the FeltKit changes it needed. Items marked *FeltKit ≥ next* need
+the FeltKit release after 0.3.28; on 0.3.28, use the workaround given.
 
-**B. X connection acceptance: not done.** It needs, in this order:
-1. **A FeltKit release** containing `5067542`, then the PersonalOS adoption patch.
-2. **The X app's OAuth 2.0 settings:**
-   - a confidential client;
-   - the callback `https://<PersonalOS public URL>/api/integrations/x/oauth/callback` registered
-     exactly. PersonalOS's `FELTKIT_PUBLIC_URL` must be that public HTTPS address;
-   - its client id in `X_CLIENT_ID`;
-   - its client secret stored with `feltkit credential set credential-ref:x-client-secret`.
-3. **Endpoint variables:**
-   - `X_TOKEN_URL=https://api.x.com/2/oauth2/token`
-   - `X_AUTHORIZE_URL=https://x.com/i/oauth2/authorize`
-   - `X_REVOKE_URL=https://api.x.com/2/oauth2/revoke`
-   - `X_API_URL=https://api.x.com`
-4. **Custody that can write:** development's vault, or production with `FELTKIT_CREDENTIAL_VAULT=1` and
-   `FELTKIT_CREDENTIAL_VAULT_KEY`. A grant can't live in `FELTKIT_CREDENTIAL_X`.
-5. **Connect:** run `feltkit credential connect x`, open the address it prints, and sign in to X **as
-   @considered_done**.
-6. **Evidence for B:**
-   - a real authenticated request succeeds (the first poll's `GET /2/users/me`);
-   - after the access token's life (or with `refreshBeforeSeconds` raised), a real renewal succeeds;
-   - `feltkit credential status` and the integration status then show `refreshes ≥ 1`, and record whether
-     X rotated the refresh token (the `credential.refresh` activity's `rotated`).
-
-**C. PersonalOS end to end: not done.** It needs B, then:
-1. Start the adapter's service session and call `xsurface:startPolling` with it:
+1. **Deploy on one machine with a volume.** The OAuth grant lives in a vault file, which belongs to one
+   machine.
+2. **Settings on the host:**
+   - `X_CLIENT_ID`; `FELTKIT_CREDENTIAL_X_CLIENT_SECRET` (a secret);
+   - `X_API_URL=https://api.x.com`;
+   - `X_TOKEN_URL=https://api.x.com/2/oauth2/token`;
+   - `X_AUTHORIZE_URL=https://x.com/i/oauth2/authorize`;
+   - `X_REVOKE_URL=https://api.x.com/2/oauth2/revoke`;
+   - `FELTKIT_PUBLIC_URL=https://personalos.fly.dev`;
+   - `FELTKIT_CREDENTIAL_VAULT=1`, and `FELTKIT_CREDENTIAL_VAULT_KEY` (a secret; never change it);
+   - the vault on the volume: `FELTKIT_CREDENTIAL_VAULT_DIR=/data/vault`. *FeltKit ≥ next* defaults it
+     beside `FELTKIT_STATE_DIR`.
+3. **Register the callback with X:** `https://personalos.fly.dev/api/integrations/x/oauth/callback`.
+4. **Connect** as a signed-in operator:
    ```bash
-   feltkit session create --type service --id x-adapter --role xadapter
+   feltkit operator signin --env production
    ```
-2. Link a human X account (Settings → Connected surfaces → Connect X; post the code; confirm).
-3. Mention @considered_done from it.
-4. Check:
-   - one invocation;
-   - AuthBoundry's decision;
-   - the generic acknowledgement on X;
-   - the result only in PersonalOS;
-   - continuing the conversation from Chrome and from Multiplayer.
+   ```bash
+   feltkit credential connect x --env production
+   ```
+   Sign in to X as @considered_done. *FeltKit ≥ next*, or Studio → Integrations → Connect. On 0.3.28: call
+   `POST /api/integrations/x/oauth/connect` with the operator's token and open the returned `url`.
+5. **The adapter's identity.**
+   - *FeltKit ≥ next:*
+     ```bash
+     feltkit session create --type service --id x-adapter --role xadapter --ttl 2160 --env production
+     ```
+   - On 0.3.28: `feltkit operator signin --id x-adapter --role xadapter` (an 8-hour session).
+6. **Start polling.**
+   - *FeltKit ≥ next:*
+     ```bash
+     feltkit call xsurface:startPolling --env production
+     ```
+     Run it as the adapter.
+   - On 0.3.28: `POST /api/mutation/xsurface:startPolling` with the adapter's token.
+7. **Check:**
+   - `feltkit credential status --env production` should show the grant: state, expiry, renewals. *FeltKit
+     ≥ next* prints these.
+   - Readiness should pass.
 
-**Pay-per-use X API credit is needed for B and C.** Costs are below.
+**X API credit.** X is pay-per-use. When the X app's credit runs out, X answers **HTTP 402** (`credits
+depleted`). That comes from X, not from PersonalOS. Polling records it and backs off (the wait doubles up
+to 30 minutes after failures in a row), then resumes once credit is added. Nothing is lost: the cursor
+moves only past mentions that were handled.
 
-The credential saved in this environment earlier (answered 401) is not used by any of this. A grant
-comes only from the connect flow.
+## Acceptance
+
+- **A. Platform:** done. The FeltKit OAuth lifecycle passes its tests against a simulated provider.
+- **B. X connection:** connected in production as @considered_done, and polling. Still to show: a real
+  renewal. After the first two hours, `credential status` should show `refreshes ≥ 1`; the
+  `credential.refresh` activity records whether X rotated the refresh token.
+- **C. End to end:** to do:
+  1. link a human X account;
+  2. mention @considered_done from it;
+  3. check: one invocation, AuthBoundry's decision, the generic acknowledgement on X, the result only in
+     PersonalOS, and continuing the conversation from Chrome and Multiplayer.
+
+  AuthBoundry in production still needs its principals, policy, agent, delegation and check credential,
+  plus `AUTHBOUNDRY_URL` on Fly. `authority.application` must match the id AuthBoundry assigned. *FeltKit
+  ≥ next* reads it from `AUTHBOUNDRY_APPLICATION`.
 
 ## X API facts used, and costs
 
@@ -297,13 +290,11 @@ These are from docs.x.com, read on 2026-11-13. Nothing else is assumed.
 
 ## Not done, and why
 
-- **Real-X acceptance.** Blocked by the 401 token and the missing human test account (above).
+- **End-to-end acceptance on X.** See Acceptance above.
 - **Webhook delivery.** It needs a public HTTPS endpoint: no new infrastructure was allowed.
 - **Research from X running at once.** It waits for the owner, because FeltKit has no on-behalf-of job
   principal. This is the same gap as Multiplayer's (docs/CONTINUITY.md).
 - **Clarifying questions answered in the thread** (Multiplayer's `needs_clarification`). The question is
   asked in PersonalOS, and you answer there.
-- **Automatic token refresh in PersonalOS.** Built in FeltKit (above). It reaches PersonalOS with the next
-  FeltKit release and the adoption patch.
 - **Verifying an unknown reply against X.** The integration declares no verification probe. A person
   checks the bot's timeline.

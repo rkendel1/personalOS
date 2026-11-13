@@ -488,3 +488,28 @@ test("the bot's grant: renewed by FeltKit as it expires (rotated refresh tokens 
     assert.ok((await invocationsOf(t, "ada")).some((i: any) => i.invocationId === `x-${c}`), "read once reconnected: the cursor did not move past it");
   });
 });
+
+test("the poll chain survives errors: the next poll is queued before the work, failures back off, and one success resets it", async () => {
+  const { nextDelay } = await import("../feltkit/xsurface.js");
+  assert.deepEqual([nextDelay(120_000, 0), nextDelay(120_000, 1), nextDelay(120_000, 3), nextDelay(120_000, 20)], [120_000, 240_000, 960_000, 1_800_000]);
+  await stack(async (t) => {
+    await linkX(t, "ada", ADA_X);
+    const queued = async () => ((await (t.runtime.services as any).jobs.listJobs("personalos")) as any[]).filter((j) => j.type === "x.poll" && ["queued", "scheduled", "pending"].includes(j.status)).map((j) => j.payload?.tick ?? j.input?.tick);
+    // The bot's grant disconnected: every X call refuses (CONFIGURATION) before anything is sent.
+    await (t.runtime as any).credentials.remove({ reference: { secretId: "x" } });
+    const before = (await t.as(XA).query(api.xsurface.pollState, {}))!;
+    const failed = await poll(t);
+    assert.match(failed.error!, /not connected/);
+    const after = (await t.as(XA).query(api.xsurface.pollState, {}))!;
+    assert.deepEqual([after.tick, after.failures], [(before.tick ?? 0) + 1, 1], "the tick moved on and the failure is counted");
+    assert.ok((await queued()).includes(after.tick), "the next poll is queued although this one failed");
+    await poll(t);
+    assert.equal((await t.as(XA).query(api.xsurface.pollState, {}))!.failures, 2);
+    const waiting = x.mention({ ...ADA_X, text: `${bot} add a task after the outage` });
+    await connectBot(t);
+    const ok = await poll(t);
+    assert.equal(ok.error, null);
+    assert.equal((await t.as(XA).query(api.xsurface.pollState, {}))!.failures, 0, "reset by a success");
+    assert.ok((await invocationsOf(t, "ada")).some((i: any) => i.invocationId === `x-${waiting}`), "nothing was lost meanwhile");
+  });
+});

@@ -115,17 +115,42 @@ export const botIs = app.mutation({
   },
 });
 
-/** One poll is done: where the cursor is now, and the next poll (once per tick, whatever retries). */
-export const polled = app.mutation({
+/** After failures in a row, the wait doubles (at most 30 minutes); one success resets it. */
+const MAX_BACKOFF_MS = 30 * 60_000;
+export const nextDelay = (intervalMs: number, failures: number) => Math.min(intervalMs * 2 ** Math.min(failures, 6), Math.max(intervalMs, MAX_BACKOFF_MS));
+
+/**
+ * A poll starts: it takes its tick and queues the next poll FIRST, so the chain goes on whatever
+ * happens to this one (an error, a throw, a crash). A retried or stale job finds its tick taken and
+ * does nothing.
+ */
+export const beginPoll = app.mutation({
   access: "x.poll",
-  args: { chain: s.string(), tick: s.integer(), sinceId: s.optional(ID), error: s.optional(s.string({ maxLength: 500 })), baselined: s.optional(s.boolean()) },
+  args: { chain: s.string(), tick: s.integer() },
+  returns: s.object({ go: s.boolean() }),
   handler: async (ctx, a) => {
     const [st] = await ctx.db.find(xState, { key: KEY });
-    if (!st || st.chain !== a.chain || (st.tick ?? 0) !== a.tick) return { next: false };
-    await ctx.db.patch(xState, st.id, { polledAt: Date.now(), tick: a.tick + 1, ...(a.sinceId ? { sinceId: a.sinceId } : {}), ...(a.baselined && !st.baselineAt ? { baselineAt: Date.now() } : {}), lastError: a.error });
-    if (!st.running) return { next: false };
-    ctx.afterCommit.jobs.enqueue("x.poll", { chain: a.chain, tick: a.tick + 1 }, { runAt: new Date(Date.now() + st.intervalMs).toISOString(), maxAttempts: 3 });
-    return { next: true };
+    if (!st || !st.running || st.chain !== a.chain || (st.tick ?? 0) !== a.tick) return { go: false };
+    await ctx.db.patch(xState, st.id, { tick: a.tick + 1 });
+    ctx.afterCommit.jobs.enqueue("x.poll", { chain: a.chain, tick: a.tick + 1 }, { runAt: new Date(Date.now() + nextDelay(st.intervalMs, st.failures ?? 0)).toISOString(), maxAttempts: 3 });
+    return { go: true };
+  },
+});
+
+/** A poll is done: where the cursor is now (it never moves back), and what went wrong, if anything. */
+export const polled = app.mutation({
+  access: "x.poll",
+  args: { chain: s.string(), sinceId: s.optional(ID), error: s.optional(s.string({ maxLength: 500 })), baselined: s.optional(s.boolean()) },
+  handler: async (ctx, a) => {
+    const [st] = await ctx.db.find(xState, { key: KEY });
+    if (!st || st.chain !== a.chain) return;
+    await ctx.db.patch(xState, st.id, {
+      polledAt: Date.now(),
+      ...(a.sinceId && newer(a.sinceId, st.sinceId) ? { sinceId: a.sinceId } : {}),
+      ...(a.baselined && !st.baselineAt ? { baselineAt: Date.now() } : {}),
+      lastError: a.error,
+      failures: a.error ? (st.failures ?? 0) + 1 : 0,
+    });
   },
 });
 
@@ -136,6 +161,7 @@ export const poll = app.action({
   handler: async (ctx, { chain, tick }) => {
     const st = (await ctx.runQuery(api.xsurface.pollState, {})) as any;
     if (!st?.running || st.chain !== chain || (st.tick ?? 0) !== tick) return { stopped: true };
+    if (!((await ctx.runMutation(api.xsurface.beginPoll, { chain, tick })) as { go: boolean }).go) return { stopped: true };
     let sinceId: string | undefined = st.sinceId;
     let error: string | undefined;
     let handled = 0;
@@ -179,8 +205,12 @@ export const poll = app.action({
       const err = e as { code?: string; message?: string };
       error = `${err.code ?? "ERROR"}: ${String(err.message ?? e).slice(0, 400)}`;
     }
-    for (const r of (await ctx.runQuery(api.xsurface.waitingReplies, {})) as Array<{ postId: string; index: number }>) await sendReply(ctx, r.postId, r.index);
-    await ctx.runMutation(api.xsurface.polled, { chain, tick, ...(sinceId ? { sinceId } : {}), ...(error ? { error: error.slice(0, 500) } : { baselined: true }) });
+    try {
+      for (const r of (await ctx.runQuery(api.xsurface.waitingReplies, {})) as Array<{ postId: string; index: number }>) await sendReply(ctx, r.postId, r.index);
+    } catch (e) {
+      error ??= `replies: ${String((e as Error).message ?? e).slice(0, 400)}`;
+    }
+    await ctx.runMutation(api.xsurface.polled, { chain, ...(sinceId ? { sinceId } : {}), ...(error ? { error: error.slice(0, 500) } : { baselined: true }) });
     return { handled, sinceId: sinceId ?? null, error: error ?? null };
   },
 });
