@@ -53,18 +53,18 @@ test("real AuthBoundry: a linked X mention runs under Ada's delegation; revoked,
     await settle();
     await poll();
     const { id, code } = await t.as("ada").mutation(api.links.start, { adapter: "x" });
-    x.mention({ author: "1001", username: "ada_x", text: `@considered_done link ${code}` });
+    x.mention({ author: "1001", username: "ada_x", text: `@anywhereaide link ${code}` });
     await poll();
     await t.as("ada").mutation(api.links.confirm, { id });
     await settle();
 
-    const first = x.mention({ author: "1001", username: "ada_x", text: "@considered_done add a task to send the contract" });
+    const first = x.mention({ author: "1001", username: "ada_x", text: "@anywhereaide add a task to send the contract" });
     await poll();
     const a = (await t.as("ada").query(api.invocationstate.get, { invocationId: `x-${first}` })).invocation;
     assert.deepEqual([a.state, a.authority.capability, a.authority.outcome, a.authority.delegationId], ["completed", "personalos.tasks.create", "allow", "ada-tasks"], JSON.stringify(a.updates));
 
     await ab.revokeDelegation("ada-tasks");
-    const second = x.mention({ author: "1001", username: "ada_x", text: "@considered_done add a task to send the invoice" });
+    const second = x.mention({ author: "1001", username: "ada_x", text: "@anywhereaide add a task to send the invoice" });
     await poll();
     const b = (await t.as("ada").query(api.invocationstate.get, { invocationId: `x-${second}` })).invocation;
     assert.deepEqual([b.state, b.error.code, b.authority.outcome], ["failed", "FORBIDDEN", "deny"]);

@@ -827,7 +827,9 @@ export const xPosts = app.collection(
 export const xState = app.collection(
   "xState",
   {
-    key: s.string(), botUserId: s.optional(s.string()), botUsername: s.optional(s.string()), sinceId: s.optional(s.string()),
+    key: s.string(), botUserId: s.optional(s.string()), botUsername: s.optional(s.string()),
+    /** When the bot's account (id and handle) was last read from X: a renamed account is picked up within an hour. */
+    botCheckedAt: s.optional(s.number()), sinceId: s.optional(s.string()),
     polledAt: s.optional(s.number()), lastError: s.optional(s.string({ maxLength: 500 })), running: s.boolean(), intervalMs: s.number(),
     /** The current polling chain: a job from an older chain (startPolling again) stops itself. */
     chain: s.optional(s.string()),

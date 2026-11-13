@@ -1,4 +1,4 @@
-# PersonalOS on X (@considered_done)
+# PersonalOS on X (@anywhereaide)
 
 Mention the bot account on X and PersonalOS works for you in your own PersonalOS. It is not a separate
 agent and not a separate store. Each mention becomes a `personalos.invocation/1` (surface `x`) in your
@@ -7,7 +7,7 @@ Nothing private is posted.
 
 **Status (2026-11-13):**
 - **Live on Fly** (`https://personalos.fly.dev`): one machine with a volume. The bot's OAuth 2.0 grant is
-  connected as @considered_done, and polling is running.
+  connected as @anywhereaide, and polling is running.
 - **Not yet shown:** the end-to-end test with a human X account, and a real token renewal (the access token
   lasts two hours).
 - **In-process tests** run against a local stand-in for the X API (`tests/fixtures/x-api.ts`), which is
@@ -17,7 +17,7 @@ Nothing private is posted.
 
 | | What it is | What proves it | What it allows |
 |---|---|---|---|
-| **The bot** (@considered_done) | the X account PersonalOS reads and posts as | the `x` integration's OAuth token (credential `x`, FeltKit custody) | reading the bot's mentions; posting replies as the bot |
+| **The bot** (@anywhereaide) | the X account PersonalOS reads and posts as | the `x` integration's OAuth token (credential `x`, FeltKit custody) | reading the bot's mentions; posting replies as the bot |
 | **A person** (you, anyone) | the author of a mention, as X's API reports it (`author_id`) | a link that person confirmed in PersonalOS, recorded in Resolver (adapter `x`, instance `x.com`) | PersonalOS working for that PersonalOS account, as far as AuthBoundry allows |
 
 - The bot's token proves nothing about who mentions the bot.
@@ -81,7 +81,7 @@ Nothing private is posted.
 
 1. In PersonalOS: Settings → Connected surfaces → **Connect X** gives a one-time code. It lasts 10
    minutes and only its digest is stored.
-2. From your X account, post `@considered_done link XXXX-XXXX`.
+2. From your X account, post `@anywhereaide link XXXX-XXXX`.
 3. PersonalOS records which X account posted it (X's `author_id`) and uses the code up.
 4. Back in PersonalOS, you see that account (handle and X user id) and confirm **This is me**. Only then
    does the `identity` agent write the link to Resolver (`links.ts`, unchanged).
@@ -106,7 +106,7 @@ no reply. Reconnecting is a new link, confirmed again.
     resolves on their own, and a linked one gets their own conversation.
   - **The X thread is not the record.** The conversation, its invocations and their evidence live in
     PersonalOS.
-- **Pointing at another conversation:** `@considered_done continue <conversation id> [request]` points
+- **Pointing at another conversation:** `@anywhereaide continue <conversation id> [request]` points
   the thread at one of your conversations. AuthBoundry decides `personalos.conversation.continue`.
 - **Continuing elsewhere:** a conversation started on X continues from Chrome ("Continue the open
   conversation") and from Multiplayer (`continue <id>` in a DM). Each part keeps its own surface,
@@ -220,7 +220,7 @@ the FeltKit release after 0.3.28; on 0.3.28, use the workaround given.
    ```bash
    feltkit credential connect x --env production
    ```
-   Sign in to X as @considered_done. *FeltKit ≥ next*, or Studio → Integrations → Connect. On 0.3.28: call
+   Sign in to X as @anywhereaide. *FeltKit ≥ next*, or Studio → Integrations → Connect. On 0.3.28: call
    `POST /api/integrations/x/oauth/connect` with the operator's token and open the returned `url`.
 5. **The adapter's identity.**
    - *FeltKit ≥ next:*
@@ -248,12 +248,12 @@ moves only past mentions that were handled.
 ## Acceptance
 
 - **A. Platform:** done. The FeltKit OAuth lifecycle passes its tests against a simulated provider.
-- **B. X connection:** connected in production as @considered_done, and polling. Still to show: a real
+- **B. X connection:** connected in production as @anywhereaide, and polling. Still to show: a real
   renewal. After the first two hours, `credential status` should show `refreshes ≥ 1`; the
   `credential.refresh` activity records whether X rotated the refresh token.
 - **C. End to end:** to do:
   1. link a human X account;
-  2. mention @considered_done from it;
+  2. mention @anywhereaide from it;
   3. check: one invocation, AuthBoundry's decision, the generic acknowledgement on X, the result only in
      PersonalOS, and continuing the conversation from Chrome and Multiplayer.
 
