@@ -62,7 +62,7 @@ These already hold across every surface:
 
 | # | Gap | Status | Evidence |
 |---|---|---|---|
-| G6 | **The iOS app has never been compiled.** It was written without Xcode. CI now compiles it on macOS (`.github/workflows/ios.yml`); see the result below. | In progress | `docs/IOS-SHARE.md` "Status, plainly" |
+| G6 | **The iOS app had never been compiled.** CI now compiles the app and the share extension on macOS: Xcode 16.4, iOS Simulator SDK, unsigned. It passes with no Swift errors or warnings (run 43525529526, commit `9d9491f`). That proves it compiles. It doesn't prove it runs, signs or installs. | Done (compile) | `.github/workflows/ios.yml`; https://github.com/rkendel1/personalOS/actions/runs/43525529526 |
 | G7 | **No real-device acceptance.** It needs your Mac (signing, with your Apple team) and iPhone. The procedure and the harness exist (`scripts/share-acceptance.mjs`). | Blocked (owner: you) | `docs/IOS-SHARE.md` |
 | G8 | **No approvals on mobile.** The iOS app shows `needs_approval` but can't approve; it opens PersonalOS. Part 6.4 asks for the approval request on mobile. | Missing | `ios/App/ContentView.swift:66` |
 | G9 | **Mobile has no notifications.** Progress shows only when the app is opened. Push would need APNs: an Apple key, plus a server capability FeltKit doesn't have. | Missing | — |
@@ -99,7 +99,7 @@ Most of the required tests exist: forged identity, injection in context, replay 
 
 ## Order of work
 
-1. **G6.** Compile iOS in CI, and fix what the compiler finds.
+1. ~~**G6.** Compile iOS in CI.~~ Done: it compiled with no errors.
 2. **G11 + G13 (FeltKit).** Per-person OAuth connections:
    - `credential: { perPrincipal: true, oauth2 }` on an integration;
    - connect, status and disconnect for the signed-in person;
