@@ -103,6 +103,12 @@ and it works here, in your account. Resolver resolves who is asking, AuthBoundry
 and shared conversations never get your private data. Approvals stay here. See
 [docs/ANYWHERE.md](docs/ANYWHERE.md) and the contract, [docs/INTERACTION-CONTRACT.md](docs/INTERACTION-CONTRACT.md).
 
+Share to PersonalOS from iOS (Safari or any app): a page, selected text or a text document, with what
+to do with it ("research this company: could it be a customer for FeltKit?"). The share sheet submits
+with your own session and closes; PersonalOS does the work later, under your AuthBoundry delegation, and
+the result waits in the app. See [docs/IOS-SHARE.md](docs/IOS-SHARE.md) (the app is in `ios/`) and the
+contract, [docs/INVOCATION-CONTRACT.md](docs/INVOCATION-CONTRACT.md).
+
 ## Tour of the code
 
 ```

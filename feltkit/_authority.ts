@@ -34,4 +34,6 @@ export const CAPABILITIES = [
   "personalos.assistant.converse", "personalos.conversation.read",
   "personalos.tasks.read", "personalos.tasks.create", "personalos.tasks.update", "personalos.tasks.delete", "personalos.reminders.create",
   "personalos.memory.read", "personalos.memory.write", "personalos.memory.delete", "personalos.projects.create",
+  // Research started from outside PersonalOS (feltkit/invocations.ts): checked when it starts and before every step.
+  "personalos.research.run",
 ] as const;

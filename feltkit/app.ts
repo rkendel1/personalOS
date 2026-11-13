@@ -31,8 +31,11 @@ const OWNER = [
   // A reminder job fires as whoever queued it: the owner, or a surface's bridge acting for the owner.
   "reminders.fire",
   // Research (feltkit/research.ts): start, follow, cancel and retry research; read its sources and
-  // prospects; and use the web search integration, which the research agent runs for the owner.
+  // prospects; and use the web search integration, which research steps (jobs, as the owner) call.
   "research.*",
+  // Invocations from outside PersonalOS (feltkit/invocations.ts): the iOS share extension submits with
+  // the person's own session; its job processes it as them, under their AuthBoundry delegation.
+  "invocations.*",
 ];
 
 /**
@@ -58,9 +61,6 @@ export const app = feltkit({
     // it, so those integrations' capabilities, which FeltKit also serves on /appport, are refused to
     // every person and to the bridge (whose identity.resolve covers reads only).
     identitylinker: ["identity.resolve", "identity.link", "links.write"],
-    // The `research` agent (feltkit/research.ts): runs one research step at a time for the run's owner.
-    // It searches the web (research.search) and records what it found; it has no way to contact anyone.
-    researcher: ["research.search", "research.work"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
     admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
   },
@@ -89,7 +89,7 @@ export const app = feltkit({
   services: {
     notifications: { types: ["reminder.due", "checkin.daily", "review.weekly"] },
     configuration: true,
-    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step" } },
+    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step", "invocation.process": "invocations:process" } },
     // Recurring jobs an operator sets up in Studio. Per-person recurrence (reminders, check-ins) is a
     // job chain owned by the person, so it runs as them (feltkit/checkins.ts).
     schedules: true,
@@ -444,6 +444,61 @@ const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s
  * from here and never executed again. The conversation, actions and evidence it produced are the
  * ordinary PersonalOS records, so there is one history, not a copy per surface.
  */
+/**
+ * An invocation from outside PersonalOS (`personalos.invocation/1`, feltkit/_invocation.ts): what the
+ * person asked and shared, from which surface, and what became of it. The owner is the session that
+ * submitted it, never a field of the envelope. One per (owner, invocationId).
+ */
+export const invocations = app.collection(
+  "invocations",
+  {
+    owner,
+    invocationId: s.string({ maxLength: 100 }),
+    contract: s.string(),
+    surface: s.object({ adapter: s.string(), device: s.optional(s.string()), version: s.optional(s.string()) }),
+    /** What the person explicitly asked, in their words. */
+    instruction: s.string({ maxLength: 2000 }),
+    /** What they supplied as context: untrusted data, kept as they sent it (normalized). */
+    context: s.array(s.object({
+      kind: s.enum(["url", "text", "selection", "document"] as const),
+      url: s.optional(s.string({ maxLength: 2000 })), title: s.optional(s.string({ maxLength: 300 })),
+      text: s.optional(s.string({ maxLength: 100_000 })), name: s.optional(s.string({ maxLength: 200 })),
+      mediaType: s.optional(s.string({ maxLength: 100 })), size: s.optional(s.number()),
+    })),
+    sourceUrl: s.optional(s.string({ maxLength: 2000 })),
+    /** The device's clock at submission, and the server's at receipt. */
+    submittedAt: s.number(),
+    receivedAt: s.number(),
+    timeZone: s.optional(s.string()),
+    digest: s.string(),
+    conversationId: s.string(),
+    returnTo: s.string(),
+    state: s.enum(["accepted", "processing", "needs_approval", "completed", "failed"] as const),
+    /** What PersonalOS inferred the request to be, and how: never confused with what was asked. */
+    interpretation: s.optional(s.object({
+      intent: s.enum(["research", "assistant", "save"] as const),
+      basis: s.enum(["rules", "model"] as const),
+      detail: s.string({ maxLength: 500 }),
+      generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
+    })),
+    /** AuthBoundry's decision on the capability the work needs, made when the work runs. */
+    authority: s.optional(s.object({
+      capability: s.string(), outcome: s.string(), principal: s.optional(s.string()), onBehalfOf: s.optional(s.string()),
+      delegationId: s.optional(s.string()), decisionId: s.optional(s.string()), reason: s.optional(s.string({ maxLength: 500 })), at: s.number(),
+    })),
+    /** Where the work lives: the research run, the assistant's reply, the action awaiting approval. */
+    work: s.optional(s.object({ researchRunId: s.optional(s.string()), replyId: s.optional(s.string()), actionIds: s.optional(s.array(s.string())) })),
+    /** What the person sees: one line per state change. */
+    updates: s.array(s.object({ seq: s.number(), state: s.string(), text: s.string({ maxLength: 2000 }), at: s.number() })),
+    error: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 1000 }) })),
+    /** Times processing found the authority unreachable (it gives up after a few). */
+    attempts: s.optional(s.number()),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+  },
+  { unique: [["owner", "invocationId"]], indexes: [{ fields: ["owner", "invocationId"] }, { fields: ["owner", "createdAt"] }] },
+);
+
 export const interactions = app.collection(
   "interactions",
   {
@@ -531,6 +586,10 @@ export const researchRuns = app.collection(
       criteria: s.array(s.string({ maxLength: 300 })),
       generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
       rejected: s.optional(s.array(s.string({ maxLength: 300 }))),
+      /** "this": assess the organization the person shared; "find": search for organizations. */
+      scope: s.optional(s.enum(["this", "find"] as const)),
+      /** What the subject is, as the plan understood it from the person's own words: what assessments compare against. */
+      summary: s.optional(s.string({ maxLength: 600 })),
     })),
     /** The organizations chosen from the search results for a closer look, and what happened to each. */
     candidates: s.optional(s.array(s.object({
@@ -546,6 +605,10 @@ export const researchRuns = app.collection(
     selection: s.optional(s.object({ basis: s.enum(["rules", "model"] as const), generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })), rejected: s.optional(s.array(s.string({ maxLength: 300 }))) })),
     /** The FeltKit agent task holding this run's model generations. */
     taskId: s.optional(s.string()),
+    /** Started by an invocation from outside PersonalOS (feltkit/invocations.ts): each step re-checks its authority. */
+    invocationId: s.optional(s.string()),
+    /** What the person shared to start it: the page to look at (its own source is in researchSources). */
+    seed: s.optional(s.object({ url: s.string({ maxLength: 2000 }), title: s.optional(s.string({ maxLength: 300 })), sourceId: s.optional(s.string()) })),
     /** Model calls that met a transient refusal (a rate limit) in the current step, and were tried again later. */
     modelRetries: s.optional(s.number()),
     /** What the run used: model generations and tokens, searches, pages, and time. */
@@ -586,9 +649,9 @@ export const researchSources = app.collection(
     /** Where the provider ranked it among that search's results (0 first). */
     position: s.optional(s.number()),
     /** A search result, or a page read in full. Absent on older records: a search result. */
-    kind: s.optional(s.enum(["search", "page"] as const)),
-    /** What `text` is: the engine's snippet, a search model's summary (never quoted), or the page's own text. */
-    textKind: s.optional(s.enum(["search-snippet", "provider-summary", "page-text"] as const)),
+    kind: s.optional(s.enum(["search", "page", "shared"] as const)),
+    /** What `text` is: the engine's snippet, a search model's summary (never quoted), the page's own text, or what the person shared. */
+    textKind: s.optional(s.enum(["search-snippet", "provider-summary", "page-text", "user-shared"] as const)),
     /** For a page: what happened when it was read (feltkit/_pages.ts). */
     status: s.optional(s.enum(["read", "unavailable", "extraction-failed", "not-allowed"] as const)),
     httpStatus: s.optional(s.number()),
@@ -608,7 +671,7 @@ export const prospects = app.collection(
     domain: s.string({ maxLength: 200 }),
     website: s.string({ maxLength: 300 }),
     /** quote: verbatim from a page that was read (checked); search-result: what a search returned about it. */
-    facts: s.array(s.object({ sourceId: s.string(), url: s.string(), text: s.string({ maxLength: 4000 }), kind: s.optional(s.enum(["quote", "search-result"] as const)) })),
+    facts: s.array(s.object({ sourceId: s.string(), url: s.string(), text: s.string({ maxLength: 4000 }), kind: s.optional(s.enum(["quote", "search-result", "shared"] as const)) })),
     assessment: s.object({
       basis: s.enum(["rules", "model"] as const),
       method: s.string({ maxLength: 500 }),
@@ -616,6 +679,8 @@ export const prospects = app.collection(
       generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
       /** Quotes the model offered that were not found in the cited page, and were dropped. */
       rejectedQuotes: s.optional(s.number()),
+      /** The model's reading of the evidence: does it offer a product like the subject (a competitor, not a buyer)? */
+      offersSimilarProduct: s.optional(s.boolean()),
       fit: s.enum(["high", "medium", "low"] as const),
       score: s.number(),
       whyFeltKit: s.string({ maxLength: 1000 }),

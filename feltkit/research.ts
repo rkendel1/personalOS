@@ -23,11 +23,14 @@
  * Research only reads. Nothing here contacts anyone: outreach is a recommended next action, and would
  * be a consequential capability that waits for the person's approval.
  */
-import { fail, s, type ActionCtx } from "@feltdb/feltkit";
+import { fail, FeltKitError, s, type ActionCtx } from "@feltdb/feltkit";
+import { authorityPrincipal } from "./_authority.js";
+import { subjectOf } from "./_invocation.js";
+import { followResearch } from "./invocationstate.js";
 import { api } from "./_generated/api.js";
 import { app, prospects, researchRuns, researchSources } from "./app.js";
 import { declaredCapabilities, describeDiscovery, PROSPECT_NEEDS, discover, type Discovery } from "./_capabilities.js";
-import { domainOf, outcomeOf, planQueries, productKnowledge, prospectsFrom, type StoredSource } from "./_research.js";
+import { companyName, domainOf, outcomeOf, planQueries, productKnowledge, prospectsFrom, type StoredSource } from "./_research.js";
 import { providerOf } from "./_search.js";
 import { readPage, type PageRead } from "./_pages.js";
 import * as M from "./_researchmodel.js";
@@ -114,6 +117,7 @@ export const cancel = app.mutation({
     const run = await ops.own<any>(ctx, researchRuns, runId, "research run");
     if (run.status !== "running" && run.status !== "blocked") return { status: run.status, conversationId: run.conversationId ?? null, messageId: null, replyId: null };
     await ctx.db.patch(researchRuns, runId, { status: "cancelled", cancelRequested: true, updatedAt: Date.now(), completedAt: Date.now() });
+    await followResearch(ctx, run, "cancelled", `You stopped the research for ${run.product}. What it found is kept; say "retry research" to continue.`);
     const replyId = run.conversationId ? await appendMessage(ctx, run.conversationId, { role: "assistant", text: `Stopped the research for ${run.product}. What I found so far is kept; say "retry research" to continue.` }) : null;
     return { status: "cancelled", conversationId: run.conversationId ?? null, messageId: replyId, replyId };
   },
@@ -152,7 +156,7 @@ function failureOf(error: unknown): { transient: boolean; state: "needs-configur
 }
 
 type Run = any;
-type Source = { id: string; position?: number; retrievedAt?: number; url: string; title: string; text: string; query: string; kind?: "search" | "page"; status?: string; textKind?: string; provider: string; detail?: string };
+type Source = { id: string; position?: number; retrievedAt?: number; url: string; title: string; text: string; query: string; kind?: "search" | "page" | "shared"; status?: string; textKind?: string; provider: string; detail?: string };
 type StepView = { run: Run; sources: Source[]; prospects: any[]; memories: Array<{ id: string; content: string; status?: string }> };
 type Outcome = {
   patch: Record<string, unknown>;
@@ -177,6 +181,15 @@ export const step = app.action({
     const run = view.run;
     const phase: string = run.phase ?? "searching";
     const started = Date.now();
+    // Work an invocation started from outside PersonalOS runs on the person's delegation, so every step
+    // asks again: a delegation revoked mid-run stops the next step.
+    if (run.invocationId && phase !== "finishing") {
+      const denied = await delegationDenied(ctx, run, phase);
+      if (denied) {
+        const r = await ctx.runMutation(api.researchstate.advance, { runId, expectUpdatedAt: run.updatedAt, patch: { status: "blocked", blocker: denied }, step: { phase, ms: Date.now() - started, outcome: `stopped: ${denied.detail}`.slice(0, 500) }, reply: `I stopped this research: ${denied.detail} ${denied.howToEnable} What I found before this is kept.`, next: false });
+        return { ran: phase, applied: r.applied, stopped: "authority" };
+      }
+    }
     let out: Outcome;
     switch (phase) {
       case "planning": out = await planStep(ctx, view); break;
@@ -199,6 +212,17 @@ export const step = app.action({
     return { ran: phase, applied: r.applied };
   },
 });
+
+/**
+ * Whether the person's delegation to PersonalOS still allows research (AuthBoundry, on their behalf).
+ * A denial is the reason to stop; an authority that cannot answer is thrown, so the job tries again.
+ */
+async function delegationDenied(ctx: ActionCtx, run: Run, phase: string): Promise<{ need: string; state: string; detail: string; howToEnable: string } | null> {
+  const decision = await ctx.authority.decide({ capability: "personalos.research.run", onBehalfOf: authorityPrincipal(run.owner), context: { invocation: String(run.invocationId).slice(0, 100), step: phase } });
+  if (decision.outcome === "unavailable" || decision.outcome === "invalid") throw new FeltKitError("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); the step will try again.`);
+  if (decision.allowed) return null;
+  return { need: "your permission", state: "needs-authorization", detail: `PersonalOS is no longer allowed to research for you (personalos.research.run${decision.reason ? `: ${decision.reason}` : ""}).`, howToEnable: "Restore the delegation in AuthBoundry, then say \"retry research\"." };
+}
 
 // ── The model ───────────────────────────────────────────────────────────────────────────────────
 
@@ -241,13 +265,26 @@ async function planStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
   const { run } = view;
   const words = String(run.request).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3);
   const statements = view.memories.filter((m) => words.some((w) => m.content.toLowerCase().includes(w))).slice(0, 12).map((m) => m.content);
-  const prompt = M.planPrompt({ request: run.request, statements, landscape: describeDiscovery(run.discovery as Discovery), today: new Date().toISOString().slice(0, 10) });
+  const sharedSource = run.seed?.sourceId ? view.sources.find((x) => x.id === run.seed.sourceId) : undefined;
+  const shared = run.seed ? { url: run.seed.url, ...(run.seed.title ? { title: run.seed.title } : {}), ...(sharedSource?.text ? { text: sharedSource.text } : {}) } : undefined;
+  const prompt = M.planPrompt({ request: run.request, statements, landscape: describeDiscovery(run.discovery as Discovery), today: new Date().toISOString().slice(0, 10), ...(shared ? { shared } : {}) });
   const a = await ask(ctx, run, prompt, 900);
   const wait = waitForModel(run, a, "planning");
   if (wait) return wait;
-  const plan = a.error ? { error: `the model could not be reached (${a.error})` } : M.acceptPlan(a.json);
+  const plan = a.error ? { error: `the model could not be reached (${a.error})` } : M.acceptPlan(a.json, { shared: Boolean(run.seed) });
   if ("error" in plan) {
     // Not accepted: the rules plan if they recognize the request, else the run stops and says why.
+    const named = run.seed ? subjectOf(run.request) : null;
+    if (named && run.seed) {
+      // A shared page and a named subject: the rules can assess that organization without a plan.
+      const knowledge = productKnowledge(named, view.memories);
+      return {
+        patch: { taskId: a.taskId, modelRetries: 0, product: named, profile: knowledge, phase: "reading", plan: { basis: "rules", criteria: knowledge.keywords.map((k) => `mentions "${k}"`), rejected: [plan.error.slice(0, 300)], scope: "this" }, queries: [], ...seedCandidate(run, sharedSource) },
+        usage: a.usage, outcome: `model plan rejected (${plan.error}); rules: assess the shared organization for ${named}`,
+        reply: `The model's plan wasn't usable (${plan.error}), so I'm assessing ${domainOf(run.seed.url)} for ${named} by my standard rules.`,
+        next: true,
+      };
+    }
     const outcome = outcomeOf(run.request);
     if (!outcome) {
       return { patch: { taskId: a.taskId, status: "failed", phase: "done", completedAt: Date.now(), blocker: { need: "a research plan", state: "failed", detail: `The model's plan was not usable: ${plan.error}.`.slice(0, 1000) } }, usage: a.usage, outcome: `plan rejected: ${plan.error}`, reply: `I couldn't plan this research: the model's plan was not usable (${plan.error}). Nothing was searched. Say "retry research" to try again.`, next: false };
@@ -263,10 +300,30 @@ async function planStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
   }
   const knowledge = productKnowledge(plan.subject, view.memories);
   const noun = plan.kind === "competitors" ? "competitors" : plan.kind === "prospects" ? "potential customers" : "organizations";
+  if (plan.scope === "this" && run.seed) {
+    const domain = domainOf(run.seed.url)!;
+    const as = plan.kind === "competitors" ? "a competitor of" : plan.kind === "prospects" ? "a potential customer for" : "a match for";
+    return {
+      patch: {
+        taskId: a.taskId, modelRetries: 0, kind: plan.kind, product: plan.subject, objective: plan.objective, profile: knowledge, phase: "reading",
+        plan: { basis: "model", criteria: plan.criteria, generation: a.generation!, scope: "this", ...(plan.subjectSummary ? { summary: plan.subjectSummary } : {}), ...(plan.rejected.length ? { rejected: plan.rejected.map((x) => x.slice(0, 300)).slice(0, 20) } : {}) },
+        queries: [], ...seedCandidate(run, sharedSource),
+      },
+      usage: a.usage,
+      outcome: `model plan accepted: assess ${domain} as ${plan.kind} of ${plan.subject}`,
+      reply: [
+        `Plan: find out whether ${domain} could be ${as} ${plan.subject}. ${plan.objective}`,
+        plan.subjectSummary ? `What I'm going on: ${plan.subjectSummary}` : "",
+        plan.criteria.length ? `A good match:\n${plan.criteria.map((c) => `- ${c}`).join("\n")}` : "",
+        "I'll read its own pages, assess it against this, and keep every quote with its link.",
+      ].filter(Boolean).join("\n"),
+      next: true,
+    };
+  }
   return {
     patch: {
       taskId: a.taskId, modelRetries: 0, kind: plan.kind, product: plan.subject, objective: plan.objective, profile: knowledge, phase: "searching",
-      plan: { basis: "model", criteria: plan.criteria, generation: a.generation!, ...(plan.rejected.length ? { rejected: plan.rejected.map((x) => x.slice(0, 300)).slice(0, 20) } : {}) },
+      plan: { basis: "model", criteria: plan.criteria, generation: a.generation!, ...(plan.subjectSummary ? { summary: plan.subjectSummary } : {}), ...(plan.rejected.length ? { rejected: plan.rejected.map((x) => x.slice(0, 300)).slice(0, 20) } : {}) },
       queries: plan.queries.map((text) => ({ text, state: "pending", attempts: 0, origin: "plan" })),
     },
     usage: a.usage,
@@ -321,12 +378,18 @@ async function searchStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
   }
 }
 
+/** The organization the person shared, as the one candidate to read and assess. */
+function seedCandidate(run: Run, shared?: Source) {
+  const domain = domainOf(run.seed.url)!;
+  return { candidates: [{ domain, name: companyName(run.seed.title ?? "", domain), sourceIds: shared ? [shared.id] : [], why: "You shared it.", state: "pending" }], selection: { basis: "rules", rejected: [] } };
+}
+
 /** Search results, one per URL, with short refs (R1…) for a model. */
 function resultRefs(sources: Source[]): M.ResultRef[] {
   const seen = new Set<string>();
   // In the order found: by search, then by the provider's ranking (stored order is not kept).
   const ordered = [...sources].sort((a, b) => (a.retrievedAt ?? 0) - (b.retrievedAt ?? 0) || (a.position ?? 0) - (b.position ?? 0) || a.url.localeCompare(b.url));
-  return ordered.filter((x) => x.kind !== "page" && !seen.has(x.url) && seen.add(x.url)).map((x, i) => ({ ref: `R${i + 1}`, sourceId: x.id, url: x.url, title: x.title, text: x.text, query: x.query }));
+  return ordered.filter((x) => x.kind === "search" || x.kind === undefined).filter((x) => !seen.has(x.url) && seen.add(x.url)).map((x, i) => ({ ref: `R${i + 1}`, sourceId: x.id, url: x.url, title: x.title, text: x.text, query: x.query }));
 }
 
 async function selectStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
@@ -382,7 +445,11 @@ async function readStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
   if (index < 0) return { patch: { phase: "assessing" }, outcome: "pages read", next: true };
   const c = candidates[index];
   const reads: PageRead[] = [];
-  for (const url of pagesToRead(c, view.sources)) reads.push(await pageReader.read(url, { signal: ctx.signal }));
+  for (const url of pagesToRead(c, view.sources)) {
+    const page = await pageReader.read(url, { signal: ctx.signal });
+    // Two addresses that land on the same page (thoughtworks.com → www.thoughtworks.com) are one page.
+    if (!reads.some((r) => r.finalUrl === page.finalUrl)) reads.push(page);
+  }
   const at = Date.now();
   const sources = reads.map((p) => ({ url: p.finalUrl.slice(0, 1000), title: (p.title || p.finalUrl).slice(0, 300), text: p.status === "read" ? p.text : "", query: `read for ${c.name}`, provider: "page-reader", retrievedAt: at, kind: "page", textKind: "page-text", status: p.status, ...(p.httpStatus ? { httpStatus: p.httpStatus } : {}), detail: p.detail.slice(0, 500) }));
   candidates[index] = { ...c, state: "read" };
@@ -406,13 +473,14 @@ async function assessStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
   const found = c.sourceIds.map((id: string) => byId.get(id)).filter(Boolean) as Source[];
   const evidence: M.Evidence[] = [
     ...pages.map((x, i) => ({ ref: `P${i + 1}`, sourceId: x.id, url: x.url, kind: "page" as const, status: x.status ?? "read", title: x.title, text: x.status === "read" ? x.text : (x.detail ?? "") })),
-    ...found.map((x, i) => ({ ref: `R${i + 1}`, sourceId: x.id, url: x.url, kind: "search" as const, textKind: x.textKind ?? "search-snippet", title: x.title, text: x.text })),
+    ...found.filter((x) => x.kind === "shared").map((x, i) => ({ ref: `S${i + 1}`, sourceId: x.id, url: x.url, kind: "shared" as const, title: x.title, text: x.text })),
+    ...found.filter((x) => x.kind !== "shared").map((x, i) => ({ ref: `R${i + 1}`, sourceId: x.id, url: x.url, kind: "search" as const, textKind: x.textKind ?? "search-snippet", title: x.title, text: x.text })),
   ];
   const pagesRead = pages.filter((p) => p.status === "read").length;
   const unread = pages.filter((p) => p.status !== "read").map((p) => `${p.url}: ${p.status} (${p.detail ?? ""})`);
   const at = Date.now();
   if (modelRun(run) && (await ctx.model.status()).ready) {
-    const a = await ask(ctx, run, M.assessmentPrompt({ kind: run.kind, subject: run.product, subjectSummary: "", objective: run.objective, criteria: run.plan?.criteria ?? [], candidate: c, evidence }), 1200);
+    const a = await ask(ctx, run, M.assessmentPrompt({ kind: run.kind, subject: run.product, subjectSummary: run.plan?.summary || (run.profile?.statements ?? []).map((x: any) => x.text).join(" ").slice(0, 600), objective: run.objective, criteria: run.plan?.criteria ?? [], candidate: c, evidence }), 1200);
     const wait = waitForModel(run, a, `assessing ${c.domain}`);
     if (wait) return wait;
     const x = a.error ? { error: `the model could not be reached (${a.error})` } : M.acceptAssessment(a.json, evidence, run.kind);
@@ -421,13 +489,13 @@ async function assessStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
       const negative = x.fit === "not-a-fit";
       candidates[index] = { ...c, state: negative ? "rejected" : "assessed", verdict: (x.fitSummary || x.fit).slice(0, 500) };
       if (negative) return { patch: { taskId: a.taskId, modelRetries: 0, candidates }, usage, outcome: `${c.domain}: not a fit (${pagesRead} page(s) read)`, next: true };
-      const facts = [...x.facts, ...found.slice(0, 2).map((s) => ({ sourceId: s.id, url: s.url, text: s.text ? `${s.title}: ${s.text}`.slice(0, 1000) : s.title, kind: "search-result" }))];
+      const facts = [...x.facts, ...found.filter((s) => s.kind !== "shared").slice(0, 2).map((s) => ({ sourceId: s.id, url: s.url, text: s.text ? `${s.title}: ${s.text}`.slice(0, 1000) : s.title, kind: "search-result" }))];
       const score = ({ high: 3, medium: 2, low: 1 } as Record<string, number>)[x.fit]! + Math.min(x.facts.length, 5) * 0.1;
       const prospect = {
         rank: 0, company: c.name, domain: c.domain, website: `https://${c.domain}`, facts,
         assessment: {
           basis: "model", method: `A model's assessment (${a.generation!.model}) of ${pagesRead} page(s) read from its site and ${found.length} search result(s), against the plan's criteria. Quotes were checked word for word against the pages; ${x.rejectedQuotes} that did not match were dropped.`,
-          generation: a.generation!, rejectedQuotes: x.rejectedQuotes,
+          generation: a.generation!, rejectedQuotes: x.rejectedQuotes, ...(x.offersSimilarProduct != null ? { offersSimilarProduct: x.offersSimilarProduct } : {}),
           fit: x.fit, score, whyFeltKit: x.fitSummary || c.why, rationale: x.rationale, confidence: x.confidence,
         },
         openQuestions: [...(pagesRead ? [] : ["None of its own pages could be read; this rests on search results only."]), ...unread.map((u) => `Not read: ${u}`).slice(0, 2), ...x.openQuestions].slice(0, 8),
@@ -465,9 +533,32 @@ function finishStep(view: StepView): Outcome {
   const pages = view.sources.filter((x) => x.kind === "page");
   const read = pages.filter((x) => x.status === "read").length;
   const rejected = (run.candidates ?? []).filter((c: any) => c.state === "rejected");
-  const status = searchSources.length === 0 ? "failed" : failed.length ? "partial" : "completed";
   const noun = run.kind === "competitors" ? "competitor" : run.kind === "organizations" ? "organization" : "prospect";
   const at = Date.now();
+  if (run.plan?.scope === "this" && run.seed) {
+    // One organization the person shared: the answer is a verdict on it, with what it rests on.
+    const c = (run.candidates ?? [])[0];
+    const p = ranked[0];
+    const pageLine = pages.length ? `${read} of ${pages.length} of its pages read${pages.some((x) => x.status !== "read") ? ` (${pages.filter((x) => x.status !== "read").map((x) => `${x.url}: ${x.status}`).join("; ")})` : ""}` : "none of its pages could be read";
+    const as = run.kind === "competitors" ? "a competitor of" : run.kind === "prospects" ? "a customer for" : "a match for";
+    const done = Boolean(p) || c?.state === "rejected";
+    const terms = p ? p.assessment.rationale.map((r: any) => /"([^"]+)"/.exec(r.text)?.[1]).filter(Boolean) : [];
+    const verdict = p && p.assessment.basis === "rules"
+      // Keyword rules can't tell a buyer from a vendor: say what they found, and no more.
+      ? `${p.company} (${p.website}) uses ${terms.length} of the terms you use for ${run.product}${terms.length ? ` (${terms.slice(0, 6).join(", ")})` : ""}. That is a keyword match, not a judgment of whether it could be ${as} ${run.product}: it may as easily sell something similar. Turn the model on in Settings for an assessment.`
+      : p ? `${p.company} (${p.website}) could be ${as} ${run.product}: ${p.assessment.fit} fit, ${p.assessment.confidence} confidence. ${p.assessment.whyFeltKit}`
+      : c?.state === "rejected" ? `${c.name} (${c.domain}) doesn't look like ${as} ${run.product}. ${c.verdict ?? ""}` : `I couldn't assess ${c?.domain ?? run.seed.url}: ${pageLine}.`;
+    const quotes = p ? p.facts.filter((f: any) => f.kind === "quote" || f.kind === "shared") : [];
+    const text = [
+      verdict,
+      ...(done ? [`Evidence: ${quotes.length} quote(s) checked word for word against ${pageLine}${p ? `; ${p.assessment.basis === "model" ? "a model's assessment, checked by rules" : "a keyword match"}` : ""}.`] : []),
+      ...quotes.slice(0, 3).map((f: any) => `- "${String(f.text).slice(0, 240)}" (${f.url})`),
+      ...(p?.openQuestions?.length ? [`Not established: ${p.openQuestions.slice(0, 3).join(" ")}`] : []),
+      "Open Research for the full evidence. Nothing was sent to anyone.",
+    ].join("\n");
+    return { patch: { status: done ? "completed" : "failed", phase: "done", prospectCount: ranked.length, completedAt: at }, ranks, outcome: `${done ? "completed" : "failed"}: ${p ? `${p.assessment.fit} fit` : c?.state ?? "not assessed"}, ${read}/${pages.length} pages read`, reply: text, next: false };
+  }
+  const status = searchSources.length === 0 ? "failed" : failed.length ? "partial" : "completed";
   const text = status === "failed"
     ? `I couldn't find anything for ${run.product}: ${failed.length} of ${searches} searches failed${failed[0]?.error ? ` (${failed[0].error})` : ""}, and the rest returned nothing. Say "retry research" to try again.`
     : [

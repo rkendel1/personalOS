@@ -1,0 +1,132 @@
+{
+  "at": "2026-11-12T23:55:29.383Z",
+  "shared": "https://encore.dev/",
+  "steps": [
+    {
+      "step": "signed in",
+      "account": "acct_97263d9e7ce1031ede15d917aa312721",
+      "sessionExpires": "2026-11-19T23:55:32.408Z",
+      "tokenInBody": true
+    },
+    {
+      "step": "delegated",
+      "delegation": "share-e2e",
+      "capabilities": [
+        "personalos.research.run"
+      ]
+    },
+    {
+      "step": "accepted",
+      "ms": 16,
+      "state": "accepted",
+      "message": "PersonalOS has it: encore.dev (https://encore.dev/), \"Research this company and tell me whether it could be a customer for FeltKit.\". You can close this; the result will be in PersonalOS.",
+      "open": "#/chat/mwe7h89j04d0bdabb7a6"
+    },
+    {
+      "step": "resubmitted",
+      "replayed": true
+    },
+    {
+      "step": "processing before the crash",
+      "state": "processing",
+      "message": "Researching it now. The plan is in the conversation; the result will be too."
+    },
+    {
+      "step": "server killed (SIGKILL) and restarted",
+      "restartedInMs": 1055,
+      "url": "http://localhost:44653"
+    },
+    {
+      "step": "finished",
+      "state": "completed",
+      "wallMs": 15186,
+      "interpretation": {
+        "intent": "research",
+        "detail": "research what was shared",
+        "basis": "rules"
+      },
+      "authority": {
+        "capability": "personalos.research.run",
+        "outcome": "allow",
+        "principal": "agent:personalos",
+        "at": 1794527733130,
+        "onBehalfOf": "user:acct_97263d9e7ce1031ede15d917aa312721",
+        "delegationId": "share-e2e",
+        "decisionId": "personalos-decision-1794527733-7f7d27275b69855d"
+      },
+      "updates": [
+        "accepted: PersonalOS has it: encore.dev (https://encore.dev/), \"Research this company and tell me whether it could be a customer for FeltKit.\". You can close this; the result will be in PersonalOS.",
+        "processing: Working on it: research what was shared",
+        "processing: Researching it now. The plan is in the conversation; the result will be too.",
+        "completed: encore.dev (encore.dev) doesn't look like a customer for FeltKit. Encore.dev offers a development platform with infrastructure automation, embedded databases, authentication, background jobs, and inte"
+      ],
+      "research": {
+        "status": "completed",
+        "plan": {
+          "basis": "model",
+          "criteria": [
+            "The organization develops internal tools or agent-ready applications.",
+            "They use or build with TypeScript or similar JavaScript frameworks.",
+            "They require embedded databases or lightweight data storage solutions.",
+            "They need features like authentication, background jobs, or integrations in their applications.",
+            "They have a development team focused on improving developer productivity or internal tooling.",
+            "They show interest in frameworks or tools that streamline building internal applications."
+          ],
+          "generation": {
+            "generationId": "gen-464404519217482b",
+            "memoryId": "task-618e134f-d107-5f44-808c-81e12baaa2c4.gen-464404519217482b.3",
+            "model": "custom/openai/gpt-4.1-mini"
+          },
+          "scope": "this",
+          "summary": "FeltKit is a TypeScript framework for building internal tools and agent-ready applications on an embedded database, with authentication, background jobs, and integrations."
+        },
+        "steps": 6,
+        "pages": [
+          [
+            "https://encore.dev/",
+            "read",
+            "10974 characters of text"
+          ]
+        ],
+        "results": [],
+        "ruledOut": [
+          [
+            "encore.dev",
+            "Encore.dev offers a development platform with infrastructure automation, embedded databases, authentication, background jobs, and integrations, directly competing with FeltKit's framework, making it not a fit as a customer."
+          ]
+        ]
+      }
+    },
+    {
+      "step": "in PersonalOS",
+      "conversation": "http://localhost:44653/#/chat/mwe7h89j04d0bdabb7a6",
+      "inbox": [
+        "Shared item: done"
+      ]
+    },
+    {
+      "step": "another account",
+      "get": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "step": "delegation revoked",
+      "state": "failed",
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "personalos.research.run was not allowed: delegation_revoked"
+      }
+    },
+    {
+      "step": "signed out",
+      "status": 401,
+      "code": "UNAUTHORIZED"
+    },
+    {
+      "step": "logs",
+      "bytes": 1601,
+      "tokenAbsent": true,
+      "passwordAbsent": true
+    }
+  ]
+}

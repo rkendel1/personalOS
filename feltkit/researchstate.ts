@@ -6,7 +6,8 @@
 import { fail, s } from "@feltdb/feltkit";
 import { app, conversations, memories, messages, prospects, researchRuns, researchSources } from "./app.js";
 import { describeDiscovery, type Discovery } from "./_capabilities.js";
-import { planQueries, productKnowledge } from "./_research.js";
+import { companyName, domainOf, planQueries, productKnowledge } from "./_research.js";
+import { followResearch } from "./invocationstate.js";
 import { appendMessage } from "./assistant.js";
 import * as ops from "./_ops.js";
 
@@ -70,6 +71,17 @@ export const create = app.mutation({
     conversationId: s.optional(s.string()),
     planning: s.optional(s.enum(["rules", "model"] as const)),
     fromTurn: s.optional(s.object({ messageId: s.string() })),
+    /**
+     * Started by an invocation from outside PersonalOS (feltkit/invocations.ts): its id (each step then
+     * re-checks the person's delegation), and what they shared: the page to look at, and any text.
+     */
+    fromInvocation: s.optional(s.object({
+      invocationId: s.string(),
+      adapter: s.string(),
+      seedUrl: s.optional(s.string({ maxLength: 2000 })),
+      seedTitle: s.optional(s.string({ maxLength: 300 })),
+      sharedText: s.optional(s.string({ maxLength: 20_000 })),
+    })),
   },
   returns: RunView,
   handler: async (ctx, args) => {
@@ -89,21 +101,39 @@ export const create = app.mutation({
     const discovery = args.discovery as unknown as Discovery;
     const known = (await ctx.db.find(memories, { owner })).map((m: any) => ({ id: m.id, content: String(m.content), status: m.status }));
     const knowledge = productKnowledge(args.product || "\u0000", known);
-    const queries = planning === "rules" ? planQueries(args.product, knowledge) : [];
-    const blocker = blockerOf(discovery);
+    const inv = args.fromInvocation;
+    const seedDomain = inv?.seedUrl ? domainOf(inv.seedUrl) : null;
+    // A shared page with a known subject: assess that organization; nothing to search for.
+    const assessSeed = planning === "rules" && Boolean(seedDomain);
+    const queries = planning === "rules" && !assessSeed ? planQueries(args.product, knowledge) : [];
+    // With a page to look at, web search is not required: the page itself can be read and assessed.
+    const blocker = seedDomain ? undefined : blockerOf(discovery);
     const now = Date.now();
     const runId = await ctx.db.insert(researchRuns, {
       owner, kind: "prospects", request: args.text, product: args.product || "(planning)", objective: args.objective,
       status: blocker ? "blocked" : "running",
-      phase: planning === "model" ? "planning" : "searching",
-      ...(planning === "rules" ? { plan: { basis: "rules" as const, criteria: knowledge.keywords.map((k) => `mentions "${k}"`) } } : {}),
+      phase: planning === "model" ? "planning" : assessSeed ? "reading" : "searching",
+      ...(planning === "rules" ? { plan: { basis: "rules" as const, criteria: knowledge.keywords.map((k) => `mentions "${k}"`), ...(assessSeed ? { scope: "this" as const } : {}) } } : {}),
       discovery: args.discovery,
       profile: knowledge,
       queries: queries.map((text) => ({ text, state: "pending" as const, attempts: 0, origin: "plan" as const })),
       ...(blocker ? { blocker } : {}),
+      ...(inv ? { invocationId: inv.invocationId } : {}),
       conversationId, createdAt: now, updatedAt: now,
     });
-    const reply = blocker ? blockedReply(args.product || "this request", discovery, blocker) : planning === "model" ? planningReply(discovery) : startReply(args.product, queries, discovery, knowledge);
+    if (inv?.seedUrl && seedDomain) {
+      // What the person shared is evidence of its own kind: their link, and any text they selected.
+      const sourceId = await ctx.db.insert(researchSources, { owner, runId, url: inv.seedUrl, title: (inv.seedTitle ?? seedDomain).slice(0, 300), text: (inv.sharedText ?? "").slice(0, 20_000), query: "shared by you", provider: inv.adapter, retrievedAt: now, kind: "shared", textKind: "user-shared" });
+      await ctx.db.patch(researchRuns, runId, {
+        seed: { url: inv.seedUrl, ...(inv.seedTitle ? { title: inv.seedTitle } : {}), sourceId },
+        ...(assessSeed ? { candidates: [{ domain: seedDomain, name: companyName(inv.seedTitle ?? "", seedDomain), sourceIds: [sourceId], why: "You shared it.", state: "pending" as const }], selection: { basis: "rules" as const, rejected: [] } } : {}),
+      });
+    }
+    const reply = blocker
+      ? blockedReply(args.product || "this request", discovery, blocker)
+      : planning === "model" ? planningReply(discovery)
+      : assessSeed ? `On it: looking at ${seedDomain} for ${args.product}. I'll read its own pages, assess it, and post what I find here with its sources. I won't contact anyone.`
+      : startReply(args.product, queries, discovery, knowledge);
     const replyId = args.fromTurn ? "" : await appendMessage(ctx, conversationId, { role: "assistant", text: reply });
     if (!blocker) enqueueStep(ctx, runId);
     return { runId, conversationId, status: blocker ? "blocked" : "running", reply, messageId, replyId };
@@ -131,6 +161,7 @@ export const resume = app.mutation({
     const reply = blocker ? blockedReply(run.product, d, blocker) : `Resuming the research for ${run.product}${left ? `: ${left} search(es) to go` : ""}.`;
     const replyId = run.conversationId ? await appendMessage(ctx, run.conversationId, { role: "assistant", text: reply }) : "";
     if (!blocker) enqueueStep(ctx, runId);
+    await followResearch(ctx, run, status, reply);
     return { runId, conversationId: run.conversationId, status, reply, messageId: replyId, replyId };
   },
 });
@@ -214,6 +245,9 @@ export const advance = app.mutation({
     const steps = [...(run.steps ?? []), { at: now, ...a.step }].slice(-200);
     await ctx.db.patch(researchRuns, run.id, { ...patch, usage, steps, updatedAt: now } as any);
     if (a.reply && run.conversationId) await appendMessage(ctx, run.conversationId, { role: "assistant", text: a.reply });
+    // A run an invocation started: the invocation follows it when it ends (or stops short).
+    const status = (patch.status as string | undefined) ?? run.status;
+    if (status !== "running") await followResearch(ctx, run as any, status, a.reply ?? a.step.outcome);
     if (a.next) enqueueStep(ctx, run.id, a.delayMs ?? 0);
     return { applied: true, sourceIds };
   },

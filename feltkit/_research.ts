@@ -107,7 +107,7 @@ export function companyName(title: string, domain: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export interface StoredSource { id: string; url: string; title: string; text: string; query: string; kind?: "search" | "page"; status?: string }
+export interface StoredSource { id: string; url: string; title: string; text: string; query: string; kind?: "search" | "page" | "shared"; status?: string }
 
 /** Sentences of a page's text that mention one of these words: verbatim, so they quote the page. */
 export function sentencesWith(text: string, words: string[], max = 2): string[] {
@@ -121,7 +121,7 @@ export interface ProspectDraft {
   domain: string;
   website: string;
   /** Facts: what sources said, verbatim, each citing its source. */
-  facts: Array<{ sourceId: string; url: string; text: string; kind: "quote" | "search-result" }>;
+  facts: Array<{ sourceId: string; url: string; text: string; kind: "quote" | "search-result" | "shared" }>;
   assessment: {
     basis: "rules";
     method: string;
@@ -152,10 +152,12 @@ export function prospectsFrom(product: string, knowledge: ProductKnowledge, sour
     // Pages read in full are quoted where they mention what the product is about; search results are
     // what the search returned. One fact per search-result URL (several searches may return it).
     const read = list.filter((s) => s.kind === "page" && s.status === "read");
-    const found = [...new Map(list.filter((s) => s.kind !== "page").map((s) => [s.url, s])).values()];
+    const shared = list.filter((s) => s.kind === "shared" && s.text);
+    const found = [...new Map(list.filter((s) => s.kind !== "page" && s.kind !== "shared").map((s) => [s.url, s])).values()];
     const pages = [...read, ...found];
     const facts: ProspectDraft["facts"] = [
       ...read.flatMap((s) => sentencesWith(s.text, knowledge.keywords).map((text) => ({ sourceId: s.id, url: s.url, text, kind: "quote" as const }))),
+      ...shared.flatMap((s) => sentencesWith(s.text, knowledge.keywords).map((text) => ({ sourceId: s.id, url: s.url, text, kind: "shared" as const }))),
       ...found.map((s) => ({ sourceId: s.id, url: s.url, text: s.text ? `${s.title}: ${s.text}` : s.title, kind: "search-result" as const })),
     ];
     const rationale: ProspectDraft["assessment"]["rationale"] = [];

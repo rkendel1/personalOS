@@ -1,0 +1,161 @@
+{
+  "at": "2026-11-12T23:55:56.399Z",
+  "shared": "https://www.thoughtworks.com/",
+  "steps": [
+    {
+      "step": "signed in",
+      "account": "acct_e52c08f8d23cf2dddab308e39cdcb795",
+      "sessionExpires": "2026-11-19T23:55:59.240Z",
+      "tokenInBody": true
+    },
+    {
+      "step": "delegated",
+      "delegation": "share-e2e",
+      "capabilities": [
+        "personalos.research.run"
+      ]
+    },
+    {
+      "step": "accepted",
+      "ms": 22,
+      "state": "accepted",
+      "message": "PersonalOS has it: thoughtworks.com (https://www.thoughtworks.com/), \"Research this company and tell me whether it could be a customer for FeltKit.\". You can close this; the result will be in PersonalOS.",
+      "open": "#/chat/mwe7hsz7cb3ff380cc8d"
+    },
+    {
+      "step": "resubmitted",
+      "replayed": true
+    },
+    {
+      "step": "processing before the crash",
+      "state": "processing",
+      "message": "Researching it now. The plan is in the conversation; the result will be too."
+    },
+    {
+      "step": "server killed (SIGKILL) and restarted",
+      "restartedInMs": 1069,
+      "url": "http://localhost:33759"
+    },
+    {
+      "step": "finished",
+      "state": "completed",
+      "wallMs": 15398,
+      "interpretation": {
+        "intent": "research",
+        "detail": "research what was shared",
+        "basis": "rules"
+      },
+      "authority": {
+        "capability": "personalos.research.run",
+        "outcome": "allow",
+        "principal": "agent:personalos",
+        "at": 1794527759995,
+        "onBehalfOf": "user:acct_e52c08f8d23cf2dddab308e39cdcb795",
+        "delegationId": "share-e2e",
+        "decisionId": "personalos-decision-1794527759-d15c45860e6fefe6"
+      },
+      "updates": [
+        "accepted: PersonalOS has it: thoughtworks.com (https://www.thoughtworks.com/), \"Research this company and tell me whether it could be a customer for FeltKit.\". You can close this; the result will be in Personal",
+        "processing: Working on it: research what was shared",
+        "processing: Researching it now. The plan is in the conversation; the result will be too.",
+        "completed: thoughtworks.com (https://thoughtworks.com) could be a customer for FeltKit: high fit, high confidence. Thoughtworks builds and modernizes core systems, develops agentic AI platforms, and focuses on r"
+      ],
+      "research": {
+        "status": "completed",
+        "plan": {
+          "basis": "model",
+          "criteria": [
+            "The organization builds or supports internal tools or custom software solutions for clients or internal use.",
+            "They have development teams working with TypeScript or JavaScript technologies.",
+            "They have a focus on modern software engineering practices including embedded databases, authentication, background jobs, or integrations.",
+            "They serve clients or have internal needs that require rapid development of agent-ready or automation-capable applications.",
+            "They have case studies, blogs, or service offerings related to internal tooling or developer productivity tools.",
+            "They are actively hiring or have teams focused on software development frameworks or internal platform engineering."
+          ],
+          "generation": {
+            "generationId": "gen-5fe1511577874cf7",
+            "memoryId": "task-823684a7-7327-657a-5d8d-ebad363b6f93.gen-5fe1511577874cf7.3",
+            "model": "custom/openai/gpt-4.1-mini"
+          },
+          "scope": "this",
+          "summary": "FeltKit is a TypeScript framework for building internal tools and agent-ready applications on an embedded database, with authentication, background jobs, and integrations."
+        },
+        "steps": 6,
+        "pages": [
+          [
+            "https://www.thoughtworks.com/",
+            "read",
+            "7995 characters of text"
+          ],
+          [
+            "https://www.thoughtworks.com/",
+            "read",
+            "7995 characters of text"
+          ]
+        ],
+        "results": [
+          {
+            "company": "thoughtworks.com",
+            "fit": "high",
+            "confidence": "high",
+            "basis": "model",
+            "quotes": [
+              {
+                "text": "Thoughtworks is a global technology consultancy that helps enterprises find where technology will pay off, then build it. We modernize core systems, redesign workflows around AI agents and launch new ",
+                "url": "https://www.thoughtworks.com/"
+              },
+              {
+                "text": "Thoughtworks spent more than 30 years changing how technology gets built. Now we’re doing it again: our engineering expertise and AI research are built into our own platforms. Our teams bring the plat",
+                "url": "https://www.thoughtworks.com/"
+              },
+              {
+                "text": "AI/works™ is Thoughtworks Agentic Development Platform for building and running industrial-grade enterprise systems with AI. It’s how our engineers work, on any model and any coding agent.",
+                "url": "https://www.thoughtworks.com/"
+              },
+              {
+                "text": "Agent/works™ is Thoughtworks control plane that governs, observes and cost-manages AI agents across any models, frameworks, clouds or other environments.",
+                "url": "https://www.thoughtworks.com/"
+              },
+              {
+                "text": "With Thoughtworks’ 3/3/3 framework, go from idea to a production-ready system in 90 days.",
+                "url": "https://www.thoughtworks.com/"
+              }
+            ]
+          }
+        ],
+        "ruledOut": []
+      }
+    },
+    {
+      "step": "in PersonalOS",
+      "conversation": "http://localhost:33759/#/chat/mwe7hsz7cb3ff380cc8d",
+      "inbox": [
+        "Shared item: done"
+      ]
+    },
+    {
+      "step": "another account",
+      "get": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "step": "delegation revoked",
+      "state": "failed",
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "personalos.research.run was not allowed: delegation_revoked"
+      }
+    },
+    {
+      "step": "signed out",
+      "status": 401,
+      "code": "UNAUTHORIZED"
+    },
+    {
+      "step": "logs",
+      "bytes": 1601,
+      "tokenAbsent": true,
+      "passwordAbsent": true
+    }
+  ]
+}
