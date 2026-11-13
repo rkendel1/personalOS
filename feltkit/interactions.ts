@@ -34,6 +34,7 @@ import * as ops from "./_ops.js";
 import { linkActive, resolveExternal } from "./_resolver.js";
 import { PRESENTED_TTL_MS } from "./links.js";
 import { authorityPrincipal, capabilityFor } from "./_authority.js";
+import { describeWork, workIn } from "./continuity.js";
 
 /** How a surface's adapter id reads to people. */
 const LABELS: Record<string, string> = { multiplayer: "Multiplayer" };
@@ -151,6 +152,50 @@ export const receive = app.mutation({
     const tk = base.threadKey;
     const clock = clockFor(e.sender.timeZone ?? null);
     const text = clean(e.message.text) || e.message.text;
+
+    // ── Continuity: carry on one of your PersonalOS conversations here, or see its work ──
+    const continuing = continuityIntent(text);
+    if (continuing) {
+      // The conversation this thread is on now (never a refused attempt's).
+      const current = await threadConversation(ctx, tk, owner);
+      const target = continuing.kind === "conversation.continue" ? continuing.conversationId : current;
+      const record = async (state: InteractionState, reply: string, extra: Record<string, unknown> = {}) => {
+        const id = await ctx.db.insert(interactions, { ...base, owner, identity, state, intent: continuing.kind, updates: [{ seq: 1, state, text: reply, at: now }], ...extra });
+        return outcome((await ctx.db.get(interactions, id))!, false);
+      };
+      // Another person's work never crosses into a shared conversation: only a direct message with me.
+      if (audience !== "private") return record("refused", "I only continue a conversation, or show its work, in a direct message with me, so nothing private lands in a shared conversation.", { error: { code: "CONTINUE_NOT_PRIVATE", message: "continuation needs a direct message" } });
+      if (!target) return record("completed", "This conversation isn't connected to a PersonalOS conversation yet. To carry one on here, send “continue <conversation id>” (PersonalOS shows it under “Where this came from” in that conversation).");
+      // Yours, or as good as nonexistent: another person's id says nothing about whether it exists.
+      const conversation = await ctx.db.get(conversations, target);
+      if (!conversation || conversation.owner !== owner) return record("refused", `There's no conversation ${target.slice(0, 40)} in your PersonalOS.`, { error: { code: "NOT_FOUND", message: "no such conversation for this account" } });
+      // Continuing is not permission to reuse what was allowed before: AuthBoundry decides now.
+      const capability = capabilityFor(continuing.kind);
+      const decision = await ctx.authority.decide({ capability, onBehalfOf: authorityPrincipal(owner), context: { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) } });
+      const authority = {
+        capability, outcome: decision.outcome, principal: decision.executor,
+        ...(decision.onBehalfOf ? { onBehalfOf: decision.onBehalfOf } : {}), ...(decision.delegationId ? { delegationId: decision.delegationId } : {}),
+        ...(decision.decisionId ? { decisionId: decision.decisionId } : {}), ...(decision.reason ? { reason: decision.reason } : {}),
+      };
+      if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); nothing was done.`);
+      if (!decision.allowed) {
+        // The denial is evidence of that conversation's history; the thread is not moved by it.
+        return record("refused", `You aren't allowed to continue PersonalOS conversations through ${label(adapter)} (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was shown or changed.`, { authority, conversationId: target, error: { code: "FORBIDDEN", message: `${capability} was not allowed${decision.reason ? `: ${decision.reason}` : ""}` } });
+      }
+      const work = describeWork(await workIn(ctx.db, owner, target));
+      const lead = continuing.kind === "conversation.continue"
+        ? `Continuing “${conversation.title}” here from ${label(adapter)}. What has happened in it, and where each part came from:`
+        : `Where “${conversation.title}” stands, and where each part came from:`;
+      const reply = `${lead}\n${work}`;
+      const messageId = await appendMessage(octx, target, { role: "user", text: `${text}\n\n(from ${label(adapter)}, ${e.conversation.kind === "dm" ? "a direct message" : "a conversation"})`, interpretation: { intent: continuing.kind, source: "rules" } });
+      const replyId = await appendMessage(octx, target, { role: "assistant", text: reply, interpretation: { intent: continuing.kind, source: "rules" } });
+      return record("completed", reply, {
+        authority, conversationId: target, messageId, replyId,
+        ...(continuing.kind === "conversation.continue" ? { continuation: { conversationId: target, at: now } } : {}),
+        provenance: { ...base.provenance, privateDataUsed: true },
+      });
+    }
+
     const about = e.context.messages.length ? conversationIntent(text) : null;
     const said: { text: string; completes?: string } = about ? { text } : await answerTo(ctx, tk, owner, e, text, clock.today);
     const understood = about ? null : interpret(said.text, clock.today as any).intent;
@@ -175,10 +220,7 @@ export const receive = app.mutation({
     }
 
     // ── The PersonalOS conversation for this source thread (one history across surfaces) ──
-    let conversationId: string | undefined;
-    for (const p of (await ctx.db.find(interactions, { threadKey: tk })).sort((a, b) => b.createdAt - a.createdAt)) {
-      if (p.owner === owner && p.conversationId && (await ctx.db.get(conversations, p.conversationId))?.owner === owner) { conversationId = p.conversationId; break; }
-    }
+    let conversationId = await threadConversation(ctx, tk, owner);
     conversationId ??= await ctx.db.insert(conversations, { owner, title: conversationTitle(label(adapter), e), createdAt: now, updatedAt: now, messageCount: 0 });
     if (!about && said.completes) await ctx.db.patch(interactions, said.completes, { state: "completed", updatedAt: now });
 
@@ -207,6 +249,28 @@ export const receive = app.mutation({
     return outcome((await ctx.db.get(interactions, id))!, false);
   },
 });
+
+/**
+ * The PersonalOS conversation a source thread is on: its latest interaction's, if that conversation is
+ * still the owner's. A refused interaction never moves a thread (a denied "continue" leaves it where it was).
+ */
+async function threadConversation(ctx: MutationCtx, tk: string, owner: string): Promise<string | undefined> {
+  for (const p of (await ctx.db.find(interactions, { threadKey: tk })).sort((a, b) => b.createdAt - a.createdAt)) {
+    if (p.state === "refused") continue;
+    if (p.owner === owner && p.conversationId && (await ctx.db.get(conversations, p.conversationId))?.owner === owner) return p.conversationId;
+  }
+  return undefined;
+}
+
+/** "continue <conversation id>", or a question about where this conversation's work stands. */
+export function continuityIntent(text: string): { kind: "conversation.continue"; conversationId: string } | { kind: "conversation.work" } | null {
+  const t = text.trim();
+  const m = /^continue\s+(?:(?:the\s+)?conversation\s+)?([A-Za-z0-9_-]{8,64})\s*[.!]?$/i.exec(t);
+  // A conversation id (FeltDB: letters and digits, 12+), never a word ("continue research").
+  if (m && m[1]!.length >= 12 && /\d/.test(m[1]!) && /[a-z]/i.test(m[1]!)) return { kind: "conversation.continue", conversationId: m[1]! };
+  if (/^(status|what'?s the status|what is the status|what did you find|what happened|where are we|where does it stand|any (news|updates?)|show (me )?(the )?(work|results?|evidence))\s*[?.!]*$/i.test(t)) return { kind: "conversation.work" };
+  return null;
+}
 
 interface Result {
   state: InteractionState;

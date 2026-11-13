@@ -90,14 +90,19 @@ export function Today({ onError, onAsk }: Err & { onAsk: (text: string) => void 
 
       {inbox.length > 0 && (
         <section>
-          <h2>Reminders</h2>
+          <h2>Inbox</h2>
           <ul className="plain">
-            {inbox.map((n) => (
-              <li key={n.id} className="reminder">
-                <span>🔔 {n.title}</span>
-                <button className="ghost tiny" onClick={() => void markRead({ id: n.id }).catch(onError)}>Dismiss</button>
-              </li>
-            ))}
+            {inbox.map((n) => {
+              // Something shared from another app (feltkit/invocations.ts): its outcome, and where to see it.
+              const shared = n.type === "invocation.updated" ? (n.data as { conversationId?: string } | null) : null;
+              return (
+                <li key={n.id} className="reminder" data-testid={shared ? "shared-outcome" : "reminder"}>
+                  <span>{shared ? "📤" : "🔔"} {n.title}</span>
+                  {shared?.conversationId && <a className="tiny" href={`#/chat/${shared.conversationId}`} onClick={() => void markRead({ id: n.id }).catch(onError)}>Open</a>}
+                  <button className="ghost tiny" onClick={() => void markRead({ id: n.id }).catch(onError)}>Dismiss</button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

@@ -1,0 +1,4 @@
+// Your Apple developer team (Xcode → Settings → Accounts; a free personal team works for your own
+// iPhone) and a reverse-DNS prefix you own. Both targets and the shared Keychain group derive from them.
+DEVELOPMENT_TEAM =
+PERSONALOS_BUNDLE_PREFIX = com.example.personalos

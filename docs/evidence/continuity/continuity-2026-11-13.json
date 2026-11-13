@@ -1,0 +1,365 @@
+{
+  "started": "2026-11-13T01:23:55.922Z",
+  "page": "https://www.thoughtworks.com/",
+  "capabilities": [
+    "personalos.assistant.converse",
+    "personalos.conversation.read",
+    "personalos.tasks.read",
+    "personalos.tasks.create",
+    "personalos.tasks.update",
+    "personalos.tasks.delete",
+    "personalos.reminders.create",
+    "personalos.memory.read",
+    "personalos.memory.write",
+    "personalos.memory.delete",
+    "personalos.projects.create",
+    "personalos.research.run",
+    "personalos.conversation.continue"
+  ],
+  "conversationB": {
+    "conversationId": "mweany2270227e3264b3",
+    "title": "Shared: Thoughtworks: A leading technology consultancy | Tho",
+    "entries": [
+      {
+        "at": 1794533084714,
+        "kind": "invocation",
+        "surface": "Chrome (your browser)",
+        "asked": "Research this company and tell me whether it could be a customer for FeltKit.",
+        "shared": [
+          "Thoughtworks: A leading technology consultancy | Thoughtworks https://www.thoughtworks.com/",
+          "selected text from https://www.thoughtworks.com/ (293 chars)"
+        ],
+        "inferred": "research (rules)",
+        "authority": {
+          "capability": "personalos.research.run",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533089-6dbdd89b6f4505f5"
+        },
+        "did": "Thoughtworks (https://thoughtworks.com) uses 1 of the terms you use for FeltKit (tools). That is a keyword match, not a judgment of whether it could be a customer for FeltKit: it may as easily sell something similar. Turn the model on in Settings for an assessment.\nEvidence: 1 quote(s) checked word for word against 1 of 1 of its pages read; a keyword match.\n- \"We use each one’s own tools where the",
+        "state": "completed",
+        "ref": "invocation browser-4d7c6f3c-633f-4e52-81c4-a5dec445920c"
+      },
+      {
+        "at": 1794533088631,
+        "kind": "interaction",
+        "surface": "Multiplayer (direct message)",
+        "asked": "continue mweany2270227e3264b3",
+        "shared": [],
+        "inferred": "conversation.continue",
+        "authority": {
+          "capability": "personalos.conversation.continue",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533088-0c77c2ada31414a0"
+        },
+        "did": "continued this conversation from Multiplayer",
+        "state": "completed",
+        "ref": "interaction mweao17tcc571364e925"
+      },
+      {
+        "at": 1794533089100,
+        "kind": "research",
+        "surface": "started by an invocation",
+        "asked": null,
+        "shared": [
+          "https://www.thoughtworks.com/"
+        ],
+        "inferred": "prospects of FeltKit (rules, the shared organization)",
+        "authority": null,
+        "did": "1 result(s); completed: medium fit, 1/1 pages read",
+        "state": "completed",
+        "ref": "research mweao1fw24752e058f0e"
+      }
+    ],
+    "continueWith": "continue mweany2270227e3264b3"
+  },
+  "conversationBAfterRevocation": {
+    "conversationId": "mweany2270227e3264b3",
+    "title": "Shared: Thoughtworks: A leading technology consultancy | Tho",
+    "entries": [
+      {
+        "at": 1794533084714,
+        "kind": "invocation",
+        "surface": "Chrome (your browser)",
+        "asked": "Research this company and tell me whether it could be a customer for FeltKit.",
+        "shared": [
+          "Thoughtworks: A leading technology consultancy | Thoughtworks https://www.thoughtworks.com/",
+          "selected text from https://www.thoughtworks.com/ (293 chars)"
+        ],
+        "inferred": "research (rules)",
+        "authority": {
+          "capability": "personalos.research.run",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533089-6dbdd89b6f4505f5"
+        },
+        "did": "Thoughtworks (https://thoughtworks.com) uses 1 of the terms you use for FeltKit (tools). That is a keyword match, not a judgment of whether it could be a customer for FeltKit: it may as easily sell something similar. Turn the model on in Settings for an assessment.\nEvidence: 1 quote(s) checked word for word against 1 of 1 of its pages read; a keyword match.\n- \"We use each one’s own tools where the",
+        "state": "completed",
+        "ref": "invocation browser-4d7c6f3c-633f-4e52-81c4-a5dec445920c"
+      },
+      {
+        "at": 1794533088631,
+        "kind": "interaction",
+        "surface": "Multiplayer (direct message)",
+        "asked": "continue mweany2270227e3264b3",
+        "shared": [],
+        "inferred": "conversation.continue",
+        "authority": {
+          "capability": "personalos.conversation.continue",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533088-0c77c2ada31414a0"
+        },
+        "did": "continued this conversation from Multiplayer",
+        "state": "completed",
+        "ref": "interaction mweao17tcc571364e925"
+      },
+      {
+        "at": 1794533089100,
+        "kind": "research",
+        "surface": "started by an invocation",
+        "asked": null,
+        "shared": [
+          "https://www.thoughtworks.com/"
+        ],
+        "inferred": "prospects of FeltKit (rules, the shared organization)",
+        "authority": null,
+        "did": "1 result(s); completed: medium fit, 1/1 pages read",
+        "state": "completed",
+        "ref": "research mweao1fw24752e058f0e"
+      },
+      {
+        "at": 1794533094234,
+        "kind": "interaction",
+        "surface": "Multiplayer (direct message)",
+        "asked": "status",
+        "shared": [],
+        "inferred": "conversation.work",
+        "authority": {
+          "capability": "personalos.conversation.continue",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533094-2c4f0f7fdf024147"
+        },
+        "did": "Where “Shared: Thoughtworks: A leading technology consultancy | Tho” stands, and where each part came from:\n• Chrome (your browser): completed · asked \"Research this company and tell me whether it could be a customer for FeltKit.\" · shared Thoughtworks: A leading technology consultancy | Thoughtwork",
+        "state": "completed",
+        "ref": "interaction mweao5ie696b70750279"
+      },
+      {
+        "at": 1794533127795,
+        "kind": "invocation",
+        "surface": "Chrome (your browser)",
+        "asked": "Remember this",
+        "shared": [
+          "Thoughtworks: A leading technology consultancy | Thoughtworks https://www.thoughtworks.com/",
+          "selected text from https://www.thoughtworks.com/ (293 chars)"
+        ],
+        "inferred": "save (rules)",
+        "authority": {
+          "capability": "personalos.memory.write",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533128-08f4baa22923ef31"
+        },
+        "did": "Saved it to your notes: Thoughtworks: A leading technology consultancy | Thoughtworks: https://www.thoughtworks.com/. Ask me about it any time.",
+        "state": "completed",
+        "ref": "invocation browser-7a548ae5-dcd7-4482-acce-827c9c7d7d68"
+      },
+      {
+        "at": 1794533128285,
+        "kind": "interaction",
+        "surface": "Multiplayer (direct message)",
+        "asked": "status",
+        "shared": [],
+        "inferred": "conversation.work",
+        "authority": {
+          "capability": "personalos.conversation.continue",
+          "outcome": "allow",
+          "delegationId": "ada-personalos",
+          "decisionId": "personalos-decision-1794533128-f1b019f163e4684c"
+        },
+        "did": "Where “Shared: Thoughtworks: A leading technology consultancy | Tho” stands, and where each part came from:\n• Chrome (your browser): completed · asked \"Research this company and tell me whether it could be a customer for FeltKit.\" · shared Thoughtworks: A leading technology consultancy | Thoughtwork",
+        "state": "completed",
+        "ref": "interaction mweaovwe8395cd82e22e"
+      },
+      {
+        "at": 1794533129852,
+        "kind": "interaction",
+        "surface": "Multiplayer (direct message)",
+        "asked": "continue mweany2270227e3264b3",
+        "shared": [],
+        "inferred": "conversation.continue",
+        "authority": {
+          "capability": "personalos.conversation.continue",
+          "outcome": "deny",
+          "decisionId": "personalos-decision-1794533129-e282bcb067f6f52d",
+          "reason": "delegation_revoked"
+        },
+        "did": "You aren't allowed to continue PersonalOS conversations through Multiplayer (personalos.conversation.continue: delegation_revoked). Nothing was shown or changed.",
+        "state": "refused",
+        "ref": "interaction mweaowzod5ccb352f7dd"
+      },
+      {
+        "at": 1794533132628,
+        "kind": "invocation",
+        "surface": "Chrome (your browser)",
+        "asked": "Research this company and tell me whether it could be a customer for FeltKit.",
+        "shared": [
+          "Thoughtworks: A leading technology consultancy | Thoughtworks https://www.thoughtworks.com/",
+          "selected text from https://www.thoughtworks.com/ (293 chars)"
+        ],
+        "inferred": "research (rules)",
+        "authority": {
+          "capability": "personalos.research.run",
+          "outcome": "deny",
+          "decisionId": "personalos-decision-1794533133-fe400105b405452c",
+          "reason": "delegation_revoked"
+        },
+        "did": "You haven't allowed PersonalOS to do this for you (personalos.research.run: delegation_revoked). Nothing was done.",
+        "state": "failed",
+        "ref": "invocation browser-68efbd2a-6eea-4607-b7dc-a75e700688c3"
+      }
+    ],
+    "continueWith": "continue mweany2270227e3264b3"
+  },
+  "finished": "2026-11-13T01:25:33.559Z",
+  "results": [
+    {
+      "n": 0,
+      "name": "setup: Ada opens Multiplayer, adds @personalos, links her PersonalOS account through a DM (Resolver); Grace links hers",
+      "ok": true,
+      "ms": 24763
+    },
+    {
+      "n": "A1",
+      "name": "Multiplayer: Ada asks PersonalOS in a DM for a reminder; a durable task, with Resolver identity and AuthBoundry's decision",
+      "ok": true,
+      "ms": 832,
+      "detail": {
+        "conversation": "mweanl83bbd35a8f10a1",
+        "task": "Follow up with Sarah (mweanl23)",
+        "authority": "personalos.reminders.create allow (ada-personalos)"
+      }
+    },
+    {
+      "n": "A2",
+      "name": "Chrome: the same conversation, opened in the extension's panel, continued with a page shared into it (the form offers the open conversation)",
+      "ok": true,
+      "ms": 5739,
+      "detail": {
+        "conversation": "mweanl83bbd35a8f10a1",
+        "parts": [
+          "interaction: Multiplayer (direct message) completed",
+          "task: PersonalOS open",
+          "invocation: Chrome (your browser) completed"
+        ]
+      }
+    },
+    {
+      "n": "A3",
+      "name": "back in Multiplayer: the DM thread is still that conversation; both parts, each with its own surface, material and authority",
+      "ok": true,
+      "ms": 419,
+      "detail": {
+        "reply": "PersonalOS\nAGENT\n1:24 AM\nWhere “Multiplayer · direct message” stands, and where each part came from:\n• Multiplayer (direct message): completed · asked \"remind me to follow up with Sarah tomorrow at 9am (mweanl23)\" · authority personalos.reminders.create: allow (delegation ada-personalos) · On it. I'll remind you to follow up with Sarah (mweanl23) tomorrow at 9am.\n• PersonalOS — task: open · task \"Follow up with Sarah (mweanl23)\", reminder 2026-11-14T09:00:00.000Z\n• Chrome (your browser): completed · asked \"Remember this\" · shared Thoughtworks: A leading technology consultancy | Thoughtworks ht"
+      }
+    },
+    {
+      "n": "B1",
+      "name": "Chrome: research summoned from a real page with its selection, in a new conversation; a durable receipt",
+      "ok": true,
+      "ms": 9984,
+      "detail": {
+        "conversation": "mweany2270227e3264b3",
+        "invocation": "browser-4d7c6f3c-633f-4e52-81c4-a5dec445920c",
+        "state": "accepted",
+        "selection": "293 chars"
+      }
+    },
+    {
+      "n": "C1",
+      "name": "the browser is closed while the work runs, and PersonalOS is killed (SIGKILL) and restarted",
+      "ok": true,
+      "ms": 3726,
+      "detail": {
+        "restartMs": 1613
+      }
+    },
+    {
+      "n": "B2",
+      "name": "Multiplayer: Ada continues that conversation in her DM; she sees the Chrome research, its page and selection, and its true state at that moment (its authority once it has run: C2)",
+      "ok": true,
+      "ms": 908,
+      "detail": {
+        "reply": "PersonalOS\nAGENT\n1:24 AM\nContinuing “Shared: Thoughtworks: A leading technology consultancy | Tho” here from Multiplayer. What has happened in it, and where each part came from:\n• Chrome (your browser): accepted · asked \"Research this company and tell me whether it could be a customer for FeltKit.\" · shared Thoughtworks: A leading technology consultancy | Thoughtworks https://www.thoughtworks.com/; selected text from https://www.thoughtworks.com/ (293 chars) · PersonalOS has it: Thoughtworks: A leading technology consultancy | Thoughtworks (https://www.thoughtworks.com/); selected text from https://www.thoughtworks.com/ (293 characters), \"Research this company and tell me whether it could be"
+      }
+    },
+    {
+      "n": "C2",
+      "name": "the same work finishes after the restart; Multiplayer's status shows it completed, one research run throughout",
+      "ok": true,
+      "ms": 5010,
+      "detail": {
+        "research": {
+          "at": 1794533089100,
+          "kind": "research",
+          "surface": "started by an invocation",
+          "asked": null,
+          "shared": [
+            "https://www.thoughtworks.com/"
+          ],
+          "inferred": "prospects of FeltKit (rules, the shared organization)",
+          "authority": null,
+          "did": "1 result(s); completed: medium fit, 1/1 pages read",
+          "state": "completed",
+          "ref": "research mweao1fw24752e058f0e"
+        },
+        "reply": "PersonalOS\nAGENT\n1:24 AM\nWhere “Shared: Thoughtworks: A leading technology consultancy | Tho” stands, and where each part came from:\n• Chrome (your browser): completed · asked \"Research this company and tell me whether it could be a customer for FeltKit.\" · shared Thoughtworks: A leading technology consultancy | Thoughtworks https://www.thoughtworks.com/; selected text from https://www.thoughtworks.com/ (293 chars) · authority personalos.research.run: allow (delegation ada-personalos) · Thoughtw"
+      }
+    },
+    {
+      "n": "B3",
+      "name": "Chrome reopened: the conversation shows the Multiplayer parts; continuing it again from the page lands in the same conversation, and Multiplayer sees that too",
+      "ok": true,
+      "ms": 33828,
+      "detail": {
+        "chromeParts": [
+          "Research this company and tell me whether it could be a customer for FeltKit.: completed",
+          "Remember this: completed"
+        ],
+        "multiplayer": "PersonalOS\nAGENT\n1:24 AM\nWhere “Multiplayer · direct message” stands, and where each part came from:\n• Multiplayer (direct message): completed · asked \"remind me to follow up with Sarah tomorrow at 9am (mweanl23)\" · authority personalos.reminders.create: allow (delegation ada-personalos) · On it. I'"
+      }
+    },
+    {
+      "n": "E",
+      "name": "isolation: Grace's conversation and invocation are hers, Ada's are Ada's: by id, from Multiplayer and over the API, neither reaches the other's",
+      "ok": true,
+      "ms": 1513,
+      "detail": {
+        "grace": "PersonalOS\nAGENT\n1:25 AM\nThere's no conversation mweany2270227e3264b3 in your PersonalOS.",
+        "ada": "PersonalOS\nAGENT\n1:25 AM\nThere's no conversation mweaovze34b2c65bb918 in your PersonalOS.",
+        "refusals": [
+          "continuity:of: NOT_FOUND",
+          "invocationstate:get: NOT_FOUND",
+          "continuity:of: NOT_FOUND",
+          "invocationstate:get: NOT_FOUND",
+          "submit into Ada's: NOT_FOUND"
+        ]
+      }
+    },
+    {
+      "n": "D",
+      "name": "authority: Ada's delegation revoked in AuthBoundry; continuing in Multiplayer is refused, a Chrome share into the conversation is refused when it runs; both refusals are kept in its history",
+      "ok": true,
+      "ms": 3726,
+      "detail": {
+        "multiplayer": "PersonalOS\nAGENT\n1:25 AM\nYou aren't allowed to continue PersonalOS conversations through Multiplayer (personalos.conversation.continue: delegation_revoked). Nothing was shown or changed.",
+        "denials": [
+          "Multiplayer (direct message): personalos.conversation.continue deny (delegation_revoked) decision personalos-decision-1794533129-e282bcb067f6f52d",
+          "Chrome (your browser): personalos.research.run deny (delegation_revoked) decision personalos-decision-1794533133-fe400105b405452c"
+        ]
+      }
+    }
+  ]
+}

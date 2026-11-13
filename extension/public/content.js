@@ -7,7 +7,8 @@
   return {
     title: document.title || location.hostname,
     url: location.href,
-    selection: selection.slice(0, 4000),
+    // One past PersonalOS's limit, so a longer selection is refused with its size, never cut silently.
+    selection: selection.slice(0, 20001),
     text: clean(root.innerText || "").slice(0, 200000),
   };
 })();

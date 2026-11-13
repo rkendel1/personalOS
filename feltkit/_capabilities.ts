@@ -24,11 +24,20 @@ export interface Need {
   need: string;
   purpose: string;
   required: boolean;
-  /** The capability that provides it here, if PersonalOS declares one. */
-  capability: string | null;
+  /**
+   * The capabilities that can provide it, in order of preference: any one of them will do (web search
+   * from Brave, or from OpenAI's web search). Empty when PersonalOS declares no provider for it.
+   */
+  capabilities: string[];
+  /** Provided by PersonalOS itself (no provider, no credential): always available. */
+  builtin?: string;
 }
 
 export interface NeedReport extends Need {
+  /** The capability that will provide it: the first available alternative, else the first declared. */
+  capability: string | null;
+  /** How each alternative was found, when there is more than one. */
+  alternatives?: Array<{ capability: string; state: NeedState; problems: string[] }>;
   state: NeedState;
   /** What to do so it becomes available (configuration, authorization, a provider to connect). */
   howToEnable: string | null;
@@ -49,9 +58,9 @@ export interface Discovery {
 
 /** What finding prospects needs. Storage is PersonalOS's own (research runs, sources, prospects). */
 export const PROSPECT_NEEDS: Need[] = [
-  { need: "web search", purpose: "find companies in the product's space, with the pages that say so", required: true, capability: "websearch.search" },
-  { need: "page retrieval", purpose: "read a company's own pages to verify what search results say", required: false, capability: null },
-  { need: "contact research", purpose: "identify who decides; not needed to find prospects, and outreach always waits for your approval", required: false, capability: null },
+  { need: "web search", purpose: "find companies in the product's space, with the pages that say so", required: true, capabilities: ["websearch.search", "openaisearch.search"] },
+  { need: "page retrieval", purpose: "read a company's own pages to verify what search results say", required: false, capabilities: [], builtin: "PersonalOS page reader (public pages only; honours robots.txt)" },
+  { need: "contact research", purpose: "identify who decides; not needed to find prospects, and outreach always waits for your approval", required: false, capabilities: [] },
 ];
 
 interface CatalogEntry {
@@ -79,26 +88,39 @@ export async function discover(agent: AgentLike, needs: Need[], options: { decla
   const declared = full ? [] : (options.declared ?? []).filter((name) => !tools.some((t) => t.name === name)).map((name) => ({ name, allowed: true, declaredOnly: true }));
   const catalog: Array<CatalogEntry & { declaredOnly?: boolean }> = full ? await agent.catalog!() : [...tools, ...declared];
   const byName = new Map(catalog.map((c) => [c.name, c]));
-  const reports = needs.map((n): NeedReport => {
-    const entry = n.capability ? byName.get(n.capability) : undefined;
-    if (!n.capability) {
-      return { ...n, state: "connectable", problems: [], howToEnable: `No ${n.need} provider is declared in this PersonalOS. An HTTP API that provides it can be connected (Studio → Integrations → Connect an API) and declared as a capability.` };
-    }
+  const one = (n: Need, capability: string): Omit<NeedReport, keyof Need | "capability" | "alternatives"> => {
+    const entry = byName.get(capability);
     if (!entry) {
       return full
-        ? { ...n, state: "connectable", problems: [], howToEnable: `${n.capability} is not declared in this deployment. Connect a ${n.need} API (Studio → Integrations) as "${n.capability.split(".")[0]}".` }
-        : { ...n, state: "needs-authorization", problems: [`${n.capability} is not among the capabilities you may use (it may not be permitted for your account, or not declared).`], howToEnable: "Ask an administrator to grant your role the research permission." };
+        ? { state: "connectable", problems: [], howToEnable: `${capability} is not declared in this deployment. Connect a ${n.need} API (Studio → Integrations) as "${capability.split(".")[0]}".` }
+        : { state: "needs-authorization", problems: [`${capability} is not among the capabilities you may use (it may not be permitted for your account, or not declared).`], howToEnable: "Ask an administrator to grant your role the research permission." };
     }
-    if (entry.allowed === false) {
-      return { ...n, state: "needs-authorization", problems: [`Your account may not use ${n.capability}.`], howToEnable: "Ask an administrator to grant your role the research permission (research.search)." };
+    if (entry.allowed === false) return { state: "needs-authorization", problems: [`Your account may not use ${capability}.`], howToEnable: "Ask an administrator to grant your role the research permission (research.search)." };
+    if (entry.readiness && !entry.readiness.ready) return { state: "needs-configuration", problems: entry.readiness.problems.map((p) => p.message), howToEnable: entry.readiness.problems.map((p) => p.fix).join(" ") };
+    if ((entry as { declaredOnly?: boolean }).declaredOnly) return { state: "available", problems: [`Declared by this PersonalOS; this FeltKit does not report whether it is configured or permitted, so the first call will tell.`], howToEnable: null };
+    return { state: "available", problems: [], howToEnable: null };
+  };
+  // A fully verified alternative beats one only declared, which beats any that is not available.
+  const rank = (r: { state: NeedState; problems: string[] }) => (r.state === "available" ? (r.problems.length ? 1 : 0) : r.state === "needs-configuration" ? 2 : r.state === "needs-authorization" ? 3 : 4);
+  const reports = needs.map((n): NeedReport => {
+    if (n.builtin) return { ...n, capability: null, state: "available", problems: [], howToEnable: null };
+    if (!n.capabilities.length) {
+      return { ...n, capability: null, state: "connectable", problems: [], howToEnable: `No ${n.need} provider is declared in this PersonalOS. An HTTP API that provides it can be connected (Studio → Integrations → Connect an API) and declared as a capability.` };
     }
-    if (entry.readiness && !entry.readiness.ready) {
-      return { ...n, state: "needs-configuration", problems: entry.readiness.problems.map((p) => p.message), howToEnable: entry.readiness.problems.map((p) => p.fix).join(" ") };
-    }
-    if ((entry as { declaredOnly?: boolean }).declaredOnly) {
-      return { ...n, state: "available", problems: [`Declared by this PersonalOS; this FeltKit does not report whether it is configured or permitted, so the first call will tell.`], howToEnable: null };
-    }
-    return { ...n, state: "available", problems: [], howToEnable: null };
+    const found = n.capabilities.map((capability) => ({ capability, ...one(n, capability) }));
+    const best = [...found].sort((a, b) => rank(a) - rank(b))[0]!;
+    if (found.length === 1) return { ...n, ...best };
+    const alternatives = found.map((f) => ({ capability: f.capability, state: f.state, problems: f.problems }));
+    if (best.state === "available") return { ...n, ...best, alternatives };
+    // None is available: say what each one lacks, so any of them can be set up.
+    return {
+      ...n,
+      capability: best.capability,
+      state: best.state,
+      alternatives,
+      problems: found.map((f) => `${f.capability}: ${f.problems.join(" ") || f.state}`),
+      howToEnable: `Any one of these will do. ${found.map((f) => `${f.capability}: ${f.howToEnable ?? f.state}`).join(" Or, ")}`,
+    };
   });
   return {
     source: full ? "ctx.agent.catalog" : "ctx.agent.tools",

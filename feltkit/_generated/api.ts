@@ -6,10 +6,13 @@ import type * as app_module from "../app.js";
 import type * as assistant_module from "../assistant.js";
 import type * as briefing_module from "../briefing.js";
 import type * as checkins_module from "../checkins.js";
+import type * as continuity_module from "../continuity.js";
 import type * as conversations_module from "../conversations.js";
 import type * as documents_module from "../documents.js";
 import type * as inbox_module from "../inbox.js";
 import type * as interactions_module from "../interactions.js";
+import type * as invocations_module from "../invocations.js";
+import type * as invocationstate_module from "../invocationstate.js";
 import type * as links_module from "../links.js";
 import type * as memory_module from "../memory.js";
 import type * as projects_module from "../projects.js";
@@ -23,4 +26,4 @@ import type * as turnstate_module from "../turnstate.js";
 import type * as weekly_module from "../weekly.js";
 
 /** Typed references to every query and mutation. Type-only imports: no backend code reaches the browser. */
-export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "conversations": typeof conversations_module; "documents": typeof documents_module; "inbox": typeof inbox_module; "interactions": typeof interactions_module; "links": typeof links_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "research": typeof research_module; "researchstate": typeof researchstate_module; "settings": typeof settings_module; "tasks": typeof tasks_module; "turn": typeof turn_module; "turnstate": typeof turnstate_module; "weekly": typeof weekly_module }>();
+export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "continuity": typeof continuity_module; "conversations": typeof conversations_module; "documents": typeof documents_module; "inbox": typeof inbox_module; "interactions": typeof interactions_module; "invocations": typeof invocations_module; "invocationstate": typeof invocationstate_module; "links": typeof links_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "research": typeof research_module; "researchstate": typeof researchstate_module; "settings": typeof settings_module; "tasks": typeof tasks_module; "turn": typeof turn_module; "turnstate": typeof turnstate_module; "weekly": typeof weekly_module }>();

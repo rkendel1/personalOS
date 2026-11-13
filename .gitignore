@@ -10,3 +10,5 @@ dist/
 !.env.example
 .feltdb/
 *.app/
+ios/*.xcodeproj/
+ios/build/

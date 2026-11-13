@@ -66,7 +66,7 @@ export function parseInstance(input: string): string | null {
 /** What the side panel and the service worker pass to each other (chrome.storage.session). */
 export const PENDING_KEY = "personalos:pending";
 export interface Pending {
-  kind: "ask" | "task" | "page";
+  kind: "ask" | "task" | "page" | "summon";
   text?: string;
   url?: string;
   title?: string;

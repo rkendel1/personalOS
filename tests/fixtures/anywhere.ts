@@ -17,6 +17,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ResolverClient } from "@appport/resolver-client";
+import { CAPABILITIES } from "../../feltkit/_authority.js";
 
 /** The package's own bin (`resolver`): its exports name only the library entry. */
 const CLI = join(process.cwd(), "tests", "resolver", "node_modules", "@appport", "resolver", "dist", "cli.js");
@@ -95,7 +96,8 @@ export interface TestAuthority {
   close(): Promise<void>;
 }
 
-const ALL = ["personalos.assistant.converse", "personalos.conversation.read", "personalos.tasks.read", "personalos.tasks.create", "personalos.tasks.update", "personalos.tasks.delete", "personalos.reminders.create", "personalos.memory.read", "personalos.memory.write", "personalos.memory.delete", "personalos.projects.create"];
+/** Every capability a surface can ask for: the contract itself, so the stand-in never drifts from it. */
+const ALL: readonly string[] = CAPABILITIES;
 
 /** An authority speaking AuthBoundry's enforcement check contract, from a policy table. */
 export async function startAuthority(): Promise<TestAuthority> {

@@ -1,0 +1,75 @@
+# XcodeGen spec for the PersonalOS iOS app and its share extension.
+#   brew install xcodegen && xcodegen generate && open PersonalOS.xcodeproj
+# Set your team and bundle prefix in Config.xcconfig first (see docs/IOS-SHARE.md).
+name: PersonalOS
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config.xcconfig
+  Release: Config.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  PersonalOS:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONALOS_BUNDLE_PREFIX).app
+        CODE_SIGN_ENTITLEMENTS: App/PersonalOS.entitlements
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: PersonalOS
+        UILaunchScreen: {}
+        # The Keychain group the app and the extension share (the session; never an API key).
+        PersonalOSKeychainGroup: $(AppIdentifierPrefix)$(PERSONALOS_BUNDLE_PREFIX).shared
+        NSAppTransportSecurity:
+          # Plain HTTP only to your own local network (a PersonalOS on your Mac); anything else needs HTTPS.
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: PersonalOS connects to your PersonalOS server on your local network.
+    dependencies:
+      - target: PersonalOSShare
+  PersonalOSShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+        excludes:
+          - Preprocess.js
+      - path: ShareExtension/Preprocess.js
+        buildPhase: resources
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONALOS_BUNDLE_PREFIX).app.share
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/PersonalOSShare.entitlements
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: PersonalOS
+        PersonalOSKeychainGroup: $(AppIdentifierPrefix)$(PERSONALOS_BUNDLE_PREFIX).shared
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # Safari runs Preprocess.js on the page: its address, title and the selected text.
+            NSExtensionJavaScriptPreprocessingFile: Preprocess
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsFileWithMaxCount: 1

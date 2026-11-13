@@ -19,6 +19,8 @@ import { api } from "../feltkit/_generated/api.js";
 import { discover, PROSPECT_NEEDS } from "../feltkit/_capabilities.js";
 import { startStreamingModel } from "./fixtures/streaming-model.js";
 import { domainOf, outcomeOf, planQueries, productKnowledge, prospectsFrom } from "../feltkit/_research.js";
+import { PAGE_READER } from "../feltkit/research.js";
+import type { PageRead } from "../feltkit/_pages.js";
 
 const KEY = "brave_test_key_0123456789abcdef";
 /**
@@ -62,6 +64,25 @@ async function provider(): Promise<Provider> {
   return state;
 }
 
+/**
+ * The companies' own pages, as the page reader would find them (feltkit/_pages.ts reads the real web;
+ * tests/pages.test.ts covers it against a local server). Brightpipe's home page is down and Tally's is
+ * rendered by scripts: each says so, and neither is treated as saying anything.
+ */
+const SITE: Record<string, Omit<PageRead, "url" | "finalUrl" | "ms">> = {
+  "https://www.acme-ops.com/": { status: "read", httpStatus: 200, title: "Acme Ops", detail: "", text: "Acme Ops builds internal tools for operations teams.\nOur platform team writes every internal tool in TypeScript and is moving approvals to agent workflows this year.\nWe serve 400 logistics companies across North America, from dispatch to billing, with dashboards our own engineers maintain." },
+  "https://www.acme-ops.com/careers": { status: "read", httpStatus: 200, title: "Careers - Acme Ops", detail: "", text: "Careers at Acme Ops.\nWe are hiring senior TypeScript engineers to build agent workflows and internal tools for our operations customers.\nYou will own the internal database layer and the approval flows that our dispatchers rely on every day of the week." },
+  "https://brightpipe.io/blog/agents": { status: "read", httpStatus: 200, title: "Brightpipe: building agent-ready applications", detail: "", text: "How Brightpipe ships agent-ready TypeScript applications with an internal database.\nEvery customer-facing workflow at Brightpipe now has an agent path, and our applications keep their state in an embedded database so agents can act safely." },
+  "https://brightpipe.io/": { status: "unavailable", httpStatus: 503, title: "", detail: "the site answered HTTP 503", text: "" },
+  "https://tallyhq.co.uk/": { status: "extraction-failed", httpStatus: 200, title: "Tally HQ", detail: "only 12 characters of readable text (the page may be rendered by scripts)", text: "" },
+};
+const pagesRead: string[] = [];
+(globalThis as any)[PAGE_READER] = async (url: string) => {
+  pagesRead.push(url);
+  const page = SITE[url] ?? { status: "unavailable" as const, httpStatus: null, title: "", detail: "could not be fetched: ENOTFOUND", text: "" };
+  return { url, finalUrl: url, ms: 1, ...page };
+};
+
 let search: Provider;
 before(async () => { search = await provider(); });
 after(async () => { await search.close(); });
@@ -70,7 +91,20 @@ function configure(on: boolean) {
   if (on) { process.env.WEBSEARCH_URL = search.url; process.env.FELTKIT_CREDENTIAL_WEBSEARCH = KEY; }
   else { delete process.env.WEBSEARCH_URL; delete process.env.FELTKIT_CREDENTIAL_WEBSEARCH; }
 }
-async function settle(t: TestApp) { for (let i = 0; i < 3; i++) { await (t.runtime as any).settleAgents(); await t.runtime.runServices(); } }
+const delayed: string[] = [];
+/** Run research's queued steps (AppPort Services jobs) the way the services worker does, until none is left. */
+async function settle(t: TestApp) {
+  const jobs = (t.runtime.services as any).jobs;
+  for (let i = 0; i < 300; i++) {
+    await t.runtime.runServices();
+    // A step scheduled for later (a back-off) runs now: the test stands in for the wait.
+    const due = (await jobs.listJobs("personalos")).filter((j: any) => j.type === "research.step" && ["queued", "scheduled", "pending"].includes(j.status));
+    delayed.push(...due.filter((j: any) => Date.parse(j.runAt ?? 0) > Date.now() + 1000).map((j: any) => j.id));
+    if (!due.length) return;
+    for (const j of due) await jobs.executeJob("personalos", j.id, "test-worker");
+  }
+  throw new Error("research did not settle");
+}
 const say = (t: TestApp, text: string, conversationId?: string) =>
   t.as("ada").action(api.turn.turn, { text, clientId: `c-${Math.random().toString(36).slice(2)}`, ...(conversationId ? { conversationId } : {}) }, { context: { timeZone: ZONE, locale: "en-US" } });
 async function knowsFeltKit(t: TestApp) {
@@ -97,11 +131,12 @@ test("discovery classifies from the platform's catalog: available, not configure
   const of = async (catalog: object[]) => (await discover({ catalog: async () => catalog as never, tools: async () => [] }, PROSPECT_NEEDS)).needs[0]!;
   assert.equal((await of([entry({})])).state, "available");
   const unconfigured = await of([entry({ readiness: { ready: false, problems: [{ message: "websearch: WEBSEARCH_URL is not set", fix: "Set WEBSEARCH_URL." }] } })]);
-  assert.deepEqual([unconfigured.state, unconfigured.howToEnable], ["needs-configuration", "Set WEBSEARCH_URL."]);
+  assert.equal(unconfigured.state, "needs-configuration");
+  assert.match(unconfigured.howToEnable!, /^Any one of these will do\. websearch\.search: Set WEBSEARCH_URL\. Or, openaisearch\.search: /, "each provider that could serve the need, and what it lacks");
   assert.equal((await of([entry({ allowed: false })])).state, "needs-authorization");
   assert.equal((await of([])).state, "connectable", "not declared: a provider can be connected, it is not 'no web access'");
   const d = await discover({ catalog: async () => [entry({})] as never, tools: async () => [] }, PROSPECT_NEEDS);
-  assert.deepEqual([d.executable, d.complete], [true, false], "page retrieval and contact research are not connected: a partial result, not a refusal");
+  assert.deepEqual([d.executable, d.complete], [true, false], "contact research is not connected: a partial result, not a refusal");
 });
 
 test("ACCEPTANCE: \"Find me some new customers for FeltKit\" is discovered, authorized, executed, and saved with its evidence; nothing is sent", async () => {
@@ -121,7 +156,8 @@ test("ACCEPTANCE: \"Find me some new customers for FeltKit\" is discovered, auth
     const discovery = started.discovery as any;
     assert.equal(discovery.source, CATALOG ? "ctx.agent.catalog" : "ctx.agent.tools", "the platform's catalog when FeltKit provides it");
     if (CATALOG) assert.ok(discovery.capabilitiesSeen > 9, `more than the nine model tools (${discovery.capabilitiesSeen})`);
-    assert.deepEqual(discovery.needs.map((n: any) => [n.need, n.state, n.capability]), [["web search", "available", "websearch.search"], ["page retrieval", "connectable", null], ["contact research", "connectable", null]]);
+    assert.deepEqual(discovery.needs.map((n: any) => [n.need, n.state, n.capability]), [["web search", "available", "websearch.search"], ["page retrieval", "available", null], ["contact research", "connectable", null]]);
+    if (CATALOG) assert.deepEqual(discovery.needs[0].alternatives.map((a: any) => [a.capability, a.state]), [["websearch.search", "available"], ["openaisearch.search", "needs-configuration"]], "the other provider is known, and why it is not used");
     if (!CATALOG) assert.match(discovery.needs[0].problems[0], /first call will tell/, "without the catalog, available means declared, and says so");
     assert.ok(started.profile.statements.length === 1, "the profile is the person's own statement about FeltKit");
     let text = await transcript(t, r.conversationId);
@@ -141,11 +177,15 @@ test("ACCEPTANCE: \"Find me some new customers for FeltKit\" is discovered, auth
     assert.ok(done.prospects.length >= 2);
     const domains = done.prospects.map((p: any) => p.domain);
     assert.ok(domains.includes("acme-ops.com") && domains.includes("brightpipe.io"));
-    assert.deepEqual(done.prospects.map((p: any) => p.company), ["Brightpipe", "Acme Ops", "Tally HQ"], "names from the pages' titles");
-    assert.equal(done.prospects.find((p: any) => p.domain === "acme-ops.com")?.facts.length, 2, "one fact per page, however many searches returned it");
+    assert.deepEqual(done.prospects.map((p: any) => p.company), ["Acme Ops", "Brightpipe", "Tally HQ"], "names from the pages' titles");
+    const acmeFacts = done.prospects.find((p: any) => p.domain === "acme-ops.com")!.facts;
+    assert.equal(acmeFacts.filter((f: any) => f.kind === "search-result").length, 2, "one search-result fact per page, however many searches returned it");
+    assert.ok(acmeFacts.filter((f: any) => f.kind === "quote").length >= 2, `and quotes from its pages, which were read: ${JSON.stringify({ acmeFacts, pagesRead, pages: done.sources.filter((x: any) => x.kind === "page").map((x: any) => [x.url, x.status]), cands: done.run.candidates, kw: done.run.profile.keywords })}`);
+    assert.ok(pagesRead.includes("https://www.acme-ops.com/careers") && pagesRead.includes("https://tallyhq.co.uk/"));
     for (const excluded of ["github.com", "wikipedia.org", "feltkit.dev"]) assert.ok(!domains.includes(excluded), `${excluded} is not a prospect`);
-    const scores = done.prospects.map((p: any) => p.assessment.score);
-    assert.deepEqual(scores, [...scores].sort((a: number, b: number) => b - a), "ranked by the stated score");
+    const LEVEL: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const order = done.prospects.map((p: any) => LEVEL[p.assessment.fit]! * 10 + LEVEL[p.assessment.confidence]!);
+    assert.deepEqual(order, [...order].sort((a: number, b: number) => b - a), "ranked by fit, then confidence: one scale whatever the basis");
     assert.deepEqual(done.prospects.map((p: any) => p.rank), done.prospects.map((_: unknown, i: number) => i + 1));
     const sourceById = new Map(done.sources.map((s: any) => [s.id, s]));
     for (const p of done.prospects) {
@@ -153,11 +193,13 @@ test("ACCEPTANCE: \"Find me some new customers for FeltKit\" is discovered, auth
         const s: any = sourceById.get(f.sourceId);
         assert.ok(s, "every fact cites a stored source");
         assert.equal(f.url, s.url);
-        assert.ok(f.text.includes(s.title), "facts quote the source, verbatim");
+        if (f.kind === "quote") assert.ok(s.kind === "page" && s.status === "read" && s.text.includes(f.text), "a quote is verbatim from a page that was read");
+        else assert.ok(f.text.includes(s.title), "a search-result fact is what the search returned");
       }
       assert.equal(p.assessment.basis, "rules");
       assert.ok(p.assessment.rationale.every((x: any) => x.sourceIds.every((id: string) => sourceById.has(id))), "the assessment cites the sources it rests on");
-      assert.ok(p.openQuestions.some((q: string) => /search-result text was read/.test(q)), "says what was not verified");
+      const read = done.sources.some((x: any) => x.kind === "page" && x.status === "read" && domainOf(x.url) === p.domain);
+      if (!read) assert.ok(p.openQuestions.some((q: string) => /search-result text was read/.test(q)), "says its pages were not read");
       assert.match(p.nextAction, /without your approval/);
       assert.equal(typeof p.researchedAt, "number");
     }
@@ -165,7 +207,13 @@ test("ACCEPTANCE: \"Find me some new customers for FeltKit\" is discovered, auth
     assert.equal(acme?.assessment.fit, "high");
     assert.equal(done.prospects.find((p: any) => p.domain === "tallyhq.co.uk")?.assessment.fit, "low", "a weak lead is labelled weak");
     text = await transcript(t, r.conversationId);
-    assert.match(text, /Research for FeltKit is done: \d+ prospects/);
+    assert.match(text, /Research for FeltKit is done: \d+ prospects from \d+ search results \(5 of 5 searches\), with 3 of 5 pages read/);
+    // Pages that were not read say why, and are never evidence.
+    const pages = done.sources.filter((x: any) => x.kind === "page");
+    assert.deepEqual(pages.filter((x: any) => x.status !== "read").map((x: any) => [domainOf(x.url), x.status]).sort(), [["brightpipe.io", "unavailable"], ["tallyhq.co.uk", "extraction-failed"]]);
+    assert.ok(pages.filter((x: any) => x.status !== "read").every((x: any) => x.text === "" && x.detail));
+    assert.ok(done.run.steps.length >= 12, "every step is recorded");
+    assert.deepEqual([done.run.usage.searches, done.run.usage.pagesRequested, done.run.usage.pagesRead, done.run.usage.generations], [5, 5, 3, 0]);
     assert.match(text, /Acme Ops/);
 
     // 9. Nothing was sent: no proposals, no actions, and the only external calls were searches.
@@ -235,6 +283,7 @@ test("transient provider failures are retried; a search that keeps failing leave
   configure(true);
   search.mode = "fail-once";
   search.failed.clear();
+  delayed.length = 0;
   search.requests = [];
   const t = await createTestApp();
   try {
@@ -244,6 +293,7 @@ test("transient provider failures are retried; a search that keeps failing leave
     const first = await detail(t, (await latestRun(t)).id);
     assert.equal(first.run.status, "completed");
     assert.ok(first.run.queries.every((q: any) => q.attempts === 2), "each search failed once, then succeeded");
+    assert.ok(delayed.length >= first.run.queries.length, "each retry waited (a job scheduled for later), instead of hammering the provider");
     // One query's provider stays down: it gives up after 3 attempts; the rest still yields prospects.
     search.mode = "flaky-query";
     const r = await say(t, "Find me new prospects for FeltKit");
@@ -326,14 +376,15 @@ test("with a model: the outcome still goes to research (not the model's tool lis
     await say(t, "Are you sure you can't search the web?", r.conversationId);
     const system = String(model.requests.at(-1)!.body.messages[0].content);
     assert.match(system, CATALOG ? /web search: available \(websearch\.search\)/ : /web search: declared; whether it is configured is checked on first use \(websearch\.search\)/);
-    assert.match(system, /page retrieval: no provider connected/);
+    assert.match(system, /page retrieval: available/);
+    assert.match(system, /contact research: no provider connected/);
     assert.match(system, /Never say a capability does not exist, or that you have no web access, unless the list above says so/);
     assert.doesNotMatch(system, /there is no such integration/);
     // Not configured: the model is told exactly that, with what is missing.
     configure(false);
     model.scripts.push({ text: ["Web search is set up but not configured yet."] });
     await say(t, "can you search the web?", r.conversationId);
-    assert.match(String(model.requests.at(-1)!.body.messages[0].content), CATALOG ? /web search: declared, not configured \(websearch\.search\): websearch: WEBSEARCH_URL is not set/ : /web search: declared; whether it is configured is checked on first use \(websearch\.search\)/);
+    assert.match(String(model.requests.at(-1)!.body.messages[0].content), CATALOG ? /web search: declared, not configured \(websearch\.search\): websearch\.search: websearch: WEBSEARCH_URL is not set[\s\S]*openaisearch\.search: openaisearch: OPENAISEARCH_URL is not set/ : /web search: declared; whether it is configured is checked on first use \(websearch\.search\)/);
   } finally { await t.close(); await model.close(); configure(false); }
 });
 
@@ -358,7 +409,7 @@ test("without a model, \"are you sure you can't search the web?\" is answered fr
     configure(false);
     const not = await say(t, "can you browse the web?", yes.conversationId);
     text = await transcript(t, not.conversationId);
-    if (CATALOG) assert.match(text, /Not right now, and it isn't a fixed limit: web search is set up but not configured\. Set WEBSEARCH_URL/);
+    if (CATALOG) assert.match(text, /Not right now, and it isn't a fixed limit: web search is set up but not configured\. Any one of these will do\. websearch\.search: Set WEBSEARCH_URL/);
     else assert.match(text, /whether its provider is configured is checked when research first uses it/);
   } finally { await t.close(); configure(false); }
 });
