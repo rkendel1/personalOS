@@ -25,6 +25,8 @@ export function capabilityFor(intent: string, detail: { reminder?: boolean } = {
     case "recall": return "personalos.memory.read";
     case "project.create": return "personalos.projects.create";
     case "conversation.summary": case "conversation.decisions": return "personalos.conversation.read";
+    // Continuing one of your PersonalOS conversations from a surface, and reading its work there.
+    case "conversation.continue": case "conversation.work": return "personalos.conversation.continue";
     default: return "personalos.assistant.converse";
   }
 }
@@ -36,4 +38,6 @@ export const CAPABILITIES = [
   "personalos.memory.read", "personalos.memory.write", "personalos.memory.delete", "personalos.projects.create",
   // Research started from outside PersonalOS (feltkit/invocations.ts): checked when it starts and before every step.
   "personalos.research.run",
+  // Continuing a PersonalOS conversation (and reading its work) from a surface (feltkit/interactions.ts).
+  "personalos.conversation.continue",
 ] as const;

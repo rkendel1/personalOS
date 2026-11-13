@@ -76,9 +76,9 @@ A bookmarklet was the lighter option, and it was rejected for three reasons:
 
 - Sign-in is e-mail and password. Provider buttons (Google, GitHub) redirect the page, which a side panel can't
   follow; they'd need `chrome.identity.launchWebAuthFlow`.
-- *Summarize* and *Ask about it* still put page text into a chat message (up to about 2,800 characters).
-  That message is not an invocation, and the page text is mixed with what you typed. Use **Summon** to
-  keep them apart.
+- *Summarize*, *Ask about it*, *Read later* and the right-click requests are invocations too: the
+  page is context and the button or your question is the instruction. *Summarize* needs a model, and
+  says so without one. See docs/CONTINUITY.md.
 - The assistant sees the page text the extension sends in a message (up to about 2,800 characters). Saved
   pages are stored whole, but the assistant can list files, not read them (see the README's gaps).
 - Reminders and the daily/weekly check-ins arrive as PersonalOS notifications in the app; there are no

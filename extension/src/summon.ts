@@ -7,11 +7,11 @@
  * is context (data), never part of the instruction, and the page is where the result offers to return.
  */
 
-export const LIMITS = { selectionChars: 20_000, titleChars: 300, urlChars: 2000, instructionChars: 2000 } as const;
+export const LIMITS = { selectionChars: 20_000, pageChars: 100_000, titleChars: 300, urlChars: 2000, instructionChars: 2000 } as const;
 
 export interface Tab { url: string; title?: string }
 /** What content.js read in the page (an isolated world: page scripts can't change what it sees). */
-export interface PageRead { url: string; title: string; selection: string }
+export interface PageRead { url: string; title: string; selection: string; text?: string }
 
 export interface SummonInput {
   invocationId: string;
@@ -19,6 +19,8 @@ export interface SummonInput {
   page?: PageRead | null;
   instruction: string;
   includeSelection: boolean;
+  /** Send the page's visible text too (Summarize): the page's own content, as context. */
+  includePageText?: boolean;
   /** Continue this PersonalOS conversation (one of the person's own; the server checks). */
   conversationId?: string | null;
   now: number;
@@ -31,7 +33,7 @@ export interface Envelope {
   invocationId: string;
   surface: { adapter: "browser"; device: string; version: string };
   instruction: string;
-  context: Array<{ kind: "url" | "selection"; url: string; title?: string; text?: string }>;
+  context: Array<{ kind: "url" | "selection" | "page"; url: string; title?: string; text?: string }>;
   submittedAt: number;
   timeZone: string;
   returnTo: { kind: "page"; url: string };
@@ -63,6 +65,12 @@ export function buildEnvelope(input: SummonInput): Built {
       return { error: `Your selection is ${selection.length.toLocaleString("en-US")} characters; PersonalOS takes up to ${LIMITS.selectionChars.toLocaleString("en-US")}. Select less, or send without it.` };
     }
     context.push({ kind: "selection", url: url.toString(), text: selection });
+  }
+  if (input.includePageText) {
+    const text = (page?.text ?? "").trim();
+    if (!text) return { error: "This page has no text PersonalOS can read." };
+    if (text.length > LIMITS.pageChars) notes.push(`Only the first ${LIMITS.pageChars.toLocaleString("en-US")} characters of the page were sent.`);
+    context.push({ kind: "page", url: url.toString(), title, text: text.slice(0, LIMITS.pageChars) });
   }
   return {
     envelope: {

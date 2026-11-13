@@ -186,7 +186,8 @@ try {
   await panel.getByRole("button", { name: "Close" }).click().catch(() => {});
   await panel.getByRole("button", { name: "Summon PersonalOS" }).click();
   const again = panel.getByTestId("summon");
-  await again.getByText(/Continue the conversation from your last summon on this page/).waitFor({ timeout: 20_000 });
+  // Continuing: the conversation open in the panel (just opened), or the last summon from this page.
+  await again.getByText(/Continue the open conversation: |Continue the conversation from your last summon on this page/).waitFor({ timeout: 20_000 });
   await again.getByLabel("What should PersonalOS do?").fill("Remember this");
   await again.getByRole("button", { name: "Send" }).click();
   await panel.getByTestId("summon-status").waitFor();

@@ -178,6 +178,21 @@ export const save = app.mutation({
   },
 });
 
+/** An answer about what was shared: the request and the model's reply in the conversation, citing its generation. */
+export const answer = app.mutation({
+  access: "invocations.process",
+  args: { invocationId: s.string(), request: s.string({ maxLength: 4000 }), reply: s.string({ maxLength: 8000 }), generation: s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() }) },
+  returns: s.object({ replyId: s.string() }),
+  handler: async (ctx, a) => {
+    const inv = await ownInvocation(ctx, a.invocationId);
+    if (!inv) fail("NOT_FOUND", `No invocation ${a.invocationId}.`);
+    await appendMessage(ctx, inv.conversationId, { role: "user", text: a.request, interpretation: { intent: "answer", source: "model" } });
+    const replyId = await appendMessage(ctx, inv.conversationId, { role: "assistant", text: a.reply, interpretation: { intent: "answer", source: "model" } });
+    await ctx.db.patch(invocations, inv.id, { interpretation: { ...(inv.interpretation ?? { intent: "answer", basis: "rules", detail: "answer" }), answeredBy: a.generation }, updatedAt: Date.now() });
+    return { replyId };
+  },
+});
+
 /** The assistant's reply to an invocation, and the actions in that conversation still waiting for the person. */
 export const replyOf = app.query({
   access: "invocations.process",

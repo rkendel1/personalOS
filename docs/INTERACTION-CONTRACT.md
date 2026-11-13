@@ -79,3 +79,17 @@ their bytes.
 Updates (`interactions:status`) are `{ seq, state, text, at, actionId? }`, limited to the audience
 like `reply`. After the owner disconnects the surface, `revoked: true` comes back and no content
 follows.
+
+## Continuing a PersonalOS conversation (docs/CONTINUITY.md)
+
+In a direct message with PersonalOS (audience `private`):
+
+- **`continue <conversation id>`** points the source thread at one of the sender's own PersonalOS
+  conversations. Later messages in the thread continue it.
+  - Capability: `personalos.conversation.continue`, decided by AuthBoundry now.
+  - Another person's id is refused as `NOT_FOUND`, the same as an id that doesn't exist.
+  - A denial is recorded against that conversation and does not move the thread.
+- **"status"** (or "what did you find", "what happened") replies with the conversation's work, each part
+  with its surface, request, shared material, authority and state. Same capability.
+
+Anywhere else either one is refused with `CONTINUE_NOT_PRIVATE`.

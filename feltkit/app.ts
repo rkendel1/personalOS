@@ -460,7 +460,7 @@ export const invocations = app.collection(
     instruction: s.string({ maxLength: 2000 }),
     /** What they supplied as context: untrusted data, kept as they sent it (normalized). */
     context: s.array(s.object({
-      kind: s.enum(["url", "text", "selection", "document"] as const),
+      kind: s.enum(["url", "text", "selection", "document", "page"] as const),
       url: s.optional(s.string({ maxLength: 2000 })), title: s.optional(s.string({ maxLength: 300 })),
       text: s.optional(s.string({ maxLength: 100_000 })), name: s.optional(s.string({ maxLength: 200 })),
       mediaType: s.optional(s.string({ maxLength: 100 })), size: s.optional(s.number()),
@@ -478,10 +478,12 @@ export const invocations = app.collection(
     state: s.enum(["accepted", "processing", "needs_approval", "completed", "failed"] as const),
     /** What PersonalOS inferred the request to be, and how: never confused with what was asked. */
     interpretation: s.optional(s.object({
-      intent: s.enum(["research", "assistant", "save"] as const),
+      intent: s.enum(["research", "assistant", "save", "answer"] as const),
       basis: s.enum(["rules", "model"] as const),
       detail: s.string({ maxLength: 500 }),
       generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
+      /** For an answer: the generation that wrote it (from the shared material only, with no tools). */
+      answeredBy: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })),
     })),
     /** AuthBoundry's decision on the capability the work needs, made when the work runs. */
     authority: s.optional(s.object({
@@ -535,6 +537,11 @@ export const interactions = app.collection(
     threadKey: s.string(),
     sourceSequence: s.optional(s.number()),
     conversationId: s.optional(s.string()),
+    /**
+     * Set when this interaction pointed its source thread at an existing PersonalOS conversation
+     * ("continue <id>"): later messages in the thread continue that conversation. Never set on a refusal.
+     */
+    continuation: s.optional(s.object({ conversationId: s.string(), at: s.number() })),
     messageId: s.optional(s.string()),
     replyId: s.optional(s.string()),
     actionIds: s.array(s.string()),

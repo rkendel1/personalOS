@@ -12,12 +12,31 @@ import { buildEnvelope, previousFor, STATE_LABEL, type PageRead, type Tab } from
 export const LAST_SUMMON_KEY = "personalos:lastSummon";
 const SUGGESTIONS = ["Research this company: could it be a customer for FeltKit?", "Remember this", "Remind me to read this tomorrow"];
 
-interface Receipt { invocationId: string; state: string; conversationId: string; message: string; returnTo: { kind: string; url?: string } }
+export interface Receipt { invocationId: string; state: string; conversationId: string; message: string; returnTo: { kind: string; url?: string } }
 
-export function SummonForm({ target, readPage, initialSelection, onClose }: {
+/** The conversation open in the panel (#/chat/<id>): continuing it is the natural default. */
+export function openConversation(): string | null {
+  return /^#\/chat\/([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? null;
+}
+
+/** Submit an envelope; a "safe to retry" refusal is retried with the same id. */
+export async function submitEnvelope(client: ReturnType<typeof useFeltKit>, envelope: object): Promise<Receipt> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return (await client.mutation(api.invocations.submit, { envelope } as never)) as Receipt;
+    } catch (e) {
+      if ((e as { code?: string }).code !== "CONFLICT" || attempt >= 2) throw e;
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+}
+
+export function SummonForm({ target, readPage, initialSelection, ask, onClose }: {
   target: Tab & { tabId?: number };
   readPage: () => Promise<PageRead>;
   initialSelection?: string;
+  /** Opened by "Ask about it": the person types their question about the page. */
+  ask?: boolean;
   onClose: () => void;
 }) {
   const client = useFeltKit();
@@ -32,7 +51,13 @@ export function SummonForm({ target, readPage, initialSelection, onClose }: {
   // One id for this summon: a retry after a failure is the same invocation, never a second one.
   const invocationId = useRef(`browser-${crypto.randomUUID()}`);
   const recent = useQuery(api.invocationstate.list, { limit: 50 });
-  const previous = recent ? previousFor(recent as never, target.url) : null;
+  const conversations = useQuery(api.conversations.list, {}) as Array<{ id: string; title: string }> | undefined;
+  // Continue: the conversation open in the panel (wherever it began: Multiplayer, iOS, here), else the
+  // last one summoned from this page.
+  const open = openConversation();
+  const openTitle = open ? conversations?.find((c) => c.id === open)?.title ?? null : null;
+  const fromPage = recent ? previousFor(recent as never, target.url) : null;
+  const previous = open && openTitle ? { conversationId: open, at: 0, title: openTitle } : fromPage ? { ...fromPage, title: null as string | null } : null;
 
   useEffect(() => {
     readPage()
@@ -54,16 +79,7 @@ export function SummonForm({ target, readPage, initialSelection, onClose }: {
     if ("error" in built) return setError(built.error);
     setSending(true);
     try {
-      let answer: Receipt | null = null;
-      for (let attempt = 0; attempt < 3 && !answer; attempt++) {
-        try {
-          answer = (await client.mutation(api.invocations.submit, { envelope: built.envelope })) as Receipt;
-        } catch (e) {
-          // "Nothing was written; it is safe to retry": the same id again.
-          if ((e as { code?: string }).code !== "CONFLICT" || attempt === 2) throw e;
-          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
-        }
-      }
+      const answer = await submitEnvelope(client, built.envelope);
       setReceipt(answer);
       void chrome.storage.session.set({ [LAST_SUMMON_KEY]: { invocationId: answer!.invocationId, title: page?.title ?? target.title ?? target.url } });
     } catch (e) {
@@ -85,20 +101,22 @@ export function SummonForm({ target, readPage, initialSelection, onClose }: {
           Include the text you selected ({selection.length.toLocaleString()} characters)
         </label>
       )}
-      <textarea aria-label="What should PersonalOS do?" placeholder="What should PersonalOS do? (optional)" rows={3} value={instruction} onChange={(e) => setInstruction(e.target.value)} />
-      <div className="row wrap">
-        {SUGGESTIONS.map((s) => <button key={s} className="ghost tiny" onClick={() => setInstruction(s)}>{s}</button>)}
-      </div>
+      <textarea aria-label="What should PersonalOS do?" placeholder={ask ? "What do you want to know about it?" : "What should PersonalOS do? (optional)"} rows={3} value={instruction} autoFocus={ask} onChange={(e) => setInstruction(e.target.value)} />
+      {!ask && (
+        <div className="row wrap">
+          {SUGGESTIONS.map((s) => <button key={s} className="ghost tiny" onClick={() => setInstruction(s)}>{s}</button>)}
+        </div>
+      )}
       {previous && (
         <label className="small">
           <input type="checkbox" checked={continueIt} onChange={(e) => setContinueIt(e.target.checked)} />
-          Continue the conversation from your last summon on this page ({new Date(previous.at).toLocaleString()})
+          {previous.title ? `Continue the open conversation: ${previous.title}` : `Continue the conversation from your last summon on this page (${new Date(previous.at).toLocaleString()})`}
         </label>
       )}
       <p className="muted small">PersonalOS works on it after you close this page. What the page says is treated as information, never as instructions; nothing is sent to anyone.</p>
       {error && <p className="error-text small" role="alert">{error}</p>}
       <div className="row">
-        <button className="tiny" disabled={sending || !page} onClick={() => void send()}>{sending ? "Sending…" : "Send"}</button>
+        <button className="tiny" disabled={sending || !page || (ask && !instruction.trim())} onClick={() => void send()}>{sending ? "Sending…" : "Send"}</button>
         <button className="ghost tiny" onClick={onClose}>Cancel</button>
       </div>
     </div>

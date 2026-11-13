@@ -165,6 +165,8 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
         </div>
       )}
 
+      {conversationId && <Provenance conversationId={conversationId} />}
+
       <div className="messages" aria-live="polite">
         {!conversationId && !pending ? (
           <div className="empty">
@@ -296,5 +298,40 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
         )}
       </form>
     </div>
+  );
+}
+
+
+/**
+ * Where this conversation's parts came from (feltkit/continuity.ts): each Multiplayer message, browser
+ * or iOS share, research run and task, with its own surface, what was asked and shared, AuthBoundry's
+ * decision and what was done. A continued conversation never borrows an earlier part's surface or
+ * authority. And how to carry it on in Multiplayer.
+ */
+function Provenance({ conversationId }: { conversationId: string }) {
+  const data = useQuery(api.continuity.of, { conversationId });
+  const [copied, setCopied] = useState(false);
+  if (!data) return null;
+  const outside = data.entries.filter((e) => e.kind === "interaction" || e.kind === "invocation");
+  return (
+    <details className="provenance" data-testid="provenance">
+      <summary className="small muted">Where this came from{outside.length ? ` (${[...new Set(outside.map((e) => e.surface.split(" (")[0]))].join(", ")})` : ""}</summary>
+      <ul className="small">
+        {data.entries.map((w) => (
+          <li key={w.ref} data-kind={w.kind}>
+            <strong>{w.surface}</strong>{w.kind === "research" || w.kind === "task" ? ` · ${w.kind}` : ""} · {w.state}
+            {w.asked && <div>Asked: “{w.asked}”</div>}
+            {w.shared.length > 0 && <div>Shared: {w.shared.join("; ")}</div>}
+            {w.inferred && <div className="muted">Read as: {w.inferred}</div>}
+            {w.authority && <div className="muted">Authority: {w.authority.capability}: {w.authority.outcome}{w.authority.delegationId ? ` (delegation ${w.authority.delegationId})` : ""}{w.authority.reason ? ` (${w.authority.reason})` : ""}</div>}
+            {w.did && <div className="muted">{w.did}</div>}
+          </li>
+        ))}
+      </ul>
+      <p className="small muted">
+        Carry this on in Multiplayer: send <code>{data.continueWith}</code> to PersonalOS in a direct message.{" "}
+        <button className="link small" onClick={() => void navigator.clipboard?.writeText(data.continueWith).then(() => setCopied(true))}>{copied ? "Copied" : "Copy"}</button>
+      </p>
+    </details>
   );
 }
