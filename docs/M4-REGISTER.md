@@ -10,6 +10,39 @@ checked against the source. Status values:
 
 The baseline is PersonalOS `cba6c4f` (main) and FeltKit `1788e47` (main).
 
+## Blocking now: unpublished releases
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G0 | **PersonalOS main depends on unpublished packages.** `package.json` names `@feltdb/feltkit` 0.3.30 and `@authboundry/local` 0.1.0. npm has FeltKit 0.3.29, no `@authboundry/local`, and `@authboundry/core` 1.17.3, so `npm ci` and main's CI fail until they are released. FeltKit main also lacks its 0.3.30 version commit (`db25bcc`, still on `claude/affectionate-bardeen-o1xu78`: PR #121 was merged before it was pushed). Releases are the owner's to publish. They are not worked around here, and nothing is published to make CI green. | Open (owner: you) | `npm view` on 2026-11-13; `package.json` lines 25-26 |
+
+## Ownership (decided 2026-11-13)
+
+Per-person connections, credential custody and renewal, connector manifests and connector execution
+belong to AppPort Services and AppPort, not to FeltKit or AnywhereAide. Delegated authority belongs to
+AuthBoundry. The surface contract, registry, invocation lifecycle and continuity belong to FeltKit. The
+product experience belongs to AnywhereAide.
+
+The test for every piece of M4: could another FeltKit application use it without importing
+AnywhereAide?
+
+One finding against that split:
+
+- AppPort's own documented boundary (`@appport/services` 0.17.0, `docs/credentials.md`) says AppPort
+  contains no secret store, encryption, provider adapter or policy engine. AppPort Services owns how a
+  credential is collected (authorized, audited, versioned); the **host** owns where it lives
+  (`SecretCustody`, implemented by FeltKit's vault).
+- The OAuth renewal lifecycle and integration execution live in FeltKit today
+  (`runtime/oauth-credentials.ts`, `runtime/integrations.ts`).
+- So moving connections into AppPort Services means either:
+  - (a) AppPort Services defines the connection contract and FeltKit implements it as host, as
+    `SecretCustody` works today; or
+  - (b) AppPort Services gains an implementation: OAuth lifecycle, provider adapters, execution.
+    That changes its stated boundary and moves code out of FeltKit.
+
+Awaiting that decision. A FeltKit-side implementation exists, unpushed, as a reference: 6/6
+acceptance tests plus a real-AuthBoundry run.
+
 ## What exists today
 
 | Surface | Contract | Who submits | Record | Result goes back to | Evidence |
@@ -72,7 +105,7 @@ These already hold across every surface:
 
 | # | Gap | Status | Evidence |
 |---|---|---|---|
-| G11 | **No per-person connector credentials. This is the central gap.** A FeltKit integration holds one OAuth grant (`credential.ref`), connected by someone holding `credential.store` (an admin). Gmail has to be *Ada's* mailbox and Grace's has to be Grace's. FeltKit needs grants owned by a person: connected by that person, used only for work done as or on behalf of that person (after AuthBoundry allows it), and revocable by that person. That belongs in FeltKit, which already has the OAuth lifecycle (renewal, rotation, failure classes, disconnect). It doesn't belong in PersonalOS. | Missing (FeltKit) | `feltkit/packages/sdk/src/runtime/oauth-credentials.ts:313-366` (connect is gated on `credential.store`; one `client.ref` per integration) |
+| G11 | **No per-person connector credentials. This is the central gap.** *Owner (decided): AppPort Services; see "Ownership".* A FeltKit integration holds one OAuth grant (`credential.ref`), connected by someone holding `credential.store` (an admin). Gmail has to be *Ada's* mailbox and Grace's has to be Grace's. FeltKit needs grants owned by a person: connected by that person, used only for work done as or on behalf of that person (after AuthBoundry allows it), and revocable by that person. That belongs in FeltKit, which already has the OAuth lifecycle (renewal, rotation, failure classes, disconnect). It doesn't belong in PersonalOS. | Missing (FeltKit) | `feltkit/packages/sdk/src/runtime/oauth-credentials.ts:313-366` (connect is gated on `credential.store`; one `client.ref` per integration) |
 | G12 | **No connector manifest.** A FeltKit integration declaration already has most of one: operations with input/output schemas, `effect: observation \| consequential`, `access`, an OAuth credential with scopes, and failure classes. It lacks: provider identity, rate limits as data, a `destructive` class distinct from `consequential`, provenance requirements, and a way to list connectors at runtime. Extend the declaration rather than invent a second format. | Partial | `feltkit/app.ts:152-276` (identity, websearch, x integrations) |
 | G13 | **No connector authority at AuthBoundry.** Connector capabilities (e.g. `gmail.send`) aren't AuthBoundry capabilities, so they can't be granted or revoked per connector. The fix fits the existing model: add them to the contract, and they appear in Settings. | Missing | `feltkit/_authority.ts` |
 | G14 | **Approvals aren't bound to parameters for connector actions.** FeltKit agent proposals are already approved as one exact action with its arguments (`ctx.agent`, `actions.approve`), so this mechanism can be reused. | Exists (mechanism) | `src/chat.tsx:88`, FeltKit agent actions |
