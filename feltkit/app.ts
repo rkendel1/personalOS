@@ -91,7 +91,7 @@ export const app = feltkit({
   // (`feltkit credential set credential-ref:authboundry-check`, or FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK).
   authority: {
     url: { env: "AUTHBOUNDRY_URL" },
-    application: "personalos",
+    application: { env: "AUTHBOUNDRY_APPLICATION", development: "personalos" },
     checkCredential: "credential-ref:authboundry-check",
     executor: { principal: "agent:personalos", type: "agent" },
   },
