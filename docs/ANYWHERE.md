@@ -78,10 +78,29 @@ Before anything runs, PersonalOS calls `ctx.authority.decide({ capability, onBeh
 That is FeltKit's own AuthBoundry adapter, configured once in `feltkit/app.ts`:
 
 ```ts
-authority: { url: { env: "AUTHBOUNDRY_URL" }, application: "personalos",
-             checkCredential: "credential-ref:authboundry-check",
+authority: { local: true, url: { env: "AUTHBOUNDRY_URL" }, capabilities: [...CAPABILITIES],
+             application: "personalos", checkCredential: "credential-ref:authboundry-check",
              executor: { principal: "agent:personalos", type: "agent" } }
 ```
+
+**Nothing to set up (the default).** Without `AUTHBOUNDRY_URL`, FeltKit runs a private AuthBoundry for
+PersonalOS through `@authboundry/local`, on loopback, with its state beside PersonalOS's. FeltKit sets up
+the application, its capabilities and `agent:personalos`. The administrator's secret and the check
+credential are generated and kept in FeltKit's custody. Each person grants what PersonalOS may do for
+them in **Settings → What PersonalOS may do for you** (`feltkit/delegation.ts`, through
+`ctx.authority.grants`, which only ever acts for the signed-in person):
+
+- a switch per capability;
+- for a day, a week, 30 days, or until they turn it off;
+- "Turn all off".
+
+Grants live in AuthBoundry alone: PersonalOS keeps no copy. A grant is recorded as activity in FeltKit and
+as evidence in AuthBoundry. In production the private AuthBoundry needs FeltKit's credential vault
+(`FELTKIT_CREDENTIAL_VAULT=1` with `FELTKIT_CREDENTIAL_VAULT_KEY`) and a persistent volume
+(`FELTKIT_STATE_DIR`); its state goes to `<state>.authority`. It runs on one machine.
+
+**A hosted AuthBoundry.** With `AUTHBOUNDRY_URL` set, that AuthBoundry decides, people grant there, and
+Settings says so.
 
 The identities are distinct and each has one authority:
 
@@ -90,7 +109,7 @@ The identities are distinct and each has one authority:
 | Requester | the Multiplayer participant who wrote the message | FeltKit session in Multiplayer (`requestedBy`) |
 | Resource owner | the PersonalOS account the sender is linked to | Resolver |
 | Executor | `agent:personalos` | AuthBoundry agent principal |
-| Delegated authority | the owner's delegation to `agent:personalos` (capabilities, scope, expiry) | AuthBoundry, created and revoked there |
+| Delegated authority | the owner's delegation to `agent:personalos` (capabilities, scope, expiry) | AuthBoundry: granted and revoked by the owner in Settings (private AuthBoundry), or in a hosted AuthBoundry |
 | Evidence | `decisionId`, `delegationId`, `onBehalfOf`, `principal` on the interaction | AuthBoundry's decision record |
 
 AuthBoundry (`POST /_authboundry/authorize/check` with `on_behalf_of`) uses only that person's live
@@ -106,11 +125,13 @@ The decision outcomes:
 - An allow counts only if it is exact, echoes `on_behalf_of`, and names a `delegation_id`.
 - A deny is recorded as `refused`, with the decision.
 - An unreachable, slow or unverifiable authority is `UNAVAILABLE`: nothing recorded, retried.
-- Revoking the delegation in AuthBoundry stops the next operation. The link and the identities are
-  unchanged.
+- Revoking the delegation (turning it off in Settings) stops the next operation. The link and the
+  identities are unchanged.
 
-Configuration: `AUTHBOUNDRY_URL`, and the check credential as `FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK`
-(or `feltkit credential set authboundry-check`). Without them, nothing a surface asks for is allowed.
+Configuration: none with the private AuthBoundry. With a hosted one, `AUTHBOUNDRY_URL`, and the check
+credential as `FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK` (or `feltkit credential set authboundry-check`).
+If the authority can't be reached, or the person has granted nothing, nothing a surface asks for is
+allowed.
 
 AuthBoundry decides *whether the account may*. PersonalOS's own rules still apply after it:
 
@@ -202,7 +223,9 @@ Still open (owners are in the register):
 
 - These commits are not released.
 - The cross-app conversation classifier (`_conversation.ts` / `_compose.ts`) has no shared home.
-- An AuthBoundry administrator creates the delegations. The owner has no federated sign-in to do it.
+- With a hosted AuthBoundry, an AuthBoundry administrator creates the delegations. The owner has no
+  federated sign-in to do it. With the private one, the owner grants in Settings.
+- Nothing moves grants from the private AuthBoundry to a hosted one.
 - The executor is asserted under the application's check credential. It is not proven by its own
   agent credential.
 - FeltKit and AppPort have no native on-behalf-of principal. `actingFor` remains PersonalOS's seam,

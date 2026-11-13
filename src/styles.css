@@ -130,7 +130,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-directio
 .kind { background: var(--raised); border-radius: 6px; padding: 0 6px; font-weight: 550; }
 .memory .tools { margin-top: 4px; }
 .toggle { display: flex; gap: 12px; align-items: flex-start; }
-.toggle input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); }
+.toggle input { flex: none; margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); }
 
 .activity { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; display: flex; flex-direction: column; gap: 4px; }
 .activity.proposed { border-color: var(--warn); }

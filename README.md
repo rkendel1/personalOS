@@ -100,7 +100,8 @@ the chat. In production, point `ref://prod/personalos/model` at a model with
 
 Mention @personalos in another app (the first is [Multiplayer](https://github.com/rkendel1/multiplayer))
 and it works here, in your account. Resolver resolves who is asking, AuthBoundry decides what they may do,
-and shared conversations never get your private data. Approvals stay here. See
+and shared conversations never get your private data. You choose what it may do for you in Settings;
+AuthBoundry comes with PersonalOS, with nothing to set up. Approvals stay here. See
 [docs/ANYWHERE.md](docs/ANYWHERE.md) and the contract, [docs/INTERACTION-CONTRACT.md](docs/INTERACTION-CONTRACT.md).
 
 Share to PersonalOS from iOS (Safari or any app): a page, selected text or a text document, with what

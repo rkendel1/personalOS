@@ -257,9 +257,11 @@ moves only past mentions that were handled.
   3. check: one invocation, AuthBoundry's decision, the generic acknowledgement on X, the result only in
      PersonalOS, and continuing the conversation from Chrome and Multiplayer.
 
-  AuthBoundry in production still needs its principals, policy, agent, delegation and check credential,
-  plus `AUTHBOUNDRY_URL` on Fly. `authority.application` must match the id AuthBoundry assigned. *FeltKit
-  ≥ next* reads it from `AUTHBOUNDRY_APPLICATION`.
+  AuthBoundry: unset `AUTHBOUNDRY_URL` on Fly and PersonalOS runs its own (docs/ANYWHERE.md). It needs
+  the credential vault and a volume (`FELTKIT_STATE_DIR`). Each person then allows what PersonalOS may do
+  in Settings; X publishing is "Publish on X for you". With a hosted AuthBoundry instead, it needs its
+  principals, policy, agent, delegation and check credential, plus `AUTHBOUNDRY_URL`, and
+  `authority.application` (or `AUTHBOUNDRY_APPLICATION`) must match the id AuthBoundry assigned.
 
 ## X API facts used, and costs
 

@@ -10,6 +10,7 @@
  * other's data.
  */
 import { feltkit, s } from "@feltdb/feltkit";
+import { CAPABILITIES } from "./_authority.js";
 
 /** What a person who owns an assistant may do. */
 const OWNER = [
@@ -21,6 +22,8 @@ const OWNER = [
   "feltkit.agent.*",
   // Documents: files the owner keeps, stored by AppPort Services Files (feltkit/documents.ts).
   "documents.*", "files.read", "files.write", "files.delete",
+  // What PersonalOS may do for them from connected surfaces: their own grants (feltkit/delegation.ts).
+  "delegation.*",
   // Outbound events (task.completed, reminder.fired, interaction.updated) to endpoints the operator
   // registers; each delivery is authorized again as the emitter (webhooks.deliver, runtime-internal).
   "webhooks.emit", "webhooks.deliver",
@@ -87,10 +90,16 @@ export const app = feltkit({
   },
   // AuthBoundry decides delegated work from connected surfaces (ctx.authority, feltkit/interactions.ts):
   // PersonalOS's executor `agent:personalos` acts on behalf of a person, under that person's
-  // delegation to it, never under its own rules. Credentials are custody references
+  // delegation to it, never under its own rules.
+  // Without AUTHBOUNDRY_URL, FeltKit runs a private AuthBoundry for PersonalOS (`local`, through
+  // @authboundry/local): nothing to set up, its secrets in FeltKit's custody, and each person grants
+  // what PersonalOS may do for them in Settings (feltkit/delegation.ts). With AUTHBOUNDRY_URL, a hosted
+  // AuthBoundry decides, and people grant there; its check credential is a custody reference
   // (`feltkit credential set credential-ref:authboundry-check`, or FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK).
   authority: {
+    local: true,
     url: { env: "AUTHBOUNDRY_URL" },
+    capabilities: [...CAPABILITIES],
     application: { env: "AUTHBOUNDRY_APPLICATION", development: "personalos" },
     checkCredential: "credential-ref:authboundry-check",
     executor: { principal: "agent:personalos", type: "agent" },
