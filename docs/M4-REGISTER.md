@@ -1,0 +1,130 @@
+# M4 (Anywhere Invocation): gap register
+
+This register was written before any M4 code changed. Every row cites what was read, so it can be
+checked against the source. Status values:
+
+- **Exists**: implemented and tested.
+- **Partial**: implemented, but with the gap named in the row.
+- **Missing**: not implemented.
+- **Blocked**: needs something outside this repository and this container.
+
+The baseline is PersonalOS `cba6c4f` (main) and FeltKit `1788e47` (main).
+
+## What exists today
+
+| Surface | Contract | Who submits | Record | Result goes back to | Evidence |
+|---|---|---|---|---|---|
+| Website (PersonalOS app) | none needed: the person's own session calls the app | the person | conversations, actions, tasks… | the app | `src/`, `tests/*.test.ts`, `e2e/ui.mjs` |
+| Chrome extension | `personalos.invocation/1` (adapter `browser`) | the person's session (bearer) | `invocations` | the side panel, plus a link back to the page (`returnTo: page`) | `extension/src/summon.ts`, `tests/browser-summon.test.ts`, `e2e/extension.mjs` |
+| iOS share sheet | `personalos.invocation/1` (adapter `ios-share`) | the person's session (Keychain) | `invocations` | the app's list of shares; opening one goes to PersonalOS | `ios/`, `tests/invocations*.test.ts`, `e2e/share-invocation.mjs` |
+| X (@anywhereaide) | the X adapter writes `invocations` records itself (`feltkit/xsurface.ts:339`) | the bot's poller; the person is resolved by a Resolver link | `invocations` + `xPosts` | a generic acknowledgement on X, never the result (public; `xsurface.ts:30`); the result is in PersonalOS | `tests/x.test.ts`, `tests/x-authboundry-real.test.ts` |
+| Multiplayer | `personalos.interaction/1` | Multiplayer's bridge service, vouching for its user; the person is resolved by Resolver | `interactions` | signed `interaction.updated` events into Multiplayer | `feltkit/interactions.ts`, `tests/interactions.test.ts`, Multiplayer e2e |
+
+These already hold across every surface:
+
+- **Identity.**
+  - The person is never an envelope field. It comes from their session, or from Resolver for bridged
+    surfaces.
+- **Authority.**
+  - Every delegated action asks AuthBoundry on behalf of the person.
+  - Revocation stops the next operation.
+  - People grant in Settings (`feltkit/delegation.ts`).
+- **Context.**
+  - Shared context is data, never instructions.
+  - It is kept apart from what PersonalOS inferred (`docs/INVOCATION-CONTRACT.md` "Kept apart").
+- **Continuity.**
+  - One conversation spans surfaces (`docs/CONTINUITY.md`).
+  - Multiplayer can `continue <conversation>`.
+  - Chrome and iOS pass `correlation.conversationId`.
+- **Idempotency.**
+  - Invocations: (owner, invocationId) is unique, a replay returns the stored receipt, and the same id
+    with different content is refused.
+  - Interactions: `adapter:idempotencyKey`.
+
+## Gaps
+
+### Part 1: universal invocation contract
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G1 | **Two contracts, not one.** Multiplayer uses `interaction/1` and records `interactions`; the other surfaces use `invocation/1` and record `invocations`. They differ in a real way: who vouches for the person (a bridge service plus Resolver, versus the person's own session). That difference should stay as a *delivery* mode of one contract, not as two contracts. | Partial | `docs/INVOCATION-CONTRACT.md` table "interaction/1 vs invocation/1" |
+| G2 | **The lifecycle has fewer states than M4 asks for.** Invocations have `accepted, processing, needs_approval, completed, failed`. M4 asks for `received, validating, accepted, running, awaiting approval, completed, failed, cancelled`. `received` and `validating` happen inside one transaction today, so they are never observable; mapping them is honest, recording them as separate writes isn't. **`cancelled` is missing**: a person can't cancel an invocation. | Partial | `feltkit/invocationstate.ts` |
+| G3 | **The envelope lacks fields M4 lists.** It has no requested capabilities and no granted authority (authority is decided at execution and recorded afterwards, which is correct; the envelope must never *carry* authority). It has no attachments beyond text documents, and no continuity reference beyond `correlation.conversationId`. | Partial | `feltkit/_invocation.ts` |
+
+### Part 2: surface adapters and registry
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G4 | **No surface registry.** `surface.adapter` is any string matching `^[a-z0-9][a-z0-9.-]*$`. Nothing lists adapters, versions, modes, context types, return capabilities, authentication or health. | Missing | `_invocation.ts:62` |
+| G5 | **No written adapter contract.** What an adapter must do (identity, context, progress, approvals, result delivery, retry) is implied by three implementations, not stated once. | Missing | — |
+
+### Part 3: mobile
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G6 | **The iOS app has never been compiled.** It was written without Xcode. CI now compiles it on macOS (`.github/workflows/ios.yml`); see the result below. | In progress | `docs/IOS-SHARE.md` "Status, plainly" |
+| G7 | **No real-device acceptance.** It needs your Mac (signing, with your Apple team) and iPhone. The procedure and the harness exist (`scripts/share-acceptance.mjs`). | Blocked (owner: you) | `docs/IOS-SHARE.md` |
+| G8 | **No approvals on mobile.** The iOS app shows `needs_approval` but can't approve; it opens PersonalOS. Part 6.4 asks for the approval request on mobile. | Missing | `ios/App/ContentView.swift:66` |
+| G9 | **Mobile has no notifications.** Progress shows only when the app is opened. Push would need APNs: an Apple key, plus a server capability FeltKit doesn't have. | Missing | — |
+| G10 | **Only text attachments.** PDFs and images are refused by contract (`UNSUPPORTED_CONTEXT`). Allowing them needs file storage per invocation; AppPort Files already exists (`feltkit/documents.ts`). | Partial | `_invocation.ts` |
+
+### Parts 4 and 5: connectors
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G11 | **No per-person connector credentials. This is the central gap.** A FeltKit integration holds one OAuth grant (`credential.ref`), connected by someone holding `credential.store` (an admin). Gmail has to be *Ada's* mailbox and Grace's has to be Grace's. FeltKit needs grants owned by a person: connected by that person, used only for work done as or on behalf of that person (after AuthBoundry allows it), and revocable by that person. That belongs in FeltKit, which already has the OAuth lifecycle (renewal, rotation, failure classes, disconnect). It doesn't belong in PersonalOS. | Missing (FeltKit) | `feltkit/packages/sdk/src/runtime/oauth-credentials.ts:313-366` (connect is gated on `credential.store`; one `client.ref` per integration) |
+| G12 | **No connector manifest.** A FeltKit integration declaration already has most of one: operations with input/output schemas, `effect: observation \| consequential`, `access`, an OAuth credential with scopes, and failure classes. It lacks: provider identity, rate limits as data, a `destructive` class distinct from `consequential`, provenance requirements, and a way to list connectors at runtime. Extend the declaration rather than invent a second format. | Partial | `feltkit/app.ts:152-276` (identity, websearch, x integrations) |
+| G13 | **No connector authority at AuthBoundry.** Connector capabilities (e.g. `gmail.send`) aren't AuthBoundry capabilities, so they can't be granted or revoked per connector. The fix fits the existing model: add them to the contract, and they appear in Settings. | Missing | `feltkit/_authority.ts` |
+| G14 | **Approvals aren't bound to parameters for connector actions.** FeltKit agent proposals are already approved as one exact action with its arguments (`ctx.agent`, `actions.approve`), so this mechanism can be reused. | Exists (mechanism) | `src/chat.tsx:88`, FeltKit agent actions |
+| G15 | **No MCP client.** FeltKit *serves* MCP (`/mcp`). It can't *consume* an external MCP server as a connector. | Missing (FeltKit) | — |
+| G16 | **Gmail, Calendar and Drive need a Google OAuth client.** That means a Google Cloud project, a consent screen, and Gmail's restricted scopes (`gmail.send`, `gmail.readonly`), which need verification before anyone but test users can connect. The APIs are reachable from here. | Blocked (owner: you) | probe: `gmail.googleapis.com` reachable |
+| G17 | **GitHub needs a GitHub OAuth app (or GitHub App) of yours.** This session's own GitHub token is the agent's, not a person's linked account, so it can't count as acceptance. | Blocked (owner: you) | — |
+
+### Part 6: continuity
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G18 | **Continuing from X.** You can't continue an existing conversation from X, for privacy: X is public. Starting there works, and continuing it from the website, Chrome or Multiplayer works. | Partial, by design | `xsurface.ts:318` (the continue path), `docs/X.md` |
+| G19 | **The result back on X.** "Final result in the original surface" conflicts with X being public. PersonalOS posts only an acknowledgement, and the result stays in PersonalOS (the M4 rule "retain the result and expose it through another authorized surface" applies). An X DM is possible but costs X API spend; it's your call. | Partial, by design | `xsurface.ts:30` |
+| G20 | **Approval on mobile.** See G8. | Missing | — |
+
+### Part 7: security
+
+Most of the required tests exist: forged identity, injection in context, replay and idempotency
+(including concurrent), revocation, unavailable authority, cross-user isolation.
+
+| # | Gap | Status | Evidence |
+|---|---|---|---|
+| G21 | **Connector-specific tests.** Unauthorized connector calls, one person's connector used for another person, and scope least-privilege can't be tested until G11 and G13 exist. | Missing | — |
+
+## Order of work
+
+1. **G6.** Compile iOS in CI, and fix what the compiler finds.
+2. **G11 + G13 (FeltKit).** Per-person OAuth connections:
+   - `credential: { perPrincipal: true, oauth2 }` on an integration;
+   - connect, status and disconnect for the signed-in person;
+   - `ctx.integrations` uses the grant of the person the work is for, and only after AuthBoundry allows
+     that connector capability;
+   - tested against the simulated OAuth provider, as the OAuth lifecycle already is.
+3. **G12.** The connector manifest as an extension of `app.integration`, plus a runtime listing.
+4. **G4, G5, G1, G2, G3.** The surface registry and the single contract:
+   - `interaction/1` becomes a bridged delivery of the one contract, with both records exposed
+     through one invocation view;
+   - add the `cancelled` state.
+5. **The first connectors in PersonalOS:** Gmail and Calendar (Google), and GitHub. Each is its own
+   integration with its own capabilities, independently revocable, and consequential operations
+   (send, create event, write) go through the existing approval flow.
+6. **G8.** Approve from the iOS app, using the same `actions.approve`.
+7. **Real acceptance:**
+   - Google and GitHub with your OAuth apps (G16, G17);
+   - iPhone on your device (G7);
+   - an evidence report.
+
+## Needed from you
+
+- **iPhone acceptance (G7).** Your Mac with Xcode and your iPhone.
+- **Google (G16).** A Google Cloud OAuth client: client id and secret, with redirect
+  `<PersonalOS URL>/api/integrations/<name>/oauth/callback`, and you added as a test user.
+- **GitHub (G17).** A GitHub OAuth app: client id and secret, with the same redirect form.
+- **X results (G19).** Decide whether the result should go back by X DM (it costs X API spend), or
+  stay in PersonalOS behind the public acknowledgement.
