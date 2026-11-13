@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { parseInstance } from "./config";
+import { fetchWithoutCookies } from "./nocookies";
 
 /** First run: which PersonalOS instance is yours. Sign-in itself is the app's own form, once connected. */
 export function Connect({ onConnected }: { onConnected: (url: string) => void }) {
@@ -16,7 +17,7 @@ export function Connect({ onConnected }: { onConnected: (url: string) => void })
       // Asks Chrome for access to this one address (a user gesture); it is the only site the extension can reach.
       const granted = await chrome.permissions.request({ origins: [`${url}/*`] });
       if (!granted) return setError("Chrome needs your permission to let this extension talk to that address.");
-      const info = await fetch(`${url}/api/session`, { headers: { Accept: "application/json" } }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
+      const info = await fetchWithoutCookies(`${url}/api/session`, { headers: { Accept: "application/json" } }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
       if (info?.application !== "personalos") return setError(`That address answered, but it isn't a PersonalOS instance${info?.application ? ` (it is "${info.application}")` : ""}.`);
       onConnected(url);
     } catch (err) {

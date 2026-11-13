@@ -7,6 +7,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createClient } from "@feltdb/feltkit/client";
+import { fetchWithoutCookies } from "./nocookies";
 import { FeltKitProvider } from "@feltdb/feltkit/react";
 import { App } from "../../src/App";
 import "@stack-ui/tokens/tokens.css";
@@ -23,7 +24,7 @@ function Root() {
   const [client, setClient] = useState<ReturnType<typeof createClient> | null>(null);
   useEffect(() => {
     if (!conn?.url) return setClient(null);
-    const c = createClient({ url: conn.url, session: "bearer", tokens: chromeTokenStore(conn.token) });
+    const c = createClient({ url: conn.url, session: "bearer", tokens: chromeTokenStore(conn.token), fetch: fetchWithoutCookies });
     setClient(c);
     return undefined;
   }, [conn?.url]);

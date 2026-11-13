@@ -22,6 +22,7 @@ No secret value appears in this document.
 | 9 | `@appport/resolver` CLI exits silently when run through the npm symlink | Resolver | any global install |
 | 10 | AuthBoundry image can't find its Services bridge | AuthBoundry | check credentials, Services panel |
 | 11 | AuthBoundry portal can't build on Vercel; check-credentials UI not live | AuthBoundry | issuing the check credential |
+| 12 | A foreign-origin request carrying an ambient session cookie is refused instead of ignored | FeltKit | extension hosts for people also signed in on the web |
 
 ## FeltKit
 
@@ -109,6 +110,20 @@ Pointers, based on this deployment. These are your stated requirements, and I ha
 - **Credentials stored in the database:** the vault is a file plus a key in the environment.
 - **Production defaults for endpoints:** the X endpoints are fixed public URLs and could be defaults for a
   known provider.
+
+### 12. Ambient cookie plus a foreign Origin is a hard error
+- **Happened:** the Chrome extension showed a black side panel with `FeltKitClientError: Cross-site request
+  refused.` for a person who was also signed in to the web app. **Verified** by reading
+  `server/index.js` (`identify`, ~line 163) and `session-http.js` (`checkCookieRequest`): a bearer token is tried
+  first, then the session cookie. Before the panel has a token, Chrome attaches the browser's cookie for the
+  instance (the extension has host permission), and the cookie check refuses `Origin: chrome-extension://…`.
+- **Workaround (PersonalOS):** every extension request omits cookies (`extension/src/nocookies.ts`, passed as the
+  client's `fetch`). The e2e test had no cookie in its profile, so it never saw this.
+- **Change:** with no bearer token, treat a cookie sent from a foreign origin as absent (anonymous), not as an
+  error, for endpoints that allow anonymous access. Or let a host declare its allowed origins. Add an e2e case with
+  a pre-existing web session cookie. `docs/EXTENSION-HOSTS.md` should say extensions must omit cookies.
+- **Also:** the panel renders nothing when the first request fails. An error boundary with a retry would have shown
+  the message instead of a black screen.
 
 ## Resolver (`@appport/resolver` 0.4.0)
 
