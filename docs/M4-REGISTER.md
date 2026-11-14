@@ -137,7 +137,7 @@ portable across ownership boundaries.
 | Milestone | Scope | Depends on |
 |---|---|---|
 | **M1 — Authority correctness** (next) | AuthBoundry A1 (tests: agent credential with `on_behalf_of`); A2 (expose whether the executor was proven); record the authenticated executor on every execution attempt; resolve asserted versus proven environment and worker attribution | — |
-| **M2 — Capability discoverability** | filter agent tool discovery by the caller's permissions; discovery stays separate from authorization; investigate wiring AppPort's cross-application registry; preserve provenance and capability ownership | M1 |
+| **M2 — Capability discoverability** (implementation complete; acceptance partial: delegated discovery outstanding) | filter agent tool discovery by the caller's permissions; discovery stays separate from authorization; investigate wiring AppPort's cross-application registry; preserve provenance and capability ownership | M1 |
 | **M3 — Bring your own inference** | per-person model bindings and credentials (R-1, R-3); failover and options (R-4); remove paths that bypass Resolver (R-6); safe inference placement and credential custody (R-7) | M1 |
 | **M4 — Bring your own execution** | AuthBoundry agent-only authentication (A3); an authenticated remote worker API (claim, progress, completion, cancellation); a customer-owned execution adapter; recovery, then re-placement | M1 (no remote worker protocol before executor identity and attribution are resolved) |
 
@@ -201,8 +201,13 @@ invocations, outbox or activity.
   `agent_required` to get proof there.
 - G0 still applies: the A2 AuthBoundry and FeltKit must be published together.
 
-**M2 — Capability discoverability: per-caller tool visibility, implemented (2026-11-14; FeltKit branch
-`claude/m2-discoverability`, `ea4a378`; unmerged, unpublished).**
+**M2 — Capability discoverability: implementation complete, acceptance partially complete
+(2026-11-14; FeltKit branch `claude/m2-discoverability`, `ea4a378`; unmerged, unpublished; AuthBoundry
+unchanged).**
+
+What M2 has demonstrated: agents see a permission-filtered capability catalog, and invocation stays
+authoritative. What it has not demonstrated: that the catalog accurately represents *delegated*
+authority. That is the outstanding requirement; M2 is not closed until it is met. M3 waits on it.
 
 **Discovery**
 
@@ -230,16 +235,24 @@ Conformance 50/50 in both full runs.
 
 **Size:** source +46 −4, tests and fixtures +154 −2, docs and changelog +85.
 
-**Remaining gaps**
+**Outstanding before M2 closes**
 
-- **Delegation-aware discovery has no contract.** AppPort capabilities don't name the AuthBoundry
-  capability a person must delegate, so listings reflect role eligibility. Delegated and resource-level
-  authority are decided at the call (and recorded, M1). Proposed: an AppPort `authority` field per
-  capability.
-- **MCP has no on-behalf-of.** External agents act as themselves; the in-app model's tool view is the
-  signed-in person's.
-- **AppPort's manifest and `/.well-known/appport` stay full and unfiltered**, as AppPort's published
-  contract. That is AppPort's decision.
+1. **Delegated discovery (the acceptance gap).** Listings reflect role authorization, not the authority a
+   person has delegated to an agent. To resolve first, as a small AppPort/AuthBoundry contract question,
+   with these meanings fixed:
+   - AppPort declares what authority a capability *requires*. The declaration is a requirement, never a
+     grant.
+   - AuthBoundry decides whether the caller, or an agent acting under delegation, holds it.
+   - FeltKit builds the visible listing from AuthBoundry's answer.
+   - Invocation still checks authorization independently.
+2. **MCP acting for a person.** External MCP agents act as themselves, so delegated discovery is not
+   demonstrated on every surface. No on-behalf-of parameter is to be added until it is established how
+   identity and delegation travel through the invocation contract.
+
+**Settled: the public manifest stays unfiltered.** AppPort's manifest and `/.well-known/appport` describe
+what an application offers; a caller-specific listing describes what one agent can use. They are
+different projections for different audiences, and filtering the public one would make discovery less
+useful.
 
 **Cross-application registry (investigated, not wired).**
 
