@@ -130,6 +130,37 @@ AppPort Services, AuthBoundry, Resolver and PersonalOS.
     hardcoded to OpenAI);
   - a remote-worker control-plane API.
 
+**Revised priorities (decided 2026-11-14).** We are closer to agent capability infrastructure than
+assumed. What's missing is making the existing capabilities accessible, correctly authorized, and
+portable across ownership boundaries.
+
+| Milestone | Scope | Depends on |
+|---|---|---|
+| **M1 — Authority correctness** (next) | AuthBoundry A1 (tests: agent credential with `on_behalf_of`); A2 (expose whether the executor was proven); record the authenticated executor on every execution attempt; resolve asserted versus proven environment and worker attribution | — |
+| **M2 — Capability discoverability** | filter agent tool discovery by the caller's permissions; discovery stays separate from authorization; investigate wiring AppPort's cross-application registry; preserve provenance and capability ownership | M1 |
+| **M3 — Bring your own inference** | per-person model bindings and credentials (R-1, R-3); failover and options (R-4); remove paths that bypass Resolver (R-6); safe inference placement and credential custody (R-7) | M1 |
+| **M4 — Bring your own execution** | AuthBoundry agent-only authentication (A3); an authenticated remote worker API (claim, progress, completion, cancellation); a customer-owned execution adapter; recovery, then re-placement | M1 (no remote worker protocol before executor identity and attribution are resolved) |
+
+M1 must make each of these distinguishable when an agent acts for someone:
+
+- who requested it;
+- whom it was for;
+- which agent executed it;
+- which authority permitted it;
+- which environment ran it;
+- what happened.
+
+**Strategic gap: cross-application discovery.**
+
+- AppPort core has a cross-application registry (`ApplicationRegistry.findByCapability` /
+  `findByRequirement`, canonical contracts; tests in `appport/packages/core/test`), and nothing uses
+  it. Without it, individual applications become agent-capable. With it, capabilities become
+  discoverable across an ecosystem: more applications exposing capabilities makes agents more useful,
+  without each application rebuilding discovery and integration.
+- Constraints: discovery stays separate from authorization, and the registry must not become an
+  uncontrolled global tool list.
+- Status: a strategic gap, not an immediate task. It is investigated in M2.
+
 **Next, after review:** migrate PersonalOS surface by surface, keeping existing behavior until each
 migration passes acceptance. Multiplayer stays a bridge delivery.
 
