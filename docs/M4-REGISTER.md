@@ -100,6 +100,36 @@ invocation's identity, lifecycle, authority and evidence wherever its work runs.
 - **Size:** source +504 −38, tests and fixtures +321 −7, docs +236; no configuration.
 - **Behavior change:** `accept` refuses a job type with no handler up front.
 
+**Agent capability infrastructure review (2026-11-14; FeltKit `e8c669c`, `fe965ac`;
+`feltkit/docs/AGENT-CAPABILITY-INFRASTRUCTURE.md`).** An evidence review across FeltKit, AppPort,
+AppPort Services, AuthBoundry, Resolver and PersonalOS.
+
+- **Ownership.** The matrix, the lifecycle, and inference placement versus execution placement are
+  in the document. Inference and execution are independent in the code: no model, provider or host
+  appears in the invocation or execution contracts.
+- **Execution review, corrected in FeltKit:**
+  - Q2: the dispatch authority no longer reads like delegated authority
+    (`requestedBy` / `runAs` / `onBehalfOf` / `checked` / `delegation`).
+  - Q3: decisions snapshot the policy order and the environment descriptors.
+  - Q4: each execution keeps its own dispatch evidence.
+- **Tests and size.** 3 new tests. Full suite: 665 tests, 663 pass, 0 fail, 2 skipped. Source +37 −13,
+  tests +55 −5, docs: a 212-line review plus EXECUTION.md corrections.
+- **Correction to the M3 register, R9.** AuthBoundry's check endpoint **does** accept an agent
+  credential (`x-authboundry-agent-credential`; tests in `crates/server/tests/agent_credentials.rs`),
+  and FeltKit sends it with `authority.executor.credential`. What remains (A1-A5) is narrower:
+  - `on_behalf_of` with an agent credential is untested;
+  - the response doesn't say whether the executor was proven;
+  - a worker can't call alone;
+  - delegations can't be scoped to resources over HTTP.
+- **Open, not implemented here** (ordered in §9 of the document):
+  - AuthBoundry A1-A5;
+  - proven executor per attempt;
+  - per-caller MCP `tools/list` filtering;
+  - the AppPort connection contract;
+  - Resolver gaps R-1 to R-7 (per-person model key, failover and options, the PersonalOS search model
+    hardcoded to OpenAI);
+  - a remote-worker control-plane API.
+
 **Next, after review:** migrate PersonalOS surface by surface, keeping existing behavior until each
 migration passes acceptance. Multiplayer stays a bridge delivery.
 
