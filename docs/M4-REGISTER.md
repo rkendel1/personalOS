@@ -150,6 +150,57 @@ M1 must make each of these distinguishable when an agent acts for someone:
 - which environment ran it;
 - what happened.
 
+**M1 — Authority correctness: implemented (2026-11-14).**
+
+**AuthBoundry** (branch `claude/m1-executor-proof`, `6a7ecab`; separate, unpublished):
+
+- **A2, additive.** A decision carries `executor { proven: true, method: "agent_credential",
+  principal_id, agent_credential_id }` only when an agent credential authenticated the request. The
+  principal comes from the credential, never from the request. The field is absent with a check
+  credential alone.
+- **A1 tests:** the delegation must be to that agent; another agent and another person are denied;
+  scopes narrow; revocation applies at the next check; no secret in the response or evidence.
+- **`@authboundry/local`:** issues the executor a 24-hour agent credential (30-day family), reuses it
+  while valid, renews it with each successor sent to custody, revokes replaced ones, and sets
+  `agent_required`.
+- **Evidence:** `agent_credentials` 28/28 (2 new), `enforcement_contract` 8/8, `packages/local` 4/4
+  (1 new).
+
+**FeltKit** (`cf19e30`):
+
+- `executorProof` is read strictly: proven only with a sent credential and an exact A2 proof; asserted
+  otherwise, including against an AuthBoundry without A2.
+- Each attempt records its decisions (decision and delegation ids, outcome, proof) as they were made.
+- The attempt's `executor` is proven only when all of its decisions proved the same agent.
+- `attribution` marks the environment and worker as asserted.
+- The private authority's agent credential lives in custody only.
+
+**Acceptance** (`test/executor-proof.test.ts`, against the real private AuthBoundry built from the A2
+branch): Ada's request; the agent proven; her delegation deciding; the six distinctions in the record;
+the same agent refused for Grace; revocation applied at the next check; no credential secret in
+invocations, outbox or activity.
+
+| Run | Result |
+|---|---|
+| executor-proof + local-authority, three times | 5/5 each |
+| Full suite with the A2 build | 668 tests, 668 pass, 0 fail, 0 skipped |
+| Full suite, standard | 668 tests, 665 pass, 0 fail, 3 skipped (the acceptance test and the two local-authority tests: "@authboundry/local is not installed"; with a pre-M1 `@authboundry/local` the acceptance test says "predates M1") |
+
+**Size:**
+
+- FeltKit: source +113 −14, tests and fixtures +185, docs and changelog +63.
+- AuthBoundry: server +47, Rust tests +75, `@authboundry/local` +76 −5, its tests +45, changelog +19.
+
+**Remaining:**
+
+- Environment and worker are asserted (M4).
+- A worker can't call AuthBoundry alone (A3, M4).
+- Resource-scoped delegations over HTTP (A4).
+- The agent-credential renewal timer isn't exercised by a test (minimum TTL 60 s).
+- The hosted AuthBoundry needs the A2 release, and apps must set `executor.credential` and
+  `agent_required` to get proof there.
+- G0 still applies: the A2 AuthBoundry and FeltKit must be published together.
+
 **Strategic gap: cross-application discovery.**
 
 - AppPort core has a cross-application registry (`ApplicationRegistry.findByCapability` /
