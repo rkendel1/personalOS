@@ -84,6 +84,22 @@ Full suite: 644 tests, 642 pass, 0 fail, 2 skipped.
 - registry availability is the last delivery, with no active probe;
 - AppBoundry artifacts don't host the store yet.
 
+**Placement-neutral execution (FeltKit `156df2c`; `docs/EXECUTION.md`).** The control plane keeps an
+invocation's identity, lifecycle, authority and evidence wherever its work runs.
+
+| Status | What |
+|---|---|
+| Implemented and tested | `feltkit.execution/1` (invocation / execution / attempt identities, work, input references, authority, requirements, placement constraints). The adapter boundary: an environment descriptor and a dispatch that stages one after-commit effect, so there is one outbox. The `managed` adapter is the existing path. A deterministic, replaceable placement resolver with the operator's versioned policy and a structured `UNPLACEABLE`. Authority is checked before and independently of placement. Decisions are durable across restarts. Attempts record their environment and worker. Fencing, recovery by a replacement worker under the same identity, `unknown` for abandoned attempts and ambiguous outcomes. |
+| Implemented, not under production conditions | A second environment exists only as a controlled in-process fixture (`fixture-remote`): it proves the contract, not remote execution. |
+| Designed, not implemented | A remote worker protocol; re-placement; preemptive cancellation; versioned operations; environment health beyond `available`. |
+| Blocked | AppBoundry artifacts don't host the invocation store. AuthBoundry has no agent-credential proof for a remote worker (R9). |
+
+- **Evidence.** `test/execution.test.ts`, 9 tests covering criteria 1-9, 11 and 12 (criterion 10 is
+  the full suite). The execution, invocation and surface tests passed 25/25 in three runs.
+- **Full FeltKit suite:** 662 tests, 660 pass, 0 fail, 2 skipped; conformance 50/50.
+- **Size:** source +504 −38, tests and fixtures +321 −7, docs +236; no configuration.
+- **Behavior change:** `accept` refuses a job type with no handler up front.
+
 **Next, after review:** migrate PersonalOS surface by surface, keeping existing behavior until each
 migration passes acceptance. Multiplayer stays a bridge delivery.
 
