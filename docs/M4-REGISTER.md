@@ -55,8 +55,37 @@ The working FeltKit implementation is preserved as evidence, not as the specific
 - `feltkit.invocation/1` (`normalizeInvocation`);
 - the lifecycle transition table, with `cancelled`.
 
-Full suite: 644 tests, 642 pass, 0 fail, 2 skipped. Next: durable lifecycle storage, the registry's
-listing and health, then PersonalOS adopting it, with Multiplayer kept as a bridge delivery.
+Full suite: 644 tests, 642 pass, 0 fail, 2 skipped.
+
+**The invocation platform store (decided A, 2026-11-14; FeltKit `e1ab984`).**
+
+- **What it is.** `ctx.invocations`: accept, get, list, cancel, start, resume and transition, plus
+  recovery in the services worker. Documented in `docs/INVOCATIONS.md`.
+- **The invariant.** An accepted invocation always has durable evidence of pending dispatch, active
+  execution, or a terminal outcome. The record and its dispatch (the existing after-commit outbox)
+  commit in one transaction.
+- **Acceptance.** `test/invocations.test.ts` 9/9, in three consecutive runs, using two independent
+  fixture applications. Each requirement has its own test:
+  - persist without an application collection;
+  - cross-application reuse;
+  - isolation by application, person and deliverer;
+  - a crash between accept and dispatch, recreated from the durable state, recovered once;
+  - no duplicate work;
+  - a deterministic cancellation race;
+  - final terminal states;
+  - a real dispatch failure, re-dispatched then failed with evidence;
+  - observable recovery.
+- **Full suite:** 653 tests, 651 pass, 0 fail, 2 skipped.
+
+**Known limits** (in the doc):
+
+- live queries aren't notified of invocation changes;
+- lifecycle moves inside a mutation commit on their own;
+- registry availability is the last delivery, with no active probe;
+- AppBoundry artifacts don't host the store yet.
+
+**Next, after review:** migrate PersonalOS surface by surface, keeping existing behavior until each
+migration passes acceptance. Multiplayer stays a bridge delivery.
 
 ## What exists today
 
