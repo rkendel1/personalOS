@@ -40,8 +40,23 @@ One finding against that split:
   - (b) AppPort Services gains an implementation: OAuth lifecycle, provider adapters, execution.
     That changes its stated boundary and moves code out of FeltKit.
 
-Awaiting that decision. A FeltKit-side implementation exists, unpushed, as a reference: 6/6
-acceptance tests plus a real-AuthBoundry run.
+**Decided (2026-11-13): (a).** AppPort Services defines the portable user-owned connection
+contract; FeltKit implements it as host; AuthBoundry decides every use; AnywhereAide consumes.
+
+The working FeltKit implementation is preserved as evidence, not as the specification:
+
+- branch `claude/per-person-connections-reference` in FeltKit, `cc468b3`;
+- results in `docs/CONNECTIONS-EVIDENCE.md`;
+- full suite before its doc fix: 640 pass, 1 fail, 3 skipped; after: 641 pass, 0 fail, 3 skipped.
+
+**Progress (FeltKit `claude/affectionate-bardeen-o1xu78`, `157c567` + `6f563df`):**
+
+- the surface registry declaration: `app.surface`, which grants nothing;
+- `feltkit.invocation/1` (`normalizeInvocation`);
+- the lifecycle transition table, with `cancelled`.
+
+Full suite: 644 tests, 642 pass, 0 fail, 2 skipped. Next: durable lifecycle storage, the registry's
+listing and health, then PersonalOS adopting it, with Multiplayer kept as a bridge delivery.
 
 ## What exists today
 
