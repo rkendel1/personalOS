@@ -1,0 +1,38 @@
+name: iOS
+# Compiles the iOS app and its share extension (ios/) on a macOS runner: an unsigned simulator build.
+# It proves the Swift compiles and the project generates; installing on an iPhone and the share-sheet
+# acceptance still need a signed build on a real device (docs/IOS-SHARE.md).
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: XcodeGen
+        run: brew install xcodegen && xcodegen generate
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Build the app and the share extension (iOS Simulator, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project PersonalOS.xcodeproj -scheme PersonalOS -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: ios/build.log
+          if-no-files-found: ignore

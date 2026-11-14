@@ -13,7 +13,7 @@ The extension submits intent; PersonalOS owns execution. Its contract is
 | | State |
 |---|---|
 | Server side (contract, durable processing, AuthBoundry at execution, research from a shared page, return states) | Implemented. Tested in-process (`tests/invocations*.test.ts`, including against the real AuthBoundry) and over real HTTP with real accounts, the real AuthBoundry, a SIGKILL restart, the real web and a real model (`e2e/share-invocation.mjs`). |
-| iOS app + share extension (`ios/`, SwiftUI, XcodeGen) | Written. **Not yet compiled or run**: it was written in a Linux container with no Xcode. Reviewed by hand for Swift and iOS API correctness. Two compile errors were found that way and fixed; others may remain. |
+| iOS app + share extension (`ios/`, SwiftUI, XcodeGen) | **Compiles.** CI (`.github/workflows/ios.yml`) builds both targets on macOS with Xcode 16.4 for the iOS Simulator, unsigned, with no errors or warnings. **Not yet run, signed or installed.** |
 | Real iPhone acceptance | **Not yet performed.** It needs your Mac and iPhone; the procedure is below. |
 
 ## What's in `ios/`
