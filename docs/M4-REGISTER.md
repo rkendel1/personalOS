@@ -201,6 +201,57 @@ invocations, outbox or activity.
   `agent_required` to get proof there.
 - G0 still applies: the A2 AuthBoundry and FeltKit must be published together.
 
+**M2 — Capability discoverability: per-caller tool visibility, implemented (2026-11-14; FeltKit branch
+`claude/m2-discoverability`, `ea4a378`; unmerged, unpublished).**
+
+**Discovery**
+
+- MCP `tools/list` shows a caller only what it may invoke. Each capability is decided by the authorizer
+  every call uses (`Authority.mayInvoke`); `feltkit_*` agent tools by the agent's own permission.
+- Nothing eligible is `{ tools: [] }`. A listing carries no reasons, roles or permissions.
+- `feltkit_context` shows only the caller's allowed capabilities and its own errors and denials;
+  operators with `feltkit.operations.read` still see the application's.
+
+**Authorization at invocation is unchanged and authoritative.** A hidden capability called directly
+(MCP or a raw AppPort request) is refused; a capability revoked after the listing is refused at the call.
+
+**Evidence**
+
+| Tests | Result |
+|---|---|
+| `discovery.test.ts` (three runs) | 5/5 |
+| MCP suites | 32/32 (one test updated for the intended change) |
+| M1 executor-proof + local-authority, A2 build | 5/5 |
+| AppPort registry tests | 92/92 |
+| Full FeltKit suite with the A2 build | 673 tests, 673 pass, 0 fail, 0 skipped |
+| Full FeltKit suite, standard | 673 tests, 670 pass, 0 fail, 3 skipped (the M1 acceptance test and both local-authority tests: "@authboundry/local is not installed") |
+
+Conformance 50/50 in both full runs.
+
+**Size:** source +46 −4, tests and fixtures +154 −2, docs and changelog +85.
+
+**Remaining gaps**
+
+- **Delegation-aware discovery has no contract.** AppPort capabilities don't name the AuthBoundry
+  capability a person must delegate, so listings reflect role eligibility. Delegated and resource-level
+  authority are decided at the call (and recorded, M1). Proposed: an AppPort `authority` field per
+  capability.
+- **MCP has no on-behalf-of.** External agents act as themselves; the in-app model's tool view is the
+  signed-in person's.
+- **AppPort's manifest and `/.well-known/appport` stay full and unfiltered**, as AppPort's published
+  contract. That is AppPort's decision.
+
+**Cross-application registry (investigated, not wired).**
+
+- It stores verified manifests, with integer-versioned capabilities, lifecycle and handover.
+- It is in-memory only, with no tenant or principal scope, no caller authorization, and no server or
+  FeltKit consumer.
+- It is not safe to expose as is.
+- Smallest next step: an AppPort scoped-discovery contract (an owning tenant per entry; a
+  caller-filtered view decided by AuthBoundry; invocation at each provider's own endpoint) before any
+  wiring.
+- Details: `feltkit/docs/AGENT-CAPABILITY-INFRASTRUCTURE.md` §10.
+
 **Strategic gap: cross-application discovery.**
 
 - AppPort core has a cross-application registry (`ApplicationRegistry.findByCapability` /
