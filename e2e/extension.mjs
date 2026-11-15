@@ -278,15 +278,17 @@ try {
       await card.getByText("Add task: Water the plants").waitFor({ timeout: 30_000 });
       const approve = card.getByRole("button", { name: "Approve" });
       await until(async () => !(await approve.isDisabled()), "Approve to be enabled by the live record");
+      // The proposal as FeltKit holds it, read over the panel's own bearer session before approving.
+      const token = (await stored())["personalos:token"];
+      const { actions } = await (await fetch(`${ORIGIN}/api/agent/actions?state=proposed`, { headers: { authorization: `Bearer ${token}` } })).json();
+      const proposed = actions.find((a) => a.input?.title === "Water the plants");
+      assert.ok(proposed?.inputDigest, "the proposal has a digest");
       await approve.click();
       await card.getByText(/^Done$/).waitFor({ timeout: 30_000 });
       assert.equal(sent.length, 1, "one approve request");
       const body = sent[0].postDataJSON();
-      const answer = (await (await sent[0].response()).json()).action;
       assert.match(String(sent[0].headers().authorization ?? ""), /^Bearer /, "the panel's bearer session, not a cookie");
-      assert.match(String(body.inputDigest ?? ""), /^sha256:/, "the approval carries a digest");
-      assert.equal(body.inputDigest, answer.inputDigest, "the digest is the approved action's own");
-      assert.equal(answer.input?.title, "Water the plants");
+      assert.deepEqual(body, { taskId: proposed.taskId, actionId: proposed.actionId, inputDigest: proposed.inputDigest }, "the panel approved that proposal's own digest");
       await tab(page, "Tasks");
       await page.getByText("Water the plants").waitFor();
       await tab(page, "Chat");

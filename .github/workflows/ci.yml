@@ -58,4 +58,13 @@ jobs:
           playwright install --with-deps chromium
           npx feltkit dev --port 5180 > feltkit-dev.log 2>&1 &
           for i in $(seq 1 60); do grep -q "Ready in" feltkit-dev.log && break; sleep 2; done
-          NODE_PATH="$(npm root -g)" npm run e2e:approve -- http://localhost:5180
+          grep -q "Ready in" feltkit-dev.log || { echo "feltkit dev did not start:"; cat feltkit-dev.log; exit 1; }
+          mkdir -p e2e-shots
+          NODE_PATH="$(npm root -g)" npm run e2e:approve -- http://localhost:5180 e2e-shots || { cat feltkit-dev.log; exit 1; }
+      - name: Approval screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: approve-binding
+          path: e2e-shots
+          if-no-files-found: ignore
