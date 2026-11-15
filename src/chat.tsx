@@ -31,10 +31,16 @@ function describe(p: Proposal): { title: string; detail?: string } {
 const DONE: Record<string, string> = { "tasks.create": "Created", "tasks.update": "Changed", "tasks.complete": "Completed", "memory.add": "Remembered" };
 const STATE: Record<string, string> = { proposed: "Approval required", approved: "Approved", executing: "Running…", succeeded: "Done", failed: "Failed", rejected: "Rejected", cancelled: "Cancelled", interrupted: "Outcome unknown" };
 
-function ProposalCard({ proposal, live, onApprove, onReject }: { proposal: Proposal; live?: OwnAction; onApprove: () => Promise<unknown>; onReject: () => Promise<unknown> }) {
+/**
+ * A proposal, shown and approved as FeltKit holds it (`live`): the card describes the stored
+ * input that will run, and Approve sends that input's digest back, so an approval binds to the
+ * exact operation shown. The message's copy only fills in until the live record arrives, and
+ * cannot be approved.
+ */
+function ProposalCard({ proposal, live, onApprove, onReject }: { proposal: Proposal; live?: OwnAction; onApprove: (shown: OwnAction) => Promise<unknown>; onReject: () => Promise<unknown> }) {
   const [busy, setBusy] = useState(false);
   const state = live?.state ?? proposal.state;
-  const { title, detail } = describe(proposal);
+  const { title, detail } = describe(live ? { ...proposal, capability: live.capability, input: live.input } : proposal);
   const act = (f: () => Promise<unknown>) => () => {
     setBusy(true);
     void f().finally(() => setBusy(false));
@@ -57,7 +63,7 @@ function ProposalCard({ proposal, live, onApprove, onReject }: { proposal: Propo
       {state === "proposed" && (
         <div className="row end">
           <button className="secondary" disabled={busy} onClick={act(onReject)}>Reject</button>
-          <button disabled={busy} onClick={act(onApprove)}>Approve</button>
+          <button disabled={busy || !live?.inputDigest} onClick={live ? act(() => onApprove(live)) : undefined}>Approve</button>
         </div>
       )}
     </div>
@@ -224,7 +230,7 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
                 {m.agent?.proposals
                   .filter((p) => p.effect === "consequential")
                   .map((p) => (
-                    <ProposalCard key={p.actionId} proposal={p} live={live.get(p.actionId)} onApprove={() => own.approve(p).catch(onError)} onReject={() => own.reject(p).catch(onError)} />
+                    <ProposalCard key={p.actionId} proposal={p} live={live.get(p.actionId)} onApprove={(shown) => own.approve(shown).catch(onError)} onReject={() => own.reject(p).catch(onError)} />
                   ))}
                 {m.agent && m.agent.proposals.some((p) => p.effect === "observation") && (
                   <div className="evidence">looked at: {[...new Set(m.agent.proposals.filter((p) => p.effect === "observation").map((p) => p.capability))].join(", ")}</div>
