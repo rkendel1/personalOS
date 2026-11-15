@@ -202,8 +202,19 @@ invocations, outbox or activity.
 - G0 still applies: the A2 AuthBoundry and FeltKit must be published together.
 
 **M2 — Capability discoverability: implementation complete, acceptance partially complete
-(2026-11-14; FeltKit branch `claude/m2-discoverability`, `ea4a378`; unmerged, unpublished; AuthBoundry
-unchanged).**
+(2026-11-14; FeltKit `ea4a378`; AuthBoundry unchanged by M2).**
+
+**Merge state, checked 2026-11-14.** Merged to `main` by the repository owner, and unpublished:
+
+| Repository | Merged | Notes |
+|---|---|---|
+| FeltKit | M1 `cf19e30` and M2 `ea4a378`, PR #122, 2026-11-13 | npm `latest` is still 0.3.29 |
+| AuthBoundry | M1 `6a7ecab`; the eligibility design `d343c5d`, PR #153 | npm 1.17.3 |
+| AppPort | delegated-authority design `7e1e09c` | — |
+
+**FeltKit `main` did not compile after that merge.** Merge `c83977d` dropped a closing brace and kept a
+duplicate import (NEW-5 in `feltkit/docs/platform/GAP-REGISTER.md`). The fix is on branch
+`claude/fix-main-merge-defects`, unmerged.
 
 What M2 has demonstrated: agents see a permission-filtered capability catalog, and invocation stays
 authoritative. What it has not demonstrated: that the catalog accurately represents *delegated*
