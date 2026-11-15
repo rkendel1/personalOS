@@ -74,12 +74,25 @@ async function scenario(name, fn) {
 
 // ---- A model that streams, slowly enough to watch and to interrupt ------------------------------
 let slow = false;
+// When set, the next streamed turn proposes tasks.create with this title (then answers its tool result in words).
+let propose = null;
 const modelCalls = [];
 const model = createServer((req, res) => {
   modelCalls.push(`${req.method} ${req.url}`);
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", () => {
+    const request = JSON.parse(body || "{}");
+    if (propose && request.stream && !(request.messages ?? []).some((m) => m.role === "tool")) {
+      const title = propose;
+      propose = null;
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      const chunk = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: "x", object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+      chunk({ role: "assistant", content: "I'll add that." });
+      chunk({ tool_calls: [{ index: 0, id: "call_ext", type: "function", function: { name: "tasks_create", arguments: JSON.stringify({ title }) } }] });
+      chunk({}, "tool_calls");
+      return res.end("data: [DONE]\n\n");
+    }
     const words = (slow ? "This is a deliberately slow reply so that it can be stopped before it finishes " : "Sure. Here is a streamed answer from the model, word by word, as it arrives ").split(" ").filter(Boolean);
     const n = slow ? 120 : 1;
     const parts = Array.from({ length: n }, () => words).flat();
@@ -251,6 +264,37 @@ try {
     assert.ok(seen.size >= 3, `grew through ${seen.size} lengths`);
     await page.locator(".msg.assistant .bubble").last().getByText(/word by word/).waitFor({ timeout: 30_000 });
     return `the reply grew through ${seen.size} lengths before it finished`;
+  });
+
+  await scenario("approval: a model proposal in the panel is approved with the digest of the input it shows", async () => {
+    propose = "Water the plants";
+    const sent = [];
+    const onRequest = (r) => r.method() === "POST" && r.url().endsWith("/api/agent/actions/approve") && sent.push(r);
+    page.on("request", onRequest);
+    try {
+      await page.getByLabel("Message").fill("remind me to water the plants");
+      await page.getByLabel("Send").click();
+      const card = page.getByTestId("proposal").last();
+      await card.getByText("Add task: Water the plants").waitFor({ timeout: 30_000 });
+      const approve = card.getByRole("button", { name: "Approve" });
+      await until(async () => !(await approve.isDisabled()), "Approve to be enabled by the live record");
+      await approve.click();
+      await card.getByText(/^Done$/).waitFor({ timeout: 30_000 });
+      assert.equal(sent.length, 1, "one approve request");
+      const body = sent[0].postDataJSON();
+      const answer = (await (await sent[0].response()).json()).action;
+      assert.match(String(sent[0].headers().authorization ?? ""), /^Bearer /, "the panel's bearer session, not a cookie");
+      assert.match(String(body.inputDigest ?? ""), /^sha256:/, "the approval carries a digest");
+      assert.equal(body.inputDigest, answer.inputDigest, "the digest is the approved action's own");
+      assert.equal(answer.input?.title, "Water the plants");
+      await tab(page, "Tasks");
+      await page.getByText("Water the plants").waitFor();
+      await tab(page, "Chat");
+      return `approved over the bearer session with ${body.inputDigest.slice(0, 18)}…; the task exists`;
+    } finally {
+      page.off("request", onRequest);
+      propose = null;
+    }
   });
 
   await scenario("interrupted streaming (Stop): the reply stops and the panel stays usable", async () => {

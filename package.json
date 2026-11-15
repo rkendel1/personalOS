@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "e2e:ui": "node e2e/ui.mjs",
     "e2e:model": "node e2e/model.mjs",
+    "e2e:approve": "node e2e/approve-binding.mjs",
     "extension:build": "vite build -c vite.extension.config.ts",
     "e2e:extension": "npm run extension:build && node e2e/extension.mjs",
     "measure": "feltkit measure",
