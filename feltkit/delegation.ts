@@ -10,6 +10,7 @@
 import { s } from "@feltdb/feltkit";
 import { app } from "./app.js";
 import { CAPABILITIES, CAPABILITY_LABELS } from "./_authority.js";
+import { setGrants } from "./_delegation.js";
 
 type Capability = (typeof CAPABILITIES)[number];
 const KNOWN = new Set<string>(CAPABILITIES);
@@ -56,11 +57,8 @@ export const set = app.action({
     const want = [...new Set(capabilities)];
     const unknown = want.filter((c) => !KNOWN.has(c));
     if (unknown.length) throw new Error(`Not something PersonalOS asks for: ${unknown.join(", ")}`);
-    const before = await current(ctx);
-    const same = (g: { capabilities: string[]; expiresAt: number | null }) => g.capabilities.length === want.length && want.every((c) => g.capabilities.includes(c)) && g.expiresAt === (expiresAt ?? null);
-    if (before.length === 1 && same(before[0]!)) return { granted: want as Capability[], changed: false };
-    if (want.length) await ctx.authority.grants.grant({ capabilities: want, ...(expiresAt ? { expiresAt } : {}) });
-    for (const g of before) await ctx.authority.grants.revoke(g.id);
-    return { granted: want as Capability[], changed: true };
+    // Retry-safe: the grant now in force is never revoked (feltkit/_delegation.ts).
+    const { granted, changed } = await setGrants(ctx.authority.grants, want, expiresAt ?? null);
+    return { granted: granted as Capability[], changed };
   },
 });
