@@ -52,3 +52,19 @@ jobs:
         run: npm run build
       - name: Build the Chrome extension
         run: npm run extension:build
+      - name: Chat approvals bind to the exact operation shown, in a real browser (e2e/approve-binding.mjs)
+        run: |
+          npm install -g playwright@1.63.0
+          playwright install --with-deps chromium
+          npx feltkit dev --port 5180 > feltkit-dev.log 2>&1 &
+          for i in $(seq 1 60); do grep -q "Ready in" feltkit-dev.log && break; sleep 2; done
+          grep -q "Ready in" feltkit-dev.log || { echo "feltkit dev did not start:"; cat feltkit-dev.log; exit 1; }
+          mkdir -p e2e-shots
+          NODE_PATH="$(npm root -g)" npm run e2e:approve -- http://localhost:5180 e2e-shots || { cat feltkit-dev.log; exit 1; }
+      - name: Approval screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: approve-binding
+          path: e2e-shots
+          if-no-files-found: ignore
