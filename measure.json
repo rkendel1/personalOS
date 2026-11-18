@@ -30,28 +30,28 @@
   },
   "totals": {
     "domain": {
-      "files": 43,
-      "lines": 6462
+      "files": 45,
+      "lines": 6710
     },
     "experience": {
       "files": 33,
-      "lines": 2542
+      "lines": 2639
     },
     "infrastructure": {
       "files": 16,
-      "lines": 2564
+      "lines": 2802
     },
     "generated": {
       "files": 2,
-      "lines": 33
+      "lines": 34
     },
     "configuration": {
       "files": 12,
       "lines": 381
     },
     "tests": {
-      "files": 60,
-      "lines": 12829
+      "files": 61,
+      "lines": 13169
     },
     "third-party": {
       "files": 0,
@@ -71,17 +71,17 @@
     }
   },
   "authored": {
-    "files": 104,
-    "lines": 11949
+    "files": 106,
+    "lines": 12532
   },
   "definitions": {
     "app": {
       "action": 11,
       "agent": 2,
-      "collection": 17,
+      "collection": 18,
       "integration": 6,
-      "mutation": 67,
-      "query": 27
+      "mutation": 71,
+      "query": 28
     },
     "collections": [
       "documents",
@@ -93,6 +93,7 @@
       "actions",
       "settings",
       "identityLinks",
+      "agentwork",
       "invocations",
       "interactions",
       "researchRuns",
@@ -106,52 +107,52 @@
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 1570,
-      "files": 28
+      "callSites": 1640,
+      "files": 29
     },
     {
       "api": "ctx.db",
-      "callSites": 284,
-      "files": 24
+      "callSites": 298,
+      "files": 25
     },
     {
       "api": "@feltdb/feltkit fail",
-      "callSites": 76,
-      "files": 17
-    },
-    {
-      "api": "@feltdb/feltkit/testing TestApp",
-      "callSites": 55,
+      "callSites": 84,
       "files": 18
     },
     {
-      "api": "@feltdb/feltkit/testing createTestApp",
-      "callSites": 51,
-      "files": 20
+      "api": "@feltdb/feltkit/testing TestApp",
+      "callSites": 60,
+      "files": 19
     },
     {
-      "api": "@feltdb/feltkit MutationCtx",
-      "callSites": 49,
-      "files": 9
+      "api": "@feltdb/feltkit/testing createTestApp",
+      "callSites": 55,
+      "files": 21
     },
     {
       "api": "@feltdb/feltkit feltkit",
-      "callSites": 48,
+      "callSites": 51,
       "files": 1
     },
     {
-      "api": "ctx.runMutation",
-      "callSites": 34,
-      "files": 4
+      "api": "@feltdb/feltkit MutationCtx",
+      "callSites": 50,
+      "files": 10
     },
     {
       "api": "@feltdb/feltkit/react useMutation",
-      "callSites": 33,
+      "callSites": 36,
       "files": 5
     },
     {
+      "api": "ctx.runMutation",
+      "callSites": 36,
+      "files": 4
+    },
+    {
       "api": "@feltdb/feltkit/react useQuery",
-      "callSites": 25,
+      "callSites": 26,
       "files": 5
     },
     {
@@ -161,7 +162,7 @@
     },
     {
       "api": "ctx.auth",
-      "callSites": 20,
+      "callSites": 21,
       "files": 11
     },
     {
@@ -190,6 +191,11 @@
       "files": 7
     },
     {
+      "api": "ctx.integrations",
+      "callSites": 10,
+      "files": 4
+    },
+    {
       "api": "ctx.model",
       "callSites": 9,
       "files": 3
@@ -197,11 +203,6 @@
     {
       "api": "ctx.runQuery",
       "callSites": 9,
-      "files": 4
-    },
-    {
-      "api": "ctx.integrations",
-      "callSites": 8,
       "files": 4
     },
     {
@@ -315,7 +316,7 @@
       "id": "audit-trail",
       "title": "App-built business audit trail",
       "file": "feltkit/app.ts",
-      "line": 488,
+      "line": 504,
       "evidence": "export const actions = app.collection(",
       "platform": "app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence)",
       "acknowledged": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
@@ -422,7 +423,7 @@
       "path": "agent/agent/channels/work.ts",
       "class": "infrastructure",
       "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
-      "lines": 287
+      "lines": 379
     },
     {
       "path": "agent/agent/instructions.md",
@@ -446,7 +447,7 @@
       "path": "agent/agent/lib/operations.ts",
       "class": "infrastructure",
       "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
-      "lines": 736
+      "lines": 753
     },
     {
       "path": "agent/agent/lib/reconcile.ts",
@@ -458,13 +459,13 @@
       "path": "agent/agent/lib/recovery.ts",
       "class": "infrastructure",
       "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
-      "lines": 239
+      "lines": 248
     },
     {
       "path": "agent/agent/lib/work.ts",
       "class": "infrastructure",
       "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
-      "lines": 382
+      "lines": 502
     },
     {
       "path": "agent/agent/tools/appport_capabilities.ts",
@@ -554,7 +555,7 @@
       "path": "agent/test/fixture-agent.mjs",
       "class": "tests",
       "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
-      "lines": 127
+      "lines": 130
     },
     {
       "path": "agent/test/host-process.mjs",
@@ -626,7 +627,7 @@
       "path": "agent/test/work.test.mjs",
       "class": "tests",
       "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
-      "lines": 607
+      "lines": 727
     },
     {
       "path": "agent/tsconfig.json",
@@ -1124,7 +1125,7 @@
       "path": "feltkit/_generated/api.ts",
       "class": "generated",
       "basis": "codegen (matches regeneration)",
-      "lines": 28,
+      "lines": 29,
       "scaffold": "modified"
     },
     {
@@ -1176,6 +1177,12 @@
       "lines": 102
     },
     {
+      "path": "feltkit/_route.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 26
+    },
+    {
       "path": "feltkit/_search.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -1194,16 +1201,22 @@
       "lines": 50
     },
     {
+      "path": "feltkit/agentwork.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 110
+    },
+    {
       "path": "feltkit/anywhere.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 155
+      "lines": 213
     },
     {
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 652,
+      "lines": 698,
       "scaffold": "modified"
     },
     {
@@ -1327,7 +1340,7 @@
       "path": "feltkit/turn.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 196
+      "lines": 204
     },
     {
       "path": "feltkit/turnstate.ts",
@@ -1514,7 +1527,7 @@
       "path": "src/chat.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 329
+      "lines": 426
     },
     {
       "path": "src/main.tsx",
@@ -1578,6 +1591,12 @@
       "class": "tests",
       "basis": "path: tests",
       "lines": 212
+    },
+    {
+      "path": "tests/agentwork.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 217
     },
     {
       "path": "tests/assistant.test.ts",

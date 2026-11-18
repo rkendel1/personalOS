@@ -22,6 +22,8 @@ import { app } from "./app.js";
 import { clockFor, offsetFor, type Clock } from "./_clock.js";
 import { outcomeOf } from "./_research.js";
 import { retryResearch, startResearch } from "./research.js";
+import { agentConnected } from "./anywhere.js";
+import { routeOf } from "./_route.js";
 import { declaredCapabilities, PROSPECT_NEEDS, describeDiscovery, discover } from "./_capabilities.js";
 
 /** The capabilities the model may use, as tools. Everything else stays with the person. */
@@ -79,7 +81,8 @@ const trim = (value: unknown) => {
 };
 
 const Result = s.object({
-  mode: s.enum(["model", "rules"] as const),
+  /** model | rules: answered here. agent: handed to the person's agent (feltkit/agentwork.ts). */
+  mode: s.enum(["model", "rules", "agent"] as const),
   conversationId: s.string(),
   messageId: s.string(),
   replyId: s.string(),
@@ -94,6 +97,14 @@ export const turn = app.action({
   returns: Result,
   handler: async (ctx, { conversationId, clientId, text }) => {
     const clock = clockFor(ctx.auth.context.timeZone);
+    // Work that needs durable, multi-step execution goes to the person's agent, when one is connected and
+    // they may hand work to it; the rules decide (feltkit/_route.ts), never a model. Everything else stays.
+    const route = routeOf(text);
+    if (route.delegate && agentConnected() && ctx.auth.has("agentwork.write")) {
+      const user = await ctx.runMutation(api.turnstate.recordUser, { ...(conversationId ? { conversationId } : {}), clientId, text });
+      const handed = (await ctx.runMutation(api.agentwork.handOver, { messageId: user.messageId, reason: route.reason })) as { replyId: string | null };
+      return { mode: "agent" as const, conversationId: user.conversationId, messageId: user.messageId, replyId: handed.replyId ?? "", replayed: user.replyId !== null, reason: route.reason };
+    }
     // An outcome to research ("find me new customers for FeltKit") is pursued by research, with or
     // without a model: discovery decides what can run, not the tools a model turn would be given.
     if (outcomeOf(text) && ctx.auth.has("research.run")) {

@@ -97,6 +97,12 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
   const live = useMemo(() => new Map([...(waiting.actions ?? []), ...(own.actions ?? [])].map((a) => [a.actionId, a])), [waiting.actions, own.actions]);
   const approve = useMutation(api.actions.approve);
   const reject = useMutation(api.actions.reject);
+  // Work handed to the person's agent from this conversation (feltkit/agentwork.ts), by the message that asked.
+  const work = useQuery(api.agentwork.list, conversationId ? { conversationId } : "skip") ?? [];
+  const workFor = useMemo(() => new Map(work.map((w) => [w.messageId, w])), [work]);
+  const startWork = useMutation(api.agentwork.start);
+  const answerWork = useMutation(api.agentwork.answer);
+  const cancelWork = useMutation(api.agentwork.cancel);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
@@ -268,9 +274,21 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
                     ))}
                   </div>
                 ) : null}
+                {m.role === "user" && workFor.get(m.id) && (
+                  <AgentWorkCard
+                    work={workFor.get(m.id)!}
+                    onAnswer={(interactionId, answer) => answerWork({ id: workFor.get(m.id)!.id, interactionId, ...answer }).then(() => undefined, onError)}
+                    onStop={() => void cancelWork({ id: workFor.get(m.id)!.id }).catch(onError)}
+                  />
+                )}
                 {m.role === "user" && !m.supersededBy && editing?.id !== m.id && (
                   <div className="msg-tools">
                     <button className="ghost tiny" onClick={() => setEditing({ id: m.id, text: m.text })} aria-label="Edit"><Icon name="edit" size={14} /> Edit</button>
+                    {(!workFor.get(m.id) || workFor.get(m.id)!.agent.state === "unavailable") && (
+                      <button className="ghost tiny" onClick={() => void startWork({ messageId: m.id }).catch(onError)} title="Hand this to your agent: it keeps working after you leave, asks you here if it needs a decision, and records what it did.">
+                        Work on this
+                      </button>
+                    )}
                     {m.id === lastUser?.id && (
                       <button className="ghost tiny" onClick={() => void submit(m.text)} aria-label="Ask again"><Icon name="retry" size={14} /> Ask again</button>
                     )}
@@ -371,5 +389,89 @@ function PublishOnX({ postId }: { postId: string }) {
       </div>
       {result && <p data-testid="publish-result">{result}</p>}
     </details>
+  );
+}
+
+type AgentWorkView = {
+  id: string;
+  routedBy: "explicit" | "rules";
+  reason: string;
+  agent: {
+    state: string;
+    workId?: string;
+    summary?: string;
+    decision?: string;
+    operations?: Array<{ capability: string; operationId: string; state: string }>;
+    questions?: Array<{ interactionId: string; kind: string; prompt: string; options: Array<{ id: string; label: string }>; allowFreeform: boolean }>;
+    answers?: Array<{ interactionId: string }>;
+    cancel?: { requestedAt: number };
+  };
+};
+
+const WORK_STATE: Record<string, string> = {
+  submitting: "Handing over",
+  accepted: "Working",
+  waiting: "Needs your answer",
+  blocked: "Stuck",
+  cancelling: "Stopping",
+  completed: "Done",
+  cancelled: "Stopped",
+  refused: "Refused",
+  expired: "No longer followed",
+  unavailable: "No agent connected",
+};
+const ACTIVE = new Set(["submitting", "accepted", "waiting", "blocked"]);
+
+/** One piece of work the person handed to their agent: where it is, what it asks, what it did. */
+function AgentWorkCard({ work, onAnswer, onStop }: { work: AgentWorkView; onAnswer: (interactionId: string, answer: { optionId?: string; text?: string }) => Promise<void>; onStop: () => void }) {
+  const { agent } = work;
+  const answered = new Set((agent.answers ?? []).map((a) => a.interactionId));
+  const open = (agent.questions ?? []).filter((q) => !answered.has(q.interactionId));
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const send = async (interactionId: string, answer: { optionId?: string; text?: string }) => {
+    setSending(true);
+    try {
+      await onAnswer(interactionId, answer);
+      setReply("");
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div className={`action-card agent-work ${agent.state}`} data-testid="agent-work">
+      <div className="row between">
+        <span className="action-summary">Your agent · {WORK_STATE[agent.state] ?? agent.state}</span>
+        {ACTIVE.has(agent.state) && !agent.cancel && (
+          <button className="secondary tiny" onClick={onStop}>Stop</button>
+        )}
+      </div>
+      <div className="muted small">{work.routedBy === "explicit" ? "You chose Work on this." : `Handed over because ${work.reason}.`}</div>
+      {agent.summary && agent.state !== "waiting" && <div className="small">{agent.summary}</div>}
+      {open.map((q) => (
+        <div key={q.interactionId} className="agent-question">
+          <div><strong>{q.prompt}</strong></div>
+          {q.options.length > 0 && (
+            <div className="row end">
+              {q.options.map((o) => (
+                <button key={o.id} className={/deny|reject|no/i.test(`${o.id} ${o.label}`) ? "secondary" : ""} disabled={sending} onClick={() => void send(q.interactionId, { optionId: o.id })}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {q.allowFreeform && (
+            <form className="row" onSubmit={(e) => (e.preventDefault(), reply.trim() && void send(q.interactionId, { text: reply.trim() }))}>
+              <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Your answer" aria-label="Your answer" maxLength={2000} />
+              <button type="submit" disabled={sending || !reply.trim()}>Answer</button>
+            </form>
+          )}
+        </div>
+      ))}
+      {agent.operations && agent.operations.length > 0 && (
+        <div className="evidence">did: {agent.operations.map((o) => `${o.capability} ${o.state}`).join(", ")}</div>
+      )}
+      {agent.workId && <div className="muted tiny">work {agent.workId}</div>}
+    </div>
   );
 }

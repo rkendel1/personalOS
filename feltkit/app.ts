@@ -24,6 +24,8 @@ const OWNER = [
   "documents.*", "files.read", "files.write", "files.delete",
   // What PersonalOS may do for them from connected surfaces: their own grants (feltkit/delegation.ts).
   "delegation.*",
+  // Work they hand to their agent from a conversation (feltkit/agentwork.ts): start, answer, stop, follow.
+  "agentwork.*",
   // Outbound events (task.completed, reminder.fired, interaction.updated) to endpoints the operator
   // registers; each delivery is authorized again as the emitter (webhooks.deliver, runtime-internal).
   "webhooks.emit", "webhooks.deliver",
@@ -225,6 +227,20 @@ export const connectedAgent = app.integration("agent", {
       method: "GET", path: "/work/{workId}", input: { workId: s.string({ pattern: "^work_[a-f0-9]{8,64}$" }) },
       output: s.record(s.unknown()), effect: "observation", access: "anywhere.agent",
       description: "The agent's own record of one piece of work it accepted from PersonalOS.",
+    },
+    answer: {
+      method: "POST", path: "/work/{workId}/answers",
+      input: {
+        workId: s.string({ pattern: "^work_[a-f0-9]{8,64}$" }),
+        answers: s.array(s.object({ interactionId: s.string({ maxLength: 200 }), optionId: s.optional(s.string({ maxLength: 200 })), text: s.optional(s.string({ maxLength: 2000 })) })),
+      },
+      output: s.record(s.unknown()), effect: "consequential", access: "anywhere.agent",
+      description: "The person's answer to what the agent asks; it resumes the work that asked (409 if it no longer waits on it).",
+    },
+    cancel: {
+      method: "POST", path: "/work/{workId}/cancel", input: { workId: s.string({ pattern: "^work_[a-f0-9]{8,64}$" }) },
+      output: s.record(s.unknown()), effect: "consequential", access: "anywhere.agent",
+      description: "Stop the work for the person (409 if it already finished).",
     },
   },
 });
@@ -603,8 +619,13 @@ const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s
 export const AgentWork = s.object({
   /** The agent's idempotency key for this request: derived from the surface's own event id. */
   key: s.string({ maxLength: 300 }),
-  /** submitting: not yet accepted by the agent. accepted: the agent has it. completed | blocked: what its record says. refused: it refused the submission (nothing ran). expired: no longer followed. */
-  state: s.enum(["submitting", "accepted", "completed", "blocked", "refused", "expired"] as const),
+  /**
+   * submitting: not yet accepted by the agent. accepted: the agent has it. waiting: it asks the person something.
+   * completed | blocked | cancelled: what its record says. cancelling: the person asked it to stop.
+   * refused: it refused the submission (nothing ran). expired: no longer followed.
+   * unavailable: no agent is connected; the request is kept here and nothing was started.
+   */
+  state: s.enum(["submitting", "accepted", "waiting", "completed", "blocked", "cancelling", "cancelled", "refused", "expired", "unavailable"] as const),
   /** What was asked (the message text), and where it came from: sent to the agent as data, never as authority. */
   objective: s.string({ maxLength: 4000 }),
   surface: s.record(s.string({ maxLength: 500 })),
@@ -623,7 +644,49 @@ export const AgentWork = s.object({
   error: s.optional(s.string({ maxLength: 1000 })),
   submittedAt: s.optional(s.number()),
   checkedAt: s.optional(s.number()),
+  /** What the agent asks the person now (its work record's open questions), and which were shown to them. */
+  questions: s.optional(s.array(s.object({
+    interactionId: s.string({ maxLength: 200 }),
+    kind: s.string({ maxLength: 50 }),
+    prompt: s.string({ maxLength: 2000 }),
+    options: s.array(s.object({ id: s.string({ maxLength: 200 }), label: s.string({ maxLength: 300 }) })),
+    allowFreeform: s.boolean(),
+    shown: s.optional(s.boolean()),
+  }))),
+  /** The person's answers, delivered to the agent by the follow job (sentAt), at most one per question. */
+  answers: s.optional(s.array(s.object({
+    interactionId: s.string({ maxLength: 200 }),
+    optionId: s.optional(s.string({ maxLength: 200 })),
+    text: s.optional(s.string({ maxLength: 2000 })),
+    at: s.number(),
+    sentAt: s.optional(s.number()),
+    error: s.optional(s.string({ maxLength: 1000 })),
+  }))),
+  /** The person asked the agent to stop (requestedAt); delivered to it at sentAt. */
+  cancel: s.optional(s.object({ requestedAt: s.number(), sentAt: s.optional(s.number()) })),
 });
+
+/**
+ * Work the person handed to their agent from a PersonalOS conversation (feltkit/agentwork.ts): which
+ * message asked, why it went to the agent, and the agent's own record of it. One per message. The person
+ * owns it; the `anywhere` agent follows it, so it does not depend on the person staying signed in.
+ */
+export const agentwork = app.collection(
+  "agentwork",
+  {
+    owner,
+    conversationId: s.string(),
+    /** The person's message it carries out. */
+    messageId: s.string(),
+    /** explicit: the person chose "Work on this". rules: PersonalOS's routing rules (feltkit/_route.ts). */
+    routedBy: s.enum(["explicit", "rules"] as const),
+    reason: s.string({ maxLength: 300 }),
+    agent: AgentWork,
+    createdAt: s.number(),
+    updatedAt: s.number(),
+  },
+  { indexes: [{ fields: ["owner", "messageId"] }, { fields: ["owner", "conversationId"] }] },
+);
 
 export const invocations = app.collection(
   "invocations",
