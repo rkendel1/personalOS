@@ -3,7 +3,7 @@
  * moment its mutation commits; there is no client-side copy to drift from the truth.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useAction, useMutation, useOwnActions, useQuery } from "@feltdb/feltkit/react";
+import { useAction, useMutation, useOwnActions, useQuery, useQueryState } from "@feltdb/feltkit/react";
 import type { OwnAction } from "@feltdb/feltkit/client";
 import { api } from "../feltkit/_generated/api";
 import { ago, dayLabel, Evidence, Icon, Markdown, StatusBadge, timeLabel, type Action } from "./ui";
@@ -98,7 +98,11 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
   const approve = useMutation(api.actions.approve);
   const reject = useMutation(api.actions.reject);
   // Work handed to the person's agent from this conversation (feltkit/agentwork.ts), by the message that asked.
-  const work = useQuery(api.agentwork.list, conversationId ? { conversationId } : "skip") ?? [];
+  // A server without agent work (deployed before it, while this client is newer) answers with an error:
+  // then there is simply no Work on this, and the conversation works as before.
+  const workState = useQueryState(api.agentwork.list, conversationId ? { conversationId } : "skip");
+  const agentWorkAvailable = !workState.error;
+  const work = workState.data ?? [];
   const workFor = useMemo(() => new Map(work.map((w) => [w.messageId, w])), [work]);
   const startWork = useMutation(api.agentwork.start);
   const answerWork = useMutation(api.agentwork.answer);
@@ -284,7 +288,7 @@ export function Chat({ conversationId, onConversation, onError, name, compose }:
                 {m.role === "user" && !m.supersededBy && editing?.id !== m.id && (
                   <div className="msg-tools">
                     <button className="ghost tiny" onClick={() => setEditing({ id: m.id, text: m.text })} aria-label="Edit"><Icon name="edit" size={14} /> Edit</button>
-                    {(!workFor.get(m.id) || workFor.get(m.id)!.agent.state === "unavailable") && (
+                    {agentWorkAvailable && (!workFor.get(m.id) || workFor.get(m.id)!.agent.state === "unavailable") && (
                       <button className="ghost tiny" onClick={() => void startWork({ messageId: m.id }).catch(onError)} title="Hand this to your agent: it keeps working after you leave, asks you here if it needs a decision, and records what it did.">
                         Work on this
                       </button>
