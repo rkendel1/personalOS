@@ -29,6 +29,7 @@ import { subjectOf } from "./_invocation.js";
 import { followResearch } from "./invocationstate.js";
 import { api } from "./_generated/api.js";
 import { app, prospects, researchRuns, researchSources } from "./app.js";
+import { releaseBudget } from "./researchstate.js";
 import { declaredCapabilities, describeDiscovery, PROSPECT_NEEDS, discover, type Discovery } from "./_capabilities.js";
 import { companyName, domainOf, outcomeOf, planQueries, productKnowledge, prospectsFrom, type StoredSource } from "./_research.js";
 import { providerOf } from "./_search.js";
@@ -113,10 +114,16 @@ export const retry = app.action({
 export const cancel = app.mutation({
   access: "research.run",
   args: { runId: s.string() },
+  returns: s.object({ status: s.string(), conversationId: s.nullable(s.string()), messageId: s.nullable(s.string()), replyId: s.nullable(s.string()) }),
+  capability: { name: "research.cancel", description: "Stop a research run: no step starts after this, and no further billable call is made. What it found is kept. Repeating it changes nothing." },
+  retry: { sequenceConflicts: 3 },
   handler: async (ctx, { runId }) => {
     const run = await ops.own<any>(ctx, researchRuns, runId, "research run");
     if (run.status !== "running" && run.status !== "blocked") return { status: run.status, conversationId: run.conversationId ?? null, messageId: null, replyId: null };
-    await ctx.db.patch(researchRuns, runId, { status: "cancelled", cancelRequested: true, updatedAt: Date.now(), completedAt: Date.now() });
+    const by = ops.delegationOf(ctx)?.agentAuthority ?? "owner";
+    const budget = await releaseBudget(ctx, run);
+    await ctx.db.patch(researchRuns, runId, { status: "cancelled", cancelRequested: true, cancelledBy: by, ...(budget ? { budget } : {}), updatedAt: Date.now(), completedAt: Date.now() });
+    await ops.record(ctx, { kind: "research.cancel", summary: `Research stopped: ${run.request}`.slice(0, 500), status: "succeeded", input: { runId, by } }, { via: "ui", ...(run.conversationId ? { conversationId: run.conversationId } : {}) });
     await followResearch(ctx, run, "cancelled", `You stopped the research for ${run.product}. What it found is kept; say "retry research" to continue.`);
     const replyId = run.conversationId ? await appendMessage(ctx, run.conversationId, { role: "assistant", text: `Stopped the research for ${run.product}. What I found so far is kept; say "retry research" to continue.` }) : null;
     return { status: "cancelled", conversationId: run.conversationId ?? null, messageId: replyId, replyId };
@@ -125,8 +132,17 @@ export const cancel = app.mutation({
 
 export const list = app.query({
   access: "research.read",
+  returns: s.array(s.object({
+    id: s.string(), kind: s.string(), product: s.string(), request: s.string(), status: s.string(), phase: s.nullable(s.string()), conversationId: s.nullable(s.string()),
+    createdAt: s.number(), completedAt: s.nullable(s.number()), prospectCount: s.number(),
+    blocker: s.nullable(s.object({ need: s.string(), state: s.string(), detail: s.string(), howToEnable: s.optional(s.string()) })),
+    budget: s.nullable(s.object({ agent: s.string(), allocation: s.number(), charged: s.number(), released: s.boolean() })),
+    cancelledBy: s.nullable(s.string()),
+    queries: s.array(s.object({ text: s.string(), state: s.string(), attempts: s.number(), results: s.nullable(s.number()), origin: s.string() })),
+  })),
+  capability: { name: "research.list", description: "Your research runs, newest first: status, phase, searches, and what each was given to spend." },
   handler: async (ctx) => (await ctx.db.find(researchRuns, { owner: ops.me(ctx) }, { orderBy: [{ field: "createdAt", direction: "desc" }], limit: 50 })).map((r: any) => ({
-    id: r.id, kind: r.kind, product: r.product, request: r.request, status: r.status, phase: r.phase ?? null, conversationId: r.conversationId ?? null, createdAt: r.createdAt, completedAt: r.completedAt ?? null, prospectCount: r.prospectCount ?? 0, blocker: r.blocker ?? null,
+    id: r.id, kind: r.kind, product: r.product, request: r.request, status: r.status, phase: r.phase ?? null, conversationId: r.conversationId ?? null, createdAt: r.createdAt, completedAt: r.completedAt ?? null, prospectCount: r.prospectCount ?? 0, blocker: r.blocker ?? null, budget: r.budget ?? null, cancelledBy: r.cancelledBy ?? null,
     queries: r.queries.map((q: any) => ({ text: q.text, state: q.state, attempts: q.attempts, results: q.results ?? null, origin: q.origin ?? "plan" })),
   })),
 });
@@ -135,6 +151,8 @@ export const list = app.query({
 export const get = app.query({
   access: "research.read",
   args: { runId: s.string() },
+  returns: s.object({ run: s.doc(researchRuns), sources: s.array(s.doc(researchSources)), prospects: s.array(s.doc(prospects)) }),
+  capability: { name: "research.get", description: "One research run with its evidence: the sources it found and read (verbatim, with URLs), and its results, whose facts cite those sources apart from its assessments." },
   handler: async (ctx, { runId }) => {
     const run = await ops.own<any>(ctx, researchRuns, runId, "research run");
     const sources = await ctx.db.find(researchSources, { runId });
@@ -183,14 +201,20 @@ export const step = app.action({
     const started = Date.now();
     // Work an invocation started from outside PersonalOS runs on the person's delegation, so every step
     // asks again: a delegation revoked mid-run stops the next step.
-    if (run.invocationId && phase !== "finishing") {
-      const denied = await delegationDenied(ctx, run, phase);
+    if ((run.invocationId || run.budget) && phase !== "finishing") {
+      const denied = run.budget ? await agentDenied(ctx, run, phase) : await delegationDenied(ctx, run, phase);
       if (denied) {
         const r = await ctx.runMutation(api.researchstate.advance, { runId, expectUpdatedAt: run.updatedAt, patch: { status: "blocked", blocker: denied }, step: { phase, ms: Date.now() - started, outcome: `stopped: ${denied.detail}`.slice(0, 500) }, reply: `I stopped this research: ${denied.detail} ${denied.howToEnable} What I found before this is kept.`, next: false });
         return { ran: phase, applied: r.applied, stopped: "authority" };
       }
     }
+    if (phase === "discovering") {
+      const discovery = await discover(ctx.agent, PROSPECT_NEEDS, { declared: declaredCapabilities() });
+      const r = await ctx.runMutation(api.researchstate.prepare, { runId, expectUpdatedAt: run.updatedAt, discovery: discovery as unknown as Record<string, unknown>, planning: (await modelUsable(ctx)) ? "model" : "rules" });
+      return { ran: phase, applied: r.applied };
+    }
     let out: Outcome;
+    try {
     switch (phase) {
       case "planning": out = await planStep(ctx, view); break;
       case "searching": out = await searchStep(ctx, view); break;
@@ -198,6 +222,11 @@ export const step = app.action({
       case "reading": out = await readStep(ctx, view); break;
       case "assessing": out = await assessStep(ctx, view); break;
       default: out = finishStep(view);
+    }
+    } catch (error) {
+      // The budget refused a billable call (the run is stopped, saying why), or the run moved on: nothing more.
+      if (error instanceof NotCharged) return { ran: phase, applied: false, stopped: error.reason };
+      throw error;
     }
     const r = await ctx.runMutation(api.researchstate.advance, {
       runId, expectUpdatedAt: run.updatedAt, patch: out.patch,
@@ -224,10 +253,39 @@ async function delegationDenied(ctx: ActionCtx, run: Run, phase: string): Promis
   return { need: "your permission", state: "needs-authorization", detail: `PersonalOS is no longer allowed to research for you (personalos.research.run${decision.reason ? `: ${decision.reason}` : ""}).`, howToEnable: "Restore the delegation in AuthBoundry, then say \"retry research\"." };
 }
 
+/**
+ * A run an agent started for the owner continues only while the owner's grant to that agent still allows
+ * research (AuthBoundry, asked as that agent). A denial stops it; an authority that cannot answer is thrown.
+ */
+async function agentDenied(ctx: ActionCtx, run: Run, phase: string): Promise<{ need: string; state: string; detail: string; howToEnable: string } | null> {
+  // `agent` (deciding as that agent) arrived with FeltKit's per-agent delegation; only such runs have a budget.
+  const question = { capability: "research.start", onBehalfOf: authorityPrincipal(run.owner), agent: run.budget.agent, context: { run: String(run.id).slice(0, 100), step: phase } };
+  const decision = await ctx.authority.decide(question as Parameters<typeof ctx.authority.decide>[0]);
+  if (decision.outcome === "unavailable" || decision.outcome === "invalid") throw new FeltKitError("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); the step will try again.`);
+  if (decision.allowed) return null;
+  return { need: "your permission", state: "needs-authorization", detail: `${run.budget.agent} is no longer allowed to research for you (research.start${decision.reason ? `: ${decision.reason}` : ""}).`, howToEnable: "Grant it research.start again, then retry the research." };
+}
+
+class NotCharged extends Error {
+  constructor(readonly reason: string) { super(`not charged: ${reason}`); }
+}
+
+/**
+ * Before a billable call (a model generation, a web search) for a run an agent started: charge it to the
+ * run's budget, or make no call. Runs the owner started have no budget and are not charged.
+ */
+async function chargeCall(ctx: ActionCtx, run: Run, call: "model" | "search") {
+  if (!run.budget) return;
+  const r = await ctx.runMutation(api.researchstate.charge, { runId: run.id, expectUpdatedAt: run.updatedAt, call });
+  if (!r.ok) throw new NotCharged(r.reason ?? "refused");
+  run.updatedAt = r.updatedAt;
+}
+
 // ── The model ───────────────────────────────────────────────────────────────────────────────────
 
 /** Ask the run's model one question. Its answer is a recorded generation on the run's agent task. */
 async function ask(ctx: ActionCtx, run: Run, prompt: { system: string; user: string }, maxTokens: number) {
+  await chargeCall(ctx, run, "model");
   const started = Date.now();
   const taskId: string = run.taskId ?? (await ctx.agent.openTask({ key: `research:${run.id}`, objective: String(run.objective).slice(0, 500) })).taskId;
   try {
@@ -351,6 +409,7 @@ async function searchStep(ctx: ActionCtx, view: StepView): Promise<Outcome> {
     const blocker = { need: "web search", state: need?.state ?? "missing", detail: `No web search provider is ready (${need?.capability ?? "none declared"}).`, ...(need?.howToEnable ? { howToEnable: need.howToEnable } : {}) };
     return { patch: { status: "blocked", blocker }, outcome: blocker.detail, reply: `The research for ${run.product} stopped: ${blocker.detail} ${blocker.howToEnable ?? ""}`.trim(), next: false };
   }
+  await chargeCall(ctx, run, "search");
   const started = Date.now();
   try {
     const output = await ctx.integrations.invoke(provider.capability, provider.input(q.text));

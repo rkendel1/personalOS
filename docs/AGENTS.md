@@ -39,6 +39,10 @@ This needs a FeltKit with delegated `/appport` (after 0.3.32) and `@authboundry/
 | `projects.update` | Rename or describe your projects, or mark them active, paused or done |
 | `documents.list` | See your saved documents' names, sizes and notes, and what they are attached to; not their contents |
 | `documents.update` | Change a document's note, or attach it to one of your projects or tasks |
+| `research.start` | Start research for you, within the research budget you set for it |
+| `research.list`, `research.get` | See your research runs, and a run's sources and results |
+| `research.cancel` | Stop your research runs |
+| `research.retry` | Resume research it started (never completed research), within budget |
 
 **Deleting a task is not on the list.** It stays your own act, in the Tasks screen.
 
@@ -61,6 +65,26 @@ This is enforced in PersonalOS itself, not only by what an agent is offered. Whi
 
 Suggesting the same sentence again changes nothing, and nothing an agent writes counts as your confirmation, however it is worded.
 
+## Research costs money: you set what it may spend
+
+A grant to start research is not a budget. Research makes billable calls (a model generation, a web search),
+so an agent may start research for you only within a **research budget you set for it**, in calls:
+
+```ts
+delegation.setResearchBudget({ agent: "appport-agent", calls: 20 })
+delegation.researchBudget({ agent: "appport-agent" })   // calls, reserved, left
+```
+
+- **With no budget, nothing starts.** Each start names how many calls that run may make, and those are reserved from what is left.
+- **Each call is charged before it is made.** A run that has used its calls stops (blocked: "research budget"), and keeps what it found.
+- **Unused calls come back** when a run finishes or is stopped. Resuming one (`research.retry`) can add calls, from what is still left.
+- **Only you set or raise the budget.** It is never something an agent can be given, and PersonalOS refuses a change made while an agent acts for you.
+- **Page reads are not counted.** Reading a company's pages is a plain web request, at most two pages per company.
+
+**Stopping research** (`research.cancel`) means no further step and no further billable call. A search already in flight finishes; its result is not kept. A stopped run stays stopped after a restart. An agent can resume research it stopped, but never research you stopped.
+
+**Revoking `research.start`** stops a running run at its next step.
+
 ## How a call works
 
 The agent names you on each call. FeltKit asks AuthBoundry whether you granted that agent that capability, then runs PersonalOS's own function as you, with your roles.
@@ -72,4 +96,4 @@ The agent names you on each call. FeltKit asks AuthBoundry whether you granted t
 ## Not yet
 
 - **No screen in Settings for agent grants.** Grants to an agent are made through `delegation.set` with `agent`; there is no screen for them yet.
-- **Research** is not available to agents yet.
+- **No Settings screen for research budgets.** Budgets are set through `delegation.setResearchBudget` for now.

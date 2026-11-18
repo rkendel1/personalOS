@@ -8,9 +8,10 @@
  * With a hosted AuthBoundry (AUTHBOUNDRY_URL), people grant there and this says so.
  */
 import { fail, s } from "@feltdb/feltkit";
-import { app } from "./app.js";
+import { app, researchBudgets } from "./app.js";
 import { AGENT_CAPABILITIES, AGENT_CAPABILITY_LABELS, CAPABILITIES, CAPABILITY_LABELS } from "./_authority.js";
 import { agentPrincipal, setGrants } from "./_delegation.js";
+import { delegationOf } from "./_ops.js";
 
 const KNOWN = new Set<string>(CAPABILITIES);
 const AGENT_KNOWN = new Set<string>(AGENT_CAPABILITIES);
@@ -83,5 +84,39 @@ export const registerAgent = app.action({
     const agents = (ctx.authority as { agents?: { register(input: { id: string; name?: string }): Promise<{ id: string; status: string }> } }).agents;
     if (!agents) fail("FAILED_PRECONDITION", "This FeltKit cannot register agents (needs a release with ctx.authority.agents).");
     return agents.register(input);
+  },
+});
+
+/**
+ * What the owner lets an agent spend on research for them, in billable calls (a model generation or a web
+ * search). Only the owner sets it: never an agent, whatever it was granted. Lowering it below what running
+ * research holds stops new runs; it does not take back what is already reserved.
+ */
+export const setResearchBudget = app.mutation({
+  access: "delegation.write",
+  args: { agent: s.string({ minLength: 1, maxLength: 100 }), calls: s.integer({ minimum: 0, maximum: 100000 }) },
+  returns: s.object({ agent: s.string(), calls: s.number(), reserved: s.number(), left: s.number() }),
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { agent, calls }) => {
+    if (delegationOf(ctx)) fail("FORBIDDEN", "Only the owner sets a research budget; an agent acting for them cannot.");
+    const owner = ctx.auth.requirePrincipal().id;
+    const target = agentPrincipal(agent);
+    const record = (await ctx.db.find(researchBudgets, { owner, agent: target }))[0];
+    if (record) await ctx.db.patch(researchBudgets, record.id, { calls, updatedAt: Date.now() });
+    else await ctx.db.insert(researchBudgets, { owner, agent: target, calls, reserved: 0, updatedAt: Date.now() });
+    const reserved = record?.reserved ?? 0;
+    return { agent: target, calls, reserved, left: Math.max(0, calls - reserved) };
+  },
+});
+
+/** The research budget the owner set for an agent, what is reserved or spent, and what is left. */
+export const researchBudget = app.query({
+  access: "delegation.read",
+  args: { agent: s.string({ minLength: 1, maxLength: 100 }) },
+  returns: s.nullable(s.object({ agent: s.string(), calls: s.number(), reserved: s.number(), left: s.number() })),
+  handler: async (ctx, { agent }) => {
+    const owner = ctx.auth.requirePrincipal().id;
+    const record = (await ctx.db.find(researchBudgets, { owner, agent: agentPrincipal(agent) }))[0];
+    return record ? { agent: record.agent, calls: record.calls, reserved: record.reserved, left: Math.max(0, record.calls - record.reserved) } : null;
   },
 });
