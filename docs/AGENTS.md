@@ -34,8 +34,17 @@ This needs a FeltKit with delegated `/appport` (after 0.3.32) and `@authboundry/
 | `briefing.today` | Read your daily briefing |
 | `memory.list` | See what PersonalOS remembers about you, confirmed and unconfirmed |
 | `memory.propose` | Suggest things to remember: stored as unconfirmed until you confirm them |
+| `projects.list` | See your projects (with their open and done task counts) |
+| `projects.create` | Start projects |
+| `projects.update` | Rename or describe your projects, or mark them active, paused or done |
+| `documents.list` | See your saved documents' names, sizes and notes, and what they are attached to; not their contents |
+| `documents.update` | Change a document's note, or attach it to one of your projects or tasks |
 
 **Deleting a task is not on the list.** It stays your own act, in the Tasks screen.
+
+**Project and document grants are separate.** Seeing your projects never shows an agent your documents; `documents.list` is needed for that.
+
+**Your documents' contents never pass through an agent.** An agent cannot upload a document, get a download link, or remove one. Saving and removing documents stay yours, in the Documents screen.
 
 ## Memory an agent suggests
 
@@ -63,4 +72,4 @@ The agent names you on each call. FeltKit asks AuthBoundry whether you granted t
 ## Not yet
 
 - **No screen in Settings for agent grants.** Grants to an agent are made through `delegation.set` with `agent`; there is no screen for them yet.
-- **Projects, documents and research** are not available to agents yet.
+- **Research** is not available to agents yet.
