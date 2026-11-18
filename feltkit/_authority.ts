@@ -66,9 +66,11 @@ export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = 
  * PersonalOS's own published capabilities a person may delegate to an agent outside PersonalOS (an agent
  * calling /appport for them: FeltKit's delegated execution, `ctx.auth.delegation`). Each one needs its own
  * grant to that agent; reading never implies writing. Deleting a task is not among them: it stays the
- * person's own act (feltkit/tasks.ts `remove`).
+ * person's own act (feltkit/tasks.ts `remove`). Nor is anything that makes a memory trusted or removes one
+ * (memory.add, confirm, update, remove): an agent only proposes (memory.propose), and _ops.ts refuses those
+ * transitions under a delegation whatever is listed here.
  */
-export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today"] as const;
+export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today", "memory.list", "memory.propose"] as const;
 
 export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number], string> = {
   "tasks.list": "See your tasks",
@@ -77,4 +79,6 @@ export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number]
   "tasks.complete": "Mark your tasks done",
   "tasks.reopen": "Reopen your done tasks",
   "briefing.today": "Read your daily briefing",
+  "memory.list": "See what PersonalOS remembers about you",
+  "memory.propose": "Suggest things to remember (you confirm them)",
 };

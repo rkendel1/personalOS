@@ -32,8 +32,25 @@ This needs a FeltKit with delegated `/appport` (after 0.3.32) and `@authboundry/
 | `tasks.complete` | Mark your tasks done |
 | `tasks.reopen` | Reopen your done tasks |
 | `briefing.today` | Read your daily briefing |
+| `memory.list` | See what PersonalOS remembers about you, confirmed and unconfirmed |
+| `memory.propose` | Suggest things to remember: stored as unconfirmed until you confirm them |
 
 **Deleting a task is not on the list.** It stays your own act, in the Tasks screen.
+
+## Memory an agent suggests
+
+An agent can only *suggest*. A suggestion is stored as an **inferred** memory, which PersonalOS never uses as fact:
+- the Memory screen shows it as "suggested by" the agent;
+- your briefing counts it among the unconfirmed notes.
+
+**Only you make a memory trusted, or drop it**, in the Memory screen or by answering in a conversation:
+- **Confirm** marks it confirmed.
+- **Edit** saves your words as confirmed.
+- **Forget** drops it; the action log keeps what was dropped and when.
+
+This is enforced in PersonalOS itself, not only by what an agent is offered. While an agent is acting for you, confirming, editing, forgetting, or recording anything as confirmed is refused, whichever function is called and whatever was granted. `memory.add` stores what you state as confirmed, so it is never offered to an agent.
+
+Suggesting the same sentence again changes nothing, and nothing an agent writes counts as your confirmation, however it is worded.
 
 ## How a call works
 
@@ -46,4 +63,4 @@ The agent names you on each call. FeltKit asks AuthBoundry whether you granted t
 ## Not yet
 
 - **No screen in Settings for agent grants.** Grants to an agent are made through `delegation.set` with `agent`; there is no screen for them yet.
-- **Memory, projects, documents and research** are not available to agents yet.
+- **Projects, documents and research** are not available to agents yet.
