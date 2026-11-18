@@ -1,0 +1,56 @@
+# PersonalOS (a FeltKit app). State and keys live on its own directory; it calls the Resolver and X over the internet.
+# Own compose project; shares only the external docker network "boundry". Configuration: ./.env (see .env.example). Secrets: /etc/boundry/secrets/.
+name: personalos
+services:
+  personalos:
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=64m
+    - /app/.feltkit/production:rw,nosuid,nodev,noexec,size=16m,uid=${BOUNDRY_UID_PERSONALOS:-21006},gid=${BOUNDRY_UID_PERSONALOS:-21006},mode=0700
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    labels:
+      com.boundry.owner: boundry
+    image: ${BOUNDRY_PERSONALOS_IMAGE:?set the immutable PersonalOS image tag}
+    container_name: boundry-personalos
+    user: ${BOUNDRY_UID_PERSONALOS:-21006}:${BOUNDRY_UID_PERSONALOS:-21006}
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    environment:
+      PORT: '3000'
+      FELTKIT_PUBLIC_URL: ${BOUNDRY_PERSONALOS_PUBLIC_URL:?set PersonalOS's public https URL}
+      FELTKIT_CREDENTIAL_VAULT: '1'
+      FELTKIT_CREDENTIAL_VAULT_DIR: /data/vault
+    env_file: ${BOUNDRY_ETC:-/etc/boundry}/secrets/personalos.env
+    volumes:
+    - ${BOUNDRY_VAR:-/var/lib/boundry}/personalos:/data
+    ports:
+    - 127.0.0.1:${BOUNDRY_PORT_PERSONALOS:-21012}:3000
+    networks:
+    - boundry
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - fetch('http://127.0.0.1:3000/_feltkit/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+networks:
+  boundry:
+    external: true
+    name: boundry

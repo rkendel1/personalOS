@@ -35,11 +35,11 @@
     },
     "experience": {
       "files": 33,
-      "lines": 2639
+      "lines": 2641
     },
     "infrastructure": {
-      "files": 16,
-      "lines": 2802
+      "files": 18,
+      "lines": 2877
     },
     "generated": {
       "files": 2,
@@ -47,7 +47,7 @@
     },
     "configuration": {
       "files": 12,
-      "lines": 381
+      "lines": 382
     },
     "tests": {
       "files": 61,
@@ -71,8 +71,8 @@
     }
   },
   "authored": {
-    "files": 106,
-    "lines": 12532
+    "files": 108,
+    "lines": 12610
   },
   "definitions": {
     "app": {
@@ -152,7 +152,7 @@
     },
     {
       "api": "@feltdb/feltkit/react useQuery",
-      "callSites": 26,
+      "callSites": 25,
       "files": 5
     },
     {
@@ -302,6 +302,11 @@
     },
     {
       "api": "@feltdb/feltkit/react useConnectionState",
+      "callSites": 1,
+      "files": 1
+    },
+    {
+      "api": "@feltdb/feltkit/react useQueryState",
       "callSites": 1,
       "files": 1
     },
@@ -634,6 +639,18 @@
       "class": "configuration",
       "basis": "configuration file",
       "lines": 27
+    },
+    {
+      "path": "deploy/hetzner/compose.yml",
+      "class": "infrastructure",
+      "basis": "path: deploy/ (app tooling)",
+      "lines": 54
+    },
+    {
+      "path": "deploy/hetzner/deploy.json",
+      "class": "infrastructure",
+      "basis": "path: deploy/ (app tooling)",
+      "lines": 21
     },
     {
       "path": "docs/AGENT-CAPABILITY-ROADMAP.md",
@@ -1455,7 +1472,7 @@
       "path": "package.json",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 43,
+      "lines": 44,
       "scaffold": "modified"
     },
     {
@@ -1527,7 +1544,7 @@
       "path": "src/chat.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 426
+      "lines": 428
     },
     {
       "path": "src/main.tsx",
