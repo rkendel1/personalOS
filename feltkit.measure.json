@@ -1,5 +1,17 @@
 {
   "report": "measure.json",
+  "classify": [
+    {
+      "path": "ios/ShareExtension/Preprocess.js",
+      "class": "experience",
+      "reason": "the iOS share extension's page script, run by Safari to capture what is being shared"
+    },
+    {
+      "path": "ios/project.yml",
+      "class": "configuration",
+      "reason": "XcodeGen project definition for the iOS app and its share extension"
+    }
+  ],
   "acknowledged": {
     "audit-trail:feltkit/app.ts": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
   }

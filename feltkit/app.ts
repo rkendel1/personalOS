@@ -76,6 +76,9 @@ export const app = feltkit({
     // it, so those integrations' capabilities, which FeltKit also serves on /appport, are refused to
     // every person and to the bridge (whose identity.resolve covers reads only).
     identitylinker: ["identity.resolve", "identity.link", "links.write"],
+    // The `anywhere` agent (feltkit/anywhere.ts), and nobody else: it hands a linked person's surface
+    // request to the connected agent and follows it. No session can be signed in as it.
+    anywhere: ["anywhere.agent", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
     xadapter: XADAPTER,
     // An agent outside PersonalOS (docs/AGENTS.md): its session holds nothing of its own; it acts only for a
@@ -114,7 +117,7 @@ export const app = feltkit({
   services: {
     notifications: { types: ["reminder.due", "checkin.daily", "review.weekly"] },
     configuration: true,
-    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step", "invocation.process": "invocations:process", "x.poll": "xsurface:poll", "x.reply": "xsurface:deliver" } },
+    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step", "invocation.process": "invocations:process", "x.poll": "xsurface:poll", "x.reply": "xsurface:deliver", "anywhere.follow": "anywhere:follow" } },
     // Recurring jobs an operator sets up in Studio. Per-person recurrence (reminders, check-ins) is a
     // job chain owned by the person, so it runs as them (feltkit/checkins.ts).
     schedules: true,
@@ -175,6 +178,54 @@ export const identityLinker = app.integration("identitylinks", {
       output: ResolverResponse, effect: "consequential", access: "identity.link", description: "Create one identity link (never change one: expectedRevision is 0).",
     },
     revoke: { method: "POST", path: "/appport", input: resolverRequest("resolver.revoke", { ref: REF, expectedRevision: s.integer({ minimum: 1 }), reason: s.string({ maxLength: 500 }) } as any), output: ResolverResponse, effect: "consequential", access: "identity.link", description: "Revoke one identity link; it never resolves again." },
+  },
+});
+
+/**
+ * The agent connected surfaces hand a linked person's requests to (feltkit/anywhere.ts): an eve AppPort
+ * agent's durable work channel (`POST /work`, `GET /work/{workId}`). PersonalOS resolves who the sender
+ * is (Resolver) and asserts that person with its own identity token (credential `agent-identity`, an
+ * ES256 token the agent verifies with PersonalOS's public key); the agent then acts only under that
+ * person's own AuthBoundry grants to it, through PersonalOS's delegated /appport. The agent never sees
+ * Resolver, a key, or where the reply goes. Application code only (`expose: false`); the `anywhere`
+ * agent alone holds `anywhere.agent`. Unset PERSONALOS_AGENT_URL: surfaces use PersonalOS's own assistant.
+ */
+export const connectedAgent = app.integration("agent", {
+  description: "The connected agent's durable work channel: hand it a linked person's surface request, and read what became of it.",
+  baseUrl: { env: "PERSONALOS_AGENT_URL" },
+  credential: "credential-ref:agent-identity",
+  timeoutMs: 15000,
+  expose: false,
+  operations: {
+    submit: {
+      method: "POST", path: "/work",
+      input: {
+        objective: s.string({ minLength: 1, maxLength: 4000 }),
+        onBehalfOf: s.string({ minLength: 1, maxLength: 100 }),
+        readOnly: s.boolean(),
+        surface: s.record(s.string({ maxLength: 500 })),
+        /** The same value as the Idempotency-Key header: what verification looks the work up by. */
+        key: s.string({ minLength: 1, maxLength: 300 }),
+      },
+      output: s.record(s.unknown()), effect: "consequential", access: "anywhere.agent", idempotencyHeader: "Idempotency-Key",
+      // A submission with no definite answer is settled by looking the work up, never by sending again.
+      verify: { operation: "lookup", input: { onBehalfOf: { $input: "onBehalfOf" }, key: { $input: "key" } }, expect: [{ at: "workId", exists: true }] },
+      description: "Hand the agent one request for the named person (who PersonalOS resolved). The same key returns the same work.",
+    },
+    lookup: {
+      method: "GET", path: "/submissions/{onBehalfOf}/{key}",
+      input: { onBehalfOf: s.string({ minLength: 1, maxLength: 100 }), key: s.string({ minLength: 1, maxLength: 300 }) },
+      output: s.record(s.unknown()), effect: "observation", access: "anywhere.agent",
+      // Verification runs its probe as an AppPort capability; anywhere.agent is held by no session, so
+      // every caller on /appport is still refused.
+      expose: true,
+      description: "The work the agent accepted from PersonalOS under this key, if any (404 if none).",
+    },
+    read: {
+      method: "GET", path: "/work/{workId}", input: { workId: s.string({ pattern: "^work_[a-f0-9]{8,64}$" }) },
+      output: s.record(s.unknown()), effect: "observation", access: "anywhere.agent",
+      description: "The agent's own record of one piece of work it accepted from PersonalOS.",
+    },
   },
 });
 
@@ -535,6 +586,36 @@ const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s
  * person asked and shared, from which surface, and what became of it. The owner is the session that
  * submitted it, never a field of the envelope. One per (owner, invocationId).
  */
+/**
+ * A surface request handed to the connected agent (feltkit/anywhere.ts): what was submitted, the agent's
+ * work id, and what the agent's own record says now. Execution state only; delivering a reply to the
+ * surface is the surface's own record (interaction updates, X replies).
+ */
+export const AgentWork = s.object({
+  /** The agent's idempotency key for this request: derived from the surface's own event id. */
+  key: s.string({ maxLength: 300 }),
+  /** submitting: not yet accepted by the agent. accepted: the agent has it. completed | blocked: what its record says. refused: it refused the submission (nothing ran). expired: no longer followed. */
+  state: s.enum(["submitting", "accepted", "completed", "blocked", "refused", "expired"] as const),
+  /** What was asked (the message text), and where it came from: sent to the agent as data, never as authority. */
+  objective: s.string({ maxLength: 4000 }),
+  surface: s.record(s.string({ maxLength: 500 })),
+  workId: s.optional(s.string()),
+  /** The agent's own status and latest decision, verbatim. */
+  status: s.optional(s.string()),
+  decision: s.optional(s.string({ maxLength: 1000 })),
+  summary: s.optional(s.string({ maxLength: 4000 })),
+  /** The operations the agent recorded for it: AppPort capability, operation id, state, request ids. */
+  operations: s.optional(s.array(s.object({ capability: s.string(), operationId: s.string(), state: s.string(), requestIds: s.array(s.string()) }))),
+  /** Which outcome has been reported to the surface already (so it is reported once). */
+  reported: s.optional(s.string()),
+  /** The follow-up scheduled now; any other is stale. */
+  next: s.optional(s.string()),
+  attempts: s.number(),
+  error: s.optional(s.string({ maxLength: 1000 })),
+  submittedAt: s.optional(s.number()),
+  checkedAt: s.optional(s.number()),
+});
+
 export const invocations = app.collection(
   "invocations",
   {
@@ -585,6 +666,8 @@ export const invocations = app.collection(
     error: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 1000 }) })),
     /** Times processing found the authority unreachable (it gives up after a few). */
     attempts: s.optional(s.number()),
+    /** Handed to the connected agent (feltkit/anywhere.ts) instead of PersonalOS's own assistant. */
+    agent: s.optional(AgentWork),
     createdAt: s.number(),
     updatedAt: s.number(),
   },
@@ -638,6 +721,8 @@ export const interactions = app.collection(
     provenance: s.object({ messageIds: s.array(s.string()), attachmentIds: s.array(s.string()), privateDataUsed: s.boolean() }),
     updates: s.array(InteractionUpdate),
     error: s.optional(s.object({ code: s.string(), message: s.string() })),
+    /** Handed to the connected agent (feltkit/anywhere.ts) instead of PersonalOS's own assistant. */
+    agent: s.optional(AgentWork),
     createdAt: s.number(),
     updatedAt: s.number(),
   },

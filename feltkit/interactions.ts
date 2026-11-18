@@ -33,6 +33,7 @@ import { clockFor } from "./_clock.js";
 import * as ops from "./_ops.js";
 import { linkActive, resolveExternal } from "./_resolver.js";
 import { PRESENTED_TTL_MS } from "./links.js";
+import { agentConnected, agentWork, handOff, HANDOFF_CAPABILITY } from "./anywhere.js";
 import { authorityPrincipal, capabilityFor } from "./_authority.js";
 import { describeWork, workIn } from "./continuity.js";
 
@@ -194,6 +195,33 @@ export const receive = app.mutation({
         ...(continuing.kind === "conversation.continue" ? { continuation: { conversationId: target, at: now } } : {}),
         provenance: { ...base.provenance, privateDataUsed: true },
       });
+    }
+
+    // ── The connected agent (feltkit/anywhere.ts): the resolved person's request, handed over durably ──
+    if (agentConnected()) {
+      const decision = await ctx.authority.decide({ capability: HANDOFF_CAPABILITY, onBehalfOf: authorityPrincipal(owner), context: { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) } });
+      const authority = {
+        capability: HANDOFF_CAPABILITY, outcome: decision.outcome, principal: decision.executor,
+        ...(decision.onBehalfOf ? { onBehalfOf: decision.onBehalfOf } : {}), ...(decision.delegationId ? { delegationId: decision.delegationId } : {}),
+        ...(decision.decisionId ? { decisionId: decision.decisionId } : {}), ...(decision.reason ? { reason: decision.reason } : {}),
+      };
+      if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); nothing was done.`);
+      if (!decision.allowed) {
+        const message = `You haven't allowed PersonalOS to take requests from ${label(adapter)} for you (${HANDOFF_CAPABILITY}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
+        const refused = await ctx.db.insert(interactions, { ...base, owner, identity, authority, state: "refused", intent: "agent", error: { code: "FORBIDDEN", message }, updates: [{ seq: 1, state: "refused", text: message, at: now }] });
+        return outcome((await ctx.db.get(interactions, refused))!, false);
+      }
+      let conversationId = await threadConversation(ctx, tk, owner);
+      conversationId ??= await ctx.db.insert(conversations, { owner, title: conversationTitle(label(adapter), e), createdAt: now, updatedAt: now, messageCount: 0 });
+      const messageId = await appendMessage(octx, conversationId, { role: "user", text: `${text}\n\n(from ${label(adapter)}, ${e.conversation.kind === "dm" ? "a direct message" : "a conversation"}; handed to the connected agent)` });
+      const working = audience === "private" ? "Working on it." : "Working on it. What happens will be in your PersonalOS, since this conversation is shared.";
+      const agent = agentWork(key, text, {
+        surface: adapter, instance: e.source.instance, eventId: e.source.eventId, messageId: e.message.id, sourcePrincipalId: e.sender.sourcePrincipalId,
+        resolverRef: resolved.ref, resolverRevision: resolved.revision, canonical: resolved.canonical, audience, conversationKind: e.conversation.kind, interactionKey: key,
+      });
+      const id = await ctx.db.insert(interactions, { ...base, owner, identity, authority, state: "working", intent: "agent", conversationId, messageId, agent: agent as any, updates: [{ seq: 1, state: "working", text: working, at: now }] });
+      handOff(ctx, "interaction", id);
+      return outcome((await ctx.db.get(interactions, id))!, false);
     }
 
     const about = e.context.messages.length ? conversationIntent(text) : null;
@@ -412,7 +440,7 @@ export const cancel = app.mutation({
  * the content with its bridge session (interactions:status), which refuses once the person
  * disconnected that surface, so no private result travels in an event.
  */
-function announce(ctx: MutationCtx, i: { adapter: string; key: string; envelope: unknown }, update: { seq: number; state: string }) {
+export function announce(ctx: MutationCtx, i: { adapter: string; key: string; envelope: unknown }, update: { seq: number; state: string }) {
   const e = i.envelope as EnvelopeT;
   ctx.afterCommit.webhooks.emit("interaction.updated", {
     adapter: i.adapter,
