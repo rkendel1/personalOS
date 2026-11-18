@@ -141,6 +141,23 @@ AuthBoundry decides *whether the account may*. PersonalOS's own rules still appl
   exact kind, input, conversation and message, so the approval is bound to the exact action. The
   bridge cannot approve: `actions:approve` is `approval: "required"`.
 
+## A connected agent (optional)
+
+With `PERSONALOS_AGENT_URL` set, a linked person's request from Multiplayer or X is handed to a connected agent (an eve AppPort agent) instead of PersonalOS's own assistant. The code is in `feltkit/anywhere.ts`.
+
+**Unchanged:** link codes, continuing a conversation, identity resolution and every refusal, on both surfaces.
+
+| Step | How |
+|---|---|
+| Who | Resolver resolves the sender, as always. AuthBoundry then decides `personalos.assistant.converse` for that person; without it, the request is refused and nothing reaches the agent. |
+| Hand-over | The request is recorded on the surface's own record (`interactions.agent`, or `invocations.agent` for X) in the same transaction. The `anywhere` agent (its own principal; no session holds `anywhere.agent`) then submits it to the agent's `POST /work`, through the `agent` integration. That integration asserts the person with PersonalOS's identity token (credential `agent-identity`, ES256, verified by the agent with PersonalOS's public key). |
+| Once | The agent's idempotency key comes from the surface's event: `surface:<interaction key>`, or `surface:x:<post id>`. If a submission gets no definite answer, the work is looked up by that key (`GET /submissions/{person}/{key}`, also the integration's declared verification probe). It is never sent again. |
+| Authority | The agent acts only under the person's own grants to it, decided by AuthBoundry at every AppPort call on PersonalOS's delegated `/appport`. A link grants nothing. The agent never receives Resolver, its keys, or a recipient. |
+| Reply | Written to the record the request came from. Multiplayer: an interaction update, which the bridge posts to that conversation; in a shared conversation, only that it is done or not. X: the result goes to the person's PersonalOS conversation; X itself only ever gets the generic acknowledgement. |
+| Outcome | `agent.state` (submitting, accepted, completed, blocked, refused, expired) and the agent's own status and decision are kept apart from delivery: interaction updates and their events, and X reply states. Blocked work (stalled, an uncertain operation, refused operations) is reported once per decision and followed for up to a day, since an operator may still settle it. |
+
+Configuration: `PERSONALOS_AGENT_URL`, the credential `agent-identity` (`feltkit credential set`, or `FELTKIT_CREDENTIAL_AGENT_IDENTITY`), and optionally `PERSONALOS_AGENT_POLL_MS` (default 2000). The agent is configured with PersonalOS's public key and issuer (`APPPORT_AGENT_IDENTITY_PUBLIC_KEY`, `APPPORT_AGENT_IDENTITY_ISSUER`).
+
 ## Privacy in shared conversations
 
 Only a direct conversation between the requester and PersonalOS is private. In a channel, a group or

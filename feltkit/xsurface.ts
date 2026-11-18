@@ -50,6 +50,7 @@ import { clockFor } from "./_clock.js";
 import { moveInvocation, saveShared } from "./invocationstate.js";
 import { assistantText, requestText } from "./invocations.js";
 import * as ops from "./_ops.js";
+import { agentConnected, agentWork, handOff, HANDOFF_CAPABILITY } from "./anywhere.js";
 
 const KEY = "mentions";
 const DEFAULT_INTERVAL_MS = 120_000;
@@ -362,6 +363,26 @@ export const receive = app.mutation({
     if (continued && !n.instruction) {
       const t = `Continuing this conversation from X (${handle}). Mention me again in that thread to carry on; the results stay here.`;
       await moveInvocation(ctx, (await inv())!, "completed", t, { authority: continued.decision, interpretation: { intent: "assistant", basis: "rules", detail: "continue a conversation" }, work: { replyId: await say(t) } });
+      return finish();
+    }
+
+    // ── The connected agent (feltkit/anywhere.ts): the result goes to the person's PersonalOS
+    //    conversation; X only ever gets the generic acknowledgement queued by finish() ──
+    if (agentConnected()) {
+      const decision = await ctx.authority.decide({ capability: HANDOFF_CAPABILITY, onBehalfOf: authorityPrincipal(owner), context: { surface: X_ADAPTER, post: m.id } });
+      if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); this mention is read again on the next poll.`);
+      const authority = authorityOf(HANDOFF_CAPABILITY, decision);
+      if (!decision.allowed) {
+        const t = `You haven't allowed PersonalOS to take requests from X for you (${HANDOFF_CAPABILITY}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
+        await moveInvocation(ctx, (await inv())!, "failed", t, { authority, work: { replyId: await say(t) }, error: { code: "FORBIDDEN", message: `${HANDOFF_CAPABILITY} was not allowed` } });
+        return finish();
+      }
+      await appendMessage(octx, conversationId!, { role: "user", text: `${requestText({ instruction: n.instruction, context: n.context, surface: n.surface })}\n\n(handed to the connected agent)` });
+      const agent = agentWork(`x:${m.id}`, n.instruction || text || "(no request)", {
+        surface: X_ADAPTER, postId: m.id, authorId: m.authorId, resolverRef: resolved.ref, resolverRevision: resolved.revision, canonical: resolved.canonical, invocationId: n.invocationId,
+      });
+      await moveInvocation(ctx, (await inv())!, "processing", "Handed to the connected agent.", { authority, agent });
+      handOff(ctx, "invocation", invId);
       return finish();
     }
 
