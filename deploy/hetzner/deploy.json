@@ -1,0 +1,21 @@
+{
+  "host": "root@95.217.199.123",
+  "services": {
+    "personalos": {
+      "image": "boundry-personalos",
+      "imageVar": "BOUNDRY_PERSONALOS_IMAGE",
+      "dir": "/opt/boundry/personalos",
+      "compose": "compose.yml",
+      "prepare": [
+        ["npm", "ci", "--no-audit", "--no-fund"],
+        ["npx", "feltkit", "deploy", "--target", "container", "--yes"]
+      ],
+      "context": ".feltkit/deploy",
+      "dockerfile": "Dockerfile",
+      "expectFrom": "node:22-slim",
+      "afterFrom": "RUN apt-get update && apt-get install -y --no-install-recommends libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*",
+      "check": ["sh", "-c", "ls /usr/lib/x86_64-linux-gnu/libssl.so.3"],
+      "health": "https://anywhereaide.com/_feltkit/health"
+    }
+  }
+}

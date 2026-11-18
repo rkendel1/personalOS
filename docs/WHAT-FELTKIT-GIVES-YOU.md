@@ -17,15 +17,15 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 | Class | Files | Lines of code | Meaning |
 |---|--:|--:|---|
 | domain | 45 | 6710 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
-| experience | 33 | 2639 | What people see and use: UI, styles, HTML, browser extension. |
-| infrastructure | 16 | 2802 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
+| experience | 33 | 2641 | What people see and use: UI, styles, HTML, browser extension. |
+| infrastructure | 18 | 2877 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
 | generated | 2 | 34 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
-| configuration | 12 | 381 | Build, package, deployment and tool configuration. |
+| configuration | 12 | 382 | Build, package, deployment and tool configuration. |
 | tests | 61 | 13169 | Tests, fixtures and acceptance scripts. |
 | excluded | 54 | 12308 | Not code: documentation, images, fonts, lockfiles, licences. |
 | unclassified | 12 | 0 | No rule applies. Declare it in feltkit.measure.json. |
 
-**Authored by the application** (domain + experience + infrastructure + configuration): 12532 lines in 106 files. Tests: 13169 lines.
+**Authored by the application** (domain + experience + infrastructure + configuration): 12610 lines in 108 files. Tests: 13169 lines.
 
 **Provenance.** Scaffolded by create-feltkit 0.3.22 (tasks): 20 files, 4 unchanged, 15 changed, 1 removed. Generated API: matches regeneration.
 
@@ -44,7 +44,7 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 | `@feltdb/feltkit MutationCtx` | 50 | 10 |
 | `@feltdb/feltkit/react useMutation` | 36 | 5 |
 | `ctx.runMutation` | 36 | 4 |
-| `@feltdb/feltkit/react useQuery` | 26 | 5 |
+| `@feltdb/feltkit/react useQuery` | 25 | 5 |
 | `ctx.agent` | 21 | 4 |
 | `ctx.auth` | 21 | 11 |
 | `ctx.authority` | 19 | 7 |
@@ -75,6 +75,7 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 | `@feltdb/feltkit/client TokenStore` | 1 | 1 |
 | `@feltdb/feltkit/react FeltKitClientError` | 1 | 1 |
 | `@feltdb/feltkit/react useConnectionState` | 1 | 1 |
+| `@feltdb/feltkit/react useQueryState` | 1 | 1 |
 | `ctx.signal` | 1 | 1 |
 
 ### Infrastructure findings (candidates for review)
