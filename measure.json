@@ -2,8 +2,8 @@
   "schema": "feltkit.measure/1",
   "app": {
     "name": "personalos",
-    "feltkit": "0.3.26",
-    "installed": "0.3.26"
+    "feltkit": "0.3.30",
+    "installed": "0.3.30"
   },
   "method": {
     "files": "git ls-files (tracked, and untracked files that are not ignored); node_modules, dist, .feltkit and .git are never counted",
@@ -18,8 +18,8 @@
       "version": "0.3.22",
       "template": "tasks",
       "files": 20,
-      "unmodified": 5,
-      "modified": 14,
+      "unmodified": 4,
+      "modified": 15,
       "missing": 1
     },
     "generated": {
@@ -30,28 +30,28 @@
   },
   "totals": {
     "domain": {
-      "files": 31,
-      "lines": 3475
+      "files": 43,
+      "lines": 6446
     },
     "experience": {
-      "files": 21,
-      "lines": 2050
+      "files": 33,
+      "lines": 2542
     },
     "infrastructure": {
-      "files": 1,
-      "lines": 24
+      "files": 3,
+      "lines": 302
     },
     "generated": {
-      "files": 3,
-      "lines": 27
+      "files": 2,
+      "lines": 33
     },
     "configuration": {
-      "files": 6,
-      "lines": 177
+      "files": 9,
+      "lines": 310
     },
     "tests": {
-      "files": 18,
-      "lines": 2684
+      "files": 38,
+      "lines": 6169
     },
     "third-party": {
       "files": 0,
@@ -62,26 +62,26 @@
       "lines": 0
     },
     "excluded": {
-      "files": 20,
-      "lines": 7422
+      "files": 51,
+      "lines": 8707
     },
     "unclassified": {
-      "files": 0,
+      "files": 12,
       "lines": 0
     }
   },
   "authored": {
-    "files": 59,
-    "lines": 5726
+    "files": 88,
+    "lines": 9600
   },
   "definitions": {
     "app": {
-      "action": 4,
+      "action": 11,
       "agent": 2,
-      "collection": 13,
-      "integration": 3,
-      "mutation": 42,
-      "query": 15
+      "collection": 17,
+      "integration": 6,
+      "mutation": 67,
+      "query": 27
     },
     "collections": [
       "documents",
@@ -93,81 +93,130 @@
       "actions",
       "settings",
       "identityLinks",
+      "invocations",
       "interactions",
       "researchRuns",
+      "researchBudgets",
       "researchSources",
-      "prospects"
+      "prospects",
+      "xPosts",
+      "xState"
     ]
   },
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 789,
-      "files": 21
+      "callSites": 1562,
+      "files": 28
     },
     {
       "api": "ctx.db",
-      "callSites": 185,
-      "files": 18
+      "callSites": 283,
+      "files": 24
     },
     {
       "api": "@feltdb/feltkit fail",
-      "callSites": 38,
-      "files": 12
-    },
-    {
-      "api": "@feltdb/feltkit/react useMutation",
-      "callSites": 31,
-      "files": 5
-    },
-    {
-      "api": "@feltdb/feltkit MutationCtx",
-      "callSites": 30,
-      "files": 5
-    },
-    {
-      "api": "@feltdb/feltkit/testing createTestApp",
-      "callSites": 29,
-      "files": 6
-    },
-    {
-      "api": "@feltdb/feltkit feltkit",
-      "callSites": 28,
-      "files": 1
-    },
-    {
-      "api": "@feltdb/feltkit/react useQuery",
-      "callSites": 19,
-      "files": 4
+      "callSites": 75,
+      "files": 17
     },
     {
       "api": "@feltdb/feltkit/testing TestApp",
-      "callSites": 19,
+      "callSites": 55,
+      "files": 18
+    },
+    {
+      "api": "@feltdb/feltkit/testing createTestApp",
+      "callSites": 51,
+      "files": 20
+    },
+    {
+      "api": "@feltdb/feltkit MutationCtx",
+      "callSites": 48,
+      "files": 9
+    },
+    {
+      "api": "@feltdb/feltkit feltkit",
+      "callSites": 46,
+      "files": 1
+    },
+    {
+      "api": "ctx.runMutation",
+      "callSites": 34,
+      "files": 4
+    },
+    {
+      "api": "@feltdb/feltkit/react useMutation",
+      "callSites": 33,
+      "files": 5
+    },
+    {
+      "api": "@feltdb/feltkit/react useQuery",
+      "callSites": 25,
       "files": 5
     },
     {
       "api": "ctx.agent",
-      "callSites": 16,
-      "files": 3
+      "callSites": 21,
+      "files": 4
     },
     {
       "api": "ctx.auth",
-      "callSites": 13,
+      "callSites": 20,
+      "files": 11
+    },
+    {
+      "api": "ctx.authority",
+      "callSites": 19,
       "files": 7
     },
     {
+      "api": "@feltdb/feltkit ActionCtx",
+      "callSites": 14,
+      "files": 3
+    },
+    {
+      "api": "@feltdb/feltkit/client ref",
+      "callSites": 11,
+      "files": 1
+    },
+    {
       "api": "@feltdb/feltkit/react useFeltKit",
+      "callSites": 10,
+      "files": 6
+    },
+    {
+      "api": "ctx.afterCommit.jobs",
+      "callSites": 10,
+      "files": 7
+    },
+    {
+      "api": "ctx.model",
+      "callSites": 9,
+      "files": 3
+    },
+    {
+      "api": "ctx.runQuery",
+      "callSites": 9,
+      "files": 4
+    },
+    {
+      "api": "ctx.integrations",
       "callSites": 8,
+      "files": 4
+    },
+    {
+      "api": "@feltdb/feltkit/server startServer",
+      "callSites": 6,
       "files": 5
     },
     {
-      "api": "ctx.runMutation",
-      "callSites": 8,
-      "files": 2
+      "api": "ctx.afterCommit.notifications",
+      "callSites": 5,
+      "files": 4
     },
     {
-      "api": "ctx.afterCommit.agent",
-      "callSites": 5,
+      "api": "@feltdb/feltkit/client createClient",
+      "callSites": 4,
       "files": 3
     },
     {
@@ -186,7 +235,12 @@
       "files": 1
     },
     {
-      "api": "@feltdb/feltkit/client createClient",
+      "api": "@feltdb/feltkit FeltKitError",
+      "callSites": 3,
+      "files": 2
+    },
+    {
+      "api": "@feltdb/feltkit/react useAction",
       "callSites": 3,
       "files": 2
     },
@@ -196,49 +250,29 @@
       "files": 3
     },
     {
-      "api": "ctx.afterCommit.jobs",
+      "api": "ctx.afterCommit.agent",
       "callSites": 3,
-      "files": 3
-    },
-    {
-      "api": "ctx.afterCommit.notifications",
-      "callSites": 3,
-      "files": 3
-    },
-    {
-      "api": "ctx.authority",
-      "callSites": 3,
-      "files": 3
-    },
-    {
-      "api": "ctx.model",
-      "callSites": 3,
-      "files": 1
-    },
-    {
-      "api": "ctx.runQuery",
-      "callSites": 3,
-      "files": 1
-    },
-    {
-      "api": "@feltdb/feltkit ActionCtx",
-      "callSites": 2,
-      "files": 1
+      "files": 2
     },
     {
       "api": "ctx.crypto",
-      "callSites": 2,
-      "files": 2
+      "callSites": 3,
+      "files": 3
     },
     {
       "api": "ctx.emit",
+      "callSites": 3,
+      "files": 1
+    },
+    {
+      "api": "@feltdb/feltkit/client OwnAction",
       "callSites": 2,
       "files": 1
     },
     {
-      "api": "ctx.integrations",
+      "api": "@feltdb/feltkit/react useOwnActions",
       "callSites": 2,
-      "files": 2
+      "files": 1
     },
     {
       "api": "ctx.services.notifications",
@@ -256,11 +290,6 @@
       "files": 1
     },
     {
-      "api": "@feltdb/feltkit/client OwnAction",
-      "callSites": 1,
-      "files": 1
-    },
-    {
       "api": "@feltdb/feltkit/client TokenStore",
       "callSites": 1,
       "files": 1
@@ -271,17 +300,12 @@
       "files": 1
     },
     {
-      "api": "@feltdb/feltkit/react useAction",
-      "callSites": 1,
-      "files": 1
-    },
-    {
       "api": "@feltdb/feltkit/react useConnectionState",
       "callSites": 1,
       "files": 1
     },
     {
-      "api": "@feltdb/feltkit/react useOwnActions",
+      "api": "ctx.signal",
       "callSites": 1,
       "files": 1
     }
@@ -291,10 +315,18 @@
       "id": "audit-trail",
       "title": "App-built business audit trail",
       "file": "feltkit/app.ts",
-      "line": 322,
+      "line": 488,
       "evidence": "export const actions = app.collection(",
       "platform": "app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence)",
       "acknowledged": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
+    },
+    {
+      "id": "queue-or-scheduler",
+      "title": "App-built queue or scheduler",
+      "file": "scripts/share-acceptance.mjs",
+      "line": 84,
+      "evidence": "const timer = setInterval(async () => {",
+      "platform": "ctx.afterCommit.jobs.enqueue and operator-managed schedules"
     }
   ],
   "checks": [
@@ -307,7 +339,7 @@
     {
       "name": "declarations match files",
       "ok": true,
-      "detail": "0 declaration(s), each matches a file",
+      "detail": "2 declaration(s), each matches a file",
       "fix": "Remove or correct the stale entries in feltkit.measure.json."
     },
     {
@@ -325,17 +357,29 @@
   ],
   "files": [
     {
+      "path": ".DS_Store",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
       "path": ".github/workflows/ci.yml",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 50
+      "lines": 66
+    },
+    {
+      "path": ".github/workflows/ios.yml",
+      "class": "configuration",
+      "basis": "configuration file",
+      "lines": 34
     },
     {
       "path": ".gitignore",
-      "class": "generated",
-      "basis": "scaffold (create-feltkit 0.3.22, unmodified)",
+      "class": "configuration",
+      "basis": "configuration file",
       "lines": 0,
-      "scaffold": "unmodified"
+      "scaffold": "modified"
     },
     {
       "path": "LICENSE",
@@ -351,6 +395,12 @@
       "scaffold": "modified"
     },
     {
+      "path": "docs/AGENTS.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
       "path": "docs/ANYWHERE-M3-REGISTER.md",
       "class": "excluded",
       "basis": "documentation",
@@ -363,13 +413,61 @@
       "lines": 0
     },
     {
+      "path": "docs/CONTINUITY.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/FELTKIT-CHANGES.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/GROK-COMPARISON.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
       "path": "docs/INTERACTION-CONTRACT.md",
       "class": "excluded",
       "basis": "documentation",
       "lines": 0
     },
     {
+      "path": "docs/INVOCATION-CONTRACT.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/IOS-SHARE.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/LAUNCH-ROADMAP.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
       "path": "docs/LIMITATIONS.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/M4-REGISTER.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/RESEARCH-LIVE.md",
       "class": "excluded",
       "basis": "documentation",
       "lines": 0
@@ -385,6 +483,120 @@
       "class": "excluded",
       "basis": "documentation",
       "lines": 0
+    },
+    {
+      "path": "docs/X.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/1-panel.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/2-summon-form.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/3-receipt.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/4-outcome.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/4b-outcome-ruled-out-run.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/5-conversation.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/browser-summon/browser-summon-2026-11-13.json",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 174
+    },
+    {
+      "path": "docs/evidence/continuity/00-linked.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/A2-chrome-continue-form.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/A2-chrome-provenance.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/A3-multiplayer-status.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/B2-multiplayer-continue.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/B3-chrome-reopened.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/D-chrome-refused.png",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "docs/evidence/continuity/continuity-2026-11-13.json",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 365
+    },
+    {
+      "path": "docs/evidence/research-live-2026-11-12.json",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 875
+    },
+    {
+      "path": "docs/evidence/share-invocation-encore-2026-11-12.json",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 132
+    },
+    {
+      "path": "docs/evidence/share-invocation-thoughtworks-2026-11-12.json",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 161
     },
     {
       "path": "docs/screenshots/chat-approved.png",
@@ -417,10 +629,22 @@
       "lines": 243
     },
     {
+      "path": "e2e/approve-binding.mjs",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 142
+    },
+    {
+      "path": "e2e/browser-summon.mjs",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 170
+    },
+    {
       "path": "e2e/extension.mjs",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 357
+      "lines": 400
     },
     {
       "path": "e2e/model.mjs",
@@ -435,16 +659,82 @@
       "lines": 88
     },
     {
+      "path": "e2e/share-invocation.mjs",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 154
+    },
+    {
       "path": "e2e/ui.mjs",
       "class": "tests",
       "basis": "path: tests",
       "lines": 83
     },
     {
+      "path": "extension/.DS_Store",
+      "class": "excluded",
+      "basis": "asset",
+      "lines": 0
+    },
+    {
       "path": "extension/README.md",
       "class": "excluded",
       "basis": "documentation",
       "lines": 0
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/assets/background.js",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 1
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/assets/config-kqRWHZRk.js",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 1
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/assets/sidepanel-B5DEdsUx.js",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 16
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/assets/sidepanel-iaKd3mGa.css",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 1
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/content.js",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 11
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/icons/icon.png",
+      "class": "excluded",
+      "basis": "asset",
+      "lines": 0
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/manifest.json",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 14
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/sidepanel.html",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 16
+    },
+    {
+      "path": "extension/personalos-extension-0.1.0 2/theme.js",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 4
     },
     {
       "path": "extension/public/content.js",
@@ -480,7 +770,7 @@
       "path": "extension/src/background.ts",
       "class": "experience",
       "basis": "path: extension/ (UI)",
-      "lines": 21
+      "lines": 23
     },
     {
       "path": "extension/src/config.ts",
@@ -492,31 +782,49 @@
       "path": "extension/src/connect.tsx",
       "class": "experience",
       "basis": "path: extension/ (UI)",
-      "lines": 39
+      "lines": 40
     },
     {
       "path": "extension/src/extension.css",
       "class": "experience",
       "basis": "path: extension/ (UI)",
-      "lines": 8
+      "lines": 12
+    },
+    {
+      "path": "extension/src/nocookies.ts",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 1
     },
     {
       "path": "extension/src/pagebar.tsx",
       "class": "experience",
       "basis": "path: extension/ (UI)",
-      "lines": 94
+      "lines": 126
     },
     {
       "path": "extension/src/sidepanel.tsx",
       "class": "experience",
       "basis": "path: extension/ (UI)",
-      "lines": 34
+      "lines": 35
+    },
+    {
+      "path": "extension/src/summon.ts",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 89
+    },
+    {
+      "path": "extension/src/summonform.tsx",
+      "class": "experience",
+      "basis": "path: extension/ (UI)",
+      "lines": 125
     },
     {
       "path": "feltkit.measure.json",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 6
+      "lines": 18
     },
     {
       "path": "feltkit.scaffold.json",
@@ -528,7 +836,7 @@
       "path": "feltkit/_authority.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 21
+      "lines": 62
     },
     {
       "path": "feltkit/_briefing.ts",
@@ -540,7 +848,7 @@
       "path": "feltkit/_capabilities.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 89
+      "lines": 103
     },
     {
       "path": "feltkit/_clock.ts",
@@ -561,10 +869,16 @@
       "lines": 192
     },
     {
+      "path": "feltkit/_delegation.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 22
+    },
+    {
       "path": "feltkit/_generated/api.ts",
       "class": "generated",
       "basis": "codegen (matches regeneration)",
-      "lines": 22,
+      "lines": 28,
       "scaffold": "modified"
     },
     {
@@ -580,16 +894,34 @@
       "lines": 166
     },
     {
+      "path": "feltkit/_invocation.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 175
+    },
+    {
       "path": "feltkit/_ops.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 256
+      "lines": 278
+    },
+    {
+      "path": "feltkit/_pages.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 150
     },
     {
       "path": "feltkit/_research.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 154
+      "lines": 155
+    },
+    {
+      "path": "feltkit/_researchmodel.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 210
     },
     {
       "path": "feltkit/_resolver.ts",
@@ -598,16 +930,34 @@
       "lines": 102
     },
     {
+      "path": "feltkit/_search.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 89
+    },
+    {
+      "path": "feltkit/_x.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 91
+    },
+    {
       "path": "feltkit/actions.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
       "lines": 50
     },
     {
+      "path": "feltkit/anywhere.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 155
+    },
+    {
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 376,
+      "lines": 650,
       "scaffold": "modified"
     },
     {
@@ -629,16 +979,28 @@
       "lines": 64
     },
     {
+      "path": "feltkit/continuity.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 79
+    },
+    {
       "path": "feltkit/conversations.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
       "lines": 36
     },
     {
+      "path": "feltkit/delegation.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 85
+    },
+    {
       "path": "feltkit/documents.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 71
+      "lines": 79
     },
     {
       "path": "feltkit/inbox.ts",
@@ -651,25 +1013,37 @@
       "path": "feltkit/interactions.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 307
+      "lines": 381
+    },
+    {
+      "path": "feltkit/invocations.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 187
+    },
+    {
+      "path": "feltkit/invocationstate.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 185
     },
     {
       "path": "feltkit/links.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 97
+      "lines": 104
     },
     {
       "path": "feltkit/memory.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 42
+      "lines": 53
     },
     {
       "path": "feltkit/projects.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 28,
+      "lines": 29,
       "scaffold": "modified"
     },
     {
@@ -682,13 +1056,13 @@
       "path": "feltkit/research.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 139
+      "lines": 522
     },
     {
       "path": "feltkit/researchstate.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 95
+      "lines": 338
     },
     {
       "path": "feltkit/settings.ts",
@@ -700,14 +1074,14 @@
       "path": "feltkit/tasks.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 51,
+      "lines": 52,
       "scaffold": "modified"
     },
     {
       "path": "feltkit/turn.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 178
+      "lines": 193
     },
     {
       "path": "feltkit/turnstate.ts",
@@ -722,6 +1096,12 @@
       "lines": 92
     },
     {
+      "path": "feltkit/xsurface.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 448
+    },
+    {
       "path": "index.html",
       "class": "experience",
       "basis": "path: root (UI)",
@@ -729,17 +1109,101 @@
       "scaffold": "modified"
     },
     {
+      "path": "ios/App/ContentView.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/App/PersonalOS.entitlements",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/App/PersonalOSApp.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/Config.xcconfig",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/ShareExtension/PersonalOSShare.entitlements",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/ShareExtension/Preprocess.js",
+      "class": "experience",
+      "basis": "declared: the iOS share extension's page script, run by Safari to capture what is being shared",
+      "lines": 10
+    },
+    {
+      "path": "ios/ShareExtension/ShareView.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/ShareExtension/ShareViewController.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/ShareExtension/SharedContent.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/Shared/Credentials.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/Shared/Invocation.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/Shared/PersonalOSClient.swift",
+      "class": "unclassified",
+      "basis": "no rule",
+      "lines": 0
+    },
+    {
+      "path": "ios/project.yml",
+      "class": "configuration",
+      "basis": "declared: XcodeGen project definition for the iOS app and its share extension",
+      "lines": 69
+    },
+    {
       "path": "package-lock.json",
       "class": "excluded",
       "basis": "lockfile",
-      "lines": 4388
+      "lines": 3983
     },
     {
       "path": "package.json",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 41,
+      "lines": 43,
       "scaffold": "modified"
+    },
+    {
+      "path": "public/581366D2-CE2B-4546-9EF6-A29CACB94556.png",
+      "class": "excluded",
+      "basis": "asset",
+      "lines": 0
     },
     {
       "path": "public/apple-touch-icon.png",
@@ -776,6 +1240,18 @@
       "lines": 24
     },
     {
+      "path": "scripts/research-live.mjs",
+      "class": "infrastructure",
+      "basis": "path: scripts/ (app tooling)",
+      "lines": 191
+    },
+    {
+      "path": "scripts/share-acceptance.mjs",
+      "class": "infrastructure",
+      "basis": "path: scripts/ (app tooling)",
+      "lines": 87
+    },
+    {
       "path": "src/App.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
@@ -792,7 +1268,7 @@
       "path": "src/chat.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 278
+      "lines": 329
     },
     {
       "path": "src/main.tsx",
@@ -805,19 +1281,19 @@
       "path": "src/research.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 122
+      "lines": 154
     },
     {
       "path": "src/screens.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 612
+      "lines": 690
     },
     {
       "path": "src/styles.css",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 180,
+      "lines": 182,
       "scaffold": "modified"
     },
     {
@@ -832,6 +1308,30 @@
       "class": "experience",
       "basis": "path: src/ (UI)",
       "lines": 127
+    },
+    {
+      "path": "tests/agent-delegation-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 135
+    },
+    {
+      "path": "tests/agent-memory-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 121
+    },
+    {
+      "path": "tests/agent-projects-documents-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 126
+    },
+    {
+      "path": "tests/agent-research-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 212
     },
     {
       "path": "tests/assistant.test.ts",
@@ -855,13 +1355,43 @@
       "path": "tests/authboundry/package-lock.json",
       "class": "excluded",
       "basis": "lockfile",
-      "lines": 1111
+      "lines": 1094
     },
     {
       "path": "tests/authboundry/package.json",
       "class": "tests",
       "basis": "path: tests",
       "lines": 8
+    },
+    {
+      "path": "tests/browser-summon.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 192
+    },
+    {
+      "path": "tests/continuity-authboundry-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 79
+    },
+    {
+      "path": "tests/continuity.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 220
+    },
+    {
+      "path": "tests/delegation-local.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 101
+    },
+    {
+      "path": "tests/delegation-set.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 72
     },
     {
       "path": "tests/design-foundation.test.ts",
@@ -873,13 +1403,25 @@
       "path": "tests/fixtures/anywhere.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 181
+      "lines": 188
     },
     {
       "path": "tests/fixtures/streaming-model.ts",
       "class": "tests",
       "basis": "path: tests",
       "lines": 67
+    },
+    {
+      "path": "tests/fixtures/x-api.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 142
+    },
+    {
+      "path": "tests/identity-linking.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 294
     },
     {
       "path": "tests/interactions.test.ts",
@@ -894,16 +1436,40 @@
       "lines": 58
     },
     {
+      "path": "tests/invocations-authboundry-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 71
+    },
+    {
+      "path": "tests/invocations.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 300
+    },
+    {
+      "path": "tests/pages.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 62
+    },
+    {
       "path": "tests/real-provider.test.ts",
       "class": "tests",
       "basis": "path: tests",
       "lines": 49
     },
     {
+      "path": "tests/research-model.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 269
+    },
+    {
       "path": "tests/research.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 316
+      "lines": 358
     },
     {
       "path": "tests/resolver/package-lock.json",
@@ -922,6 +1488,18 @@
       "class": "tests",
       "basis": "path: tests",
       "lines": 148
+    },
+    {
+      "path": "tests/x-authboundry-real.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 69
+    },
+    {
+      "path": "tests/x.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 462
     },
     {
       "path": "tsconfig.json",

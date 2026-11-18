@@ -16,6 +16,13 @@ import { startServer } from "@feltdb/feltkit/server";
 import { api } from "../feltkit/_generated/api.js";
 import { CONTRACT } from "../feltkit/_interaction.js";
 import { startResolver, type TestResolver } from "./fixtures/anywhere.js";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+
+/** Outside agents (registration, per-agent grants, delegated /appport) need a FeltKit with delegation; published 0.3.30 has none. */
+const AGENTS = existsSync(join(dirname(createRequire(import.meta.url).resolve("@feltdb/feltkit/package.json")), "dist/runtime/delegation.js"));
+const NO_AGENTS = AGENTS ? false : "the installed @feltdb/feltkit has no outside agents (registration, per-agent grants, delegated /appport)";
 
 const BRIDGE = { id: "multiplayer", type: "service" as const, displayName: "Multiplayer bridge", roles: ["bridge"] };
 const OTHER_BRIDGE = { id: "slackbridge", type: "service" as const, roles: ["bridge"] };
@@ -125,7 +132,7 @@ test("4-5: a matching email, display name or handle is never identity; only the 
   assert.deepEqual((await linksOf(t, "grace")).map((l) => [l.id, l.status, l.source]), [[id, "presented", "mallory"]]);
 }));
 
-test("6: an agent cannot assert an identity link: no session, grant or /appport call reaches linking", () => withApp(async (t) => {
+test("6: an agent cannot assert an identity link: no session, grant or /appport call reaches linking", { skip: NO_AGENTS }, () => withApp(async (t) => {
   await (t.as("ada") as any).action(api.delegation.registerAgent, { id: "eve" });
   // An outside agent's own session holds nothing.
   await rejects(t.as(EVE).mutation(api.links.start, {}), "FORBIDDEN");
@@ -289,10 +296,11 @@ test("22: failed attempts leave no partial link: no Resolver reference, no owner
 // ── Identity is not authority ────────────────────────────────────────────────
 
 test("18-20: a link creates and changes no AuthBoundry grant, grants nothing, and leaves the person's own session as it was", () => withApp(async (t) => {
-  await (t.as("ada") as any).action(api.delegation.registerAgent, { id: "eve" });
+  // Grants to PersonalOS's own executor always; an outside agent's too where this FeltKit has them.
+  if (AGENTS) await (t.as("ada") as any).action(api.delegation.registerAgent, { id: "eve" });
   await t.as("ada").action(api.delegation.set, { capabilities: ["personalos.tasks.read"] });
-  await t.as("ada").action(api.delegation.set, { agent: "eve", capabilities: ["tasks.list"] });
-  const grants = async (who: string) => JSON.stringify([await t.as(who).action(api.delegation.list, {}), await t.as(who).action(api.delegation.list, { agent: "eve" })]);
+  if (AGENTS) await t.as("ada").action(api.delegation.set, { agent: "eve", capabilities: ["tasks.list"] });
+  const grants = async (who: string) => JSON.stringify([await t.as(who).action(api.delegation.list, {}), ...(AGENTS ? [await t.as(who).action(api.delegation.list, { agent: "eve" })] : [])]);
   const before = { ada: await grants("ada"), grace: await grants("grace") };
   await t.as("ada").mutation(api.tasks.create, { title: "mine" } as any);
   const id = await link(t, "ada", "sam");
