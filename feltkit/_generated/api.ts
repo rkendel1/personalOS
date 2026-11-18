@@ -2,6 +2,7 @@
 /* eslint-disable */
 import { createApi } from "@feltdb/feltkit/client";
 import type * as actions_module from "../actions.js";
+import type * as anywhere_module from "../anywhere.js";
 import type * as app_module from "../app.js";
 import type * as assistant_module from "../assistant.js";
 import type * as briefing_module from "../briefing.js";
@@ -28,4 +29,4 @@ import type * as weekly_module from "../weekly.js";
 import type * as xsurface_module from "../xsurface.js";
 
 /** Typed references to every query and mutation. Type-only imports: no backend code reaches the browser. */
-export const api = createApi<{ "actions": typeof actions_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "continuity": typeof continuity_module; "conversations": typeof conversations_module; "delegation": typeof delegation_module; "documents": typeof documents_module; "inbox": typeof inbox_module; "interactions": typeof interactions_module; "invocations": typeof invocations_module; "invocationstate": typeof invocationstate_module; "links": typeof links_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "research": typeof research_module; "researchstate": typeof researchstate_module; "settings": typeof settings_module; "tasks": typeof tasks_module; "turn": typeof turn_module; "turnstate": typeof turnstate_module; "weekly": typeof weekly_module; "xsurface": typeof xsurface_module }>();
+export const api = createApi<{ "actions": typeof actions_module; "anywhere": typeof anywhere_module; "app": typeof app_module; "assistant": typeof assistant_module; "briefing": typeof briefing_module; "checkins": typeof checkins_module; "continuity": typeof continuity_module; "conversations": typeof conversations_module; "delegation": typeof delegation_module; "documents": typeof documents_module; "inbox": typeof inbox_module; "interactions": typeof interactions_module; "invocations": typeof invocations_module; "invocationstate": typeof invocationstate_module; "links": typeof links_module; "memory": typeof memory_module; "projects": typeof projects_module; "reminders": typeof reminders_module; "research": typeof research_module; "researchstate": typeof researchstate_module; "settings": typeof settings_module; "tasks": typeof tasks_module; "turn": typeof turn_module; "turnstate": typeof turnstate_module; "weekly": typeof weekly_module; "xsurface": typeof xsurface_module }>();
