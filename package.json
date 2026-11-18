@@ -23,6 +23,7 @@
     "measure:doc": "node scripts/measure-doc.mjs"
   },
   "dependencies": {
+    "@appport/hetzner-deploy": "^0.1.0",
     "@appport/resolver-client": "0.3.0",
     "@authboundry/local": "0.1.1",
     "@feltdb/feltkit": "0.3.33",
