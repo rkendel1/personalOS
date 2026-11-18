@@ -505,6 +505,11 @@ export const identityLinks = app.collection(
     sourcePrincipalId: s.optional(s.string()),
     sourceDisplayName: s.optional(s.string({ maxLength: 120 })),
     sourceInstance: s.optional(s.string()),
+    /**
+     * The external identity this link holds (Resolver's exact lookup entry, `lookupEntry`), from the
+     * owner's confirmation until it is refused or revoked. Unique: one owner at a time per identity.
+     */
+    claim: s.optional(s.string()),
     /** The link in Resolver (ref://identity/personalos/…): the authoritative record. */
     presentedAt: s.optional(s.number()),
     resolverRef: s.optional(s.string()),
@@ -513,7 +518,7 @@ export const identityLinks = app.collection(
     revokedAt: s.optional(s.number()),
     lastUsedAt: s.optional(s.number()),
   },
-  { indexes: [{ fields: ["owner"] }, { fields: ["adapter", "sourcePrincipalId", "status"] }, { fields: ["codeDigest"] }] },
+  { unique: [{ fields: ["claim"], sparse: true }], indexes: [{ fields: ["owner"] }, { fields: ["adapter", "sourcePrincipalId", "status"] }, { fields: ["codeDigest"] }, { fields: ["claim"] }] },
 );
 
 const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s.string({ maxLength: 8000 }), at: s.number(), actionId: s.optional(s.string()) });

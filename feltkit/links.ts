@@ -26,7 +26,7 @@ import { fail, s } from "@feltdb/feltkit";
 import { app, identityLinks } from "./app.js";
 import { digest, linkCodeFrom } from "./_interaction.js";
 import { me, own } from "./_ops.js";
-import { linkExternal, resolveExternal, revokeLink } from "./_resolver.js";
+import { linkExternal, lookupEntry, resolveExternal, revokeLink, type External } from "./_resolver.js";
 
 export const CODE_TTL_MS = 10 * 60_000;
 /** How long a presented code waits for the owner's confirmation. */
@@ -45,6 +45,12 @@ const Link = s.object({
   lastUsedAt: s.nullable(s.number()),
   codeExpiresAt: s.nullable(s.number()),
 });
+
+/** The identity a link claims: Resolver's exact lookup entry for it, so both agree on "the same account". */
+async function claimOf(e: External): Promise<string> {
+  const { key, value } = await lookupEntry(e);
+  return `${key}=${value}`;
+}
 
 const view = (l: any) => ({
   id: l.id, adapter: l.adapter, status: l.status, error: l.error ?? null, sourcePrincipalId: l.sourcePrincipalId ?? null, sourceDisplayName: l.sourceDisplayName ?? null,
@@ -85,7 +91,7 @@ export const revoke = app.mutation({
     if (link.status === "revoking") return;
     // Nothing in Resolver yet (a code, a presentation, a confirmation not recorded): done here.
     if (!link.resolverRef && link.status !== "confirming") {
-      await ctx.db.patch(identityLinks, id, { status: "revoked", revokedAt: Date.now(), codeDigest: undefined, codeExpiresAt: undefined });
+      await ctx.db.patch(identityLinks, id, { status: "revoked", revokedAt: Date.now(), codeDigest: undefined, codeExpiresAt: undefined, claim: undefined });
       return;
     }
     // In Resolver: revoking until the identity agent has revoked it there. Requests are refused from
@@ -107,7 +113,12 @@ export const confirm = app.mutation({
     const link = await own<any>(ctx, identityLinks, id, "link");
     if (link.status !== "presented" || !link.sourcePrincipalId || !link.sourceInstance) fail("FAILED_PRECONDITION", "There is nothing to confirm: no surface account has presented this code.");
     if ((link.codeExpiresAt ?? 0) < Date.now()) fail("FAILED_PRECONDITION", "This confirmation expired. Start again to get a new code.");
-    await ctx.db.patch(identityLinks, id, { status: "confirming", confirmedAt: Date.now(), error: undefined });
+    // One owner per external identity, decided here, in this transaction: FeltDB refuses a second claim
+    // at commit (unique), so two owners confirming the same account at once cannot both proceed.
+    const claim = await claimOf({ adapter: link.adapter, instance: link.sourceInstance, principalId: link.sourcePrincipalId });
+    const [holder] = await ctx.db.find(identityLinks, { claim });
+    if (holder) fail("FAILED_PRECONDITION", holder.owner === link.owner ? "That account is already connected to your PersonalOS account." : "That account is already connected, or being connected, to a different PersonalOS account.");
+    await ctx.db.patch(identityLinks, id, { status: "confirming", confirmedAt: Date.now(), claim, error: undefined });
     ctx.afterCommit.agent("identity", { linkId: id });
     return view((await ctx.db.get(identityLinks, id))!);
   },
@@ -132,13 +143,13 @@ export const identityAgent = app.agent("identity", {
       const problem = current.status === "ambiguous" ? "That account resolves to more than one PersonalOS link. Disconnect the others first."
         : current.status === "resolved" && current.owner !== link.owner ? "That account is already connected to a different PersonalOS account."
         : null;
-      if (problem) { await ctx.db.patch(identityLinks, link.id, { status: "presented", error: problem }); return; }
+      if (problem) { await ctx.db.patch(identityLinks, link.id, { status: "presented", error: problem, claim: undefined }); return; }
       const now = Date.now();
       const linked = current.status === "resolved" ? { ref: current.ref } : await linkExternal(ctx, external, link.owner, link.id, link.confirmedAt ?? now);
       await ctx.db.patch(identityLinks, link.id, { status: "active", resolverRef: linked.ref, linkedAt: now, codeExpiresAt: undefined, error: undefined });
     } else if (link.status === "revoking") {
       if (link.resolverRef) await revokeLink(ctx, link.resolverRef, `disconnected by ${link.owner}`);
-      await ctx.db.patch(identityLinks, link.id, { status: "revoked", revokedAt: Date.now(), error: undefined });
+      await ctx.db.patch(identityLinks, link.id, { status: "revoked", revokedAt: Date.now(), error: undefined, claim: undefined });
     }
   },
 });

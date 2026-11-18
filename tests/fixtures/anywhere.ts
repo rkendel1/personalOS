@@ -45,6 +45,8 @@ export interface TestResolver {
   keys: { read: { secret: string; id: string }; write: { secret: string; id: string } };
   /** Issue a new key for a credential and make it the one FeltKit uses (rotation); returns the old one. */
   rotate(which: "read" | "write"): Promise<{ secret: string; id: string }>;
+  /** Stop the server and start it again on the same store and port. */
+  restart(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -55,15 +57,19 @@ export async function startResolver(): Promise<TestResolver> {
   const adminKey = init.split(/\s+/).find((w) => w.startsWith("app_live_"));
   if (!adminKey) throw new Error(`resolver init printed no key: ${init}`);
   const port = await freePort();
-  const child: ChildProcess = spawn(process.execPath, [CLI, "serve", "--dir", dir, "--port", String(port), "--host", "127.0.0.1"], { stdio: ["ignore", "pipe", "pipe"] });
+  const serve = async () => {
+    const started: ChildProcess = spawn(process.execPath, [CLI, "serve", "--dir", dir, "--port", String(port), "--host", "127.0.0.1"], { stdio: ["ignore", "pipe", "pipe"] });
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("resolver did not start")), 15000);
+      const ready = (d: Buffer) => { if (String(d).includes("listening")) { clearTimeout(timer); resolve(); } };
+      started.stdout!.on("data", ready);
+      started.stderr!.on("data", ready);
+      started.on("exit", (code) => reject(new Error(`resolver exited ${code}`)));
+    });
+    return started;
+  };
+  let child = await serve();
   const url = `http://127.0.0.1:${port}`;
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("resolver did not start")), 15000);
-    const ready = (d: Buffer) => { if (String(d).includes("listening")) { clearTimeout(timer); resolve(); } };
-    child.stdout!.on("data", ready);
-    child.stderr!.on("data", ready);
-    child.on("exit", (code) => reject(new Error(`resolver exited ${code}`)));
-  });
   const admin = await ResolverClient.connect({ url, apiKey: adminKey, live: false, maxStaleSeconds: 0 });
   // PersonalOS's keys, identity references only: one that can only read, one that can only write.
   const issue = async (which: "read" | "write") => {
@@ -78,6 +84,8 @@ export async function startResolver(): Promise<TestResolver> {
   return {
     url, admin, adminKey, keys,
     rotate: async (which) => { const old = keys[which]; keys[which] = await issue(which); return old; },
+    // The same store and port, a new process: what Resolver kept on disk is all that is left.
+    restart: async () => { const old = child; old.kill(); await new Promise((r) => old.once("exit", r)); child = await serve(); },
     close: async () => { admin.close(); child.kill(); await new Promise((r) => child.once("exit", r)); },
   };
 }
