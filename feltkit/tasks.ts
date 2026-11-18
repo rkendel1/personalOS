@@ -44,6 +44,7 @@ export const reopen = app.mutation({
   access: "tasks.write",
   args: { id: s.string() },
   returns: s.doc(tasks),
+  capability: { name: "tasks.reopen", description: "Reopen a done task." },
   retry: { sequenceConflicts: 3 },
   handler: async (ctx, { id }) => (await ops.reopenTask(ctx, id, ui)).task,
 });

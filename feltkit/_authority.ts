@@ -61,3 +61,20 @@ export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = 
   "personalos.conversation.continue": "Continue your PersonalOS conversations",
   "personalos.x.publish": "Publish on X for you, as the bot",
 };
+
+/**
+ * PersonalOS's own published capabilities a person may delegate to an agent outside PersonalOS (an agent
+ * calling /appport for them: FeltKit's delegated execution, `ctx.auth.delegation`). Each one needs its own
+ * grant to that agent; reading never implies writing. Deleting a task is not among them: it stays the
+ * person's own act (feltkit/tasks.ts `remove`).
+ */
+export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today"] as const;
+
+export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number], string> = {
+  "tasks.list": "See your tasks",
+  "tasks.create": "Add tasks and reminders",
+  "tasks.update": "Change your tasks (title, notes, dates, reminders)",
+  "tasks.complete": "Mark your tasks done",
+  "tasks.reopen": "Reopen your done tasks",
+  "briefing.today": "Read your daily briefing",
+};

@@ -46,6 +46,12 @@ export async function own<T extends { owner: string }>(ctx: { db: { get(c: any, 
 
 type Evidence = { collection: string; id: string; version: number; verified: boolean };
 
+/** The delegation FeltKit verified for this call (an agent acting for the owner over /appport), or null. */
+interface Delegated { agent: string; agentAuthority: string; capability: string; decisionId: string; delegationId: string }
+export function delegationOf(ctx: { auth: object }): Delegated | null {
+  return (ctx.auth as { delegation?: Delegated | null }).delegation ?? null;
+}
+
 export async function record(
   ctx: MutationCtx,
   entry: { kind: string; summary: string; status: "proposed" | "succeeded" | "failed" | "rejected"; approval?: "none" | "required"; input: Record<string, unknown>; evidence?: Evidence; error?: { code: string; message: string } },
@@ -53,6 +59,7 @@ export async function record(
 ): Promise<string> {
   const owner = me(ctx);
   if (meta.proposalId) return meta.proposalId;
+  const delegated = delegationOf(ctx);
   return ctx.db.insert(actions, {
     owner,
     seq: await ctx.db.sequence(`actions:${owner}`),
@@ -63,7 +70,8 @@ export async function record(
     input: entry.input,
     ...(entry.evidence ? { evidence: entry.evidence } : {}),
     ...(entry.error ? { error: entry.error } : {}),
-    via: meta.via,
+    via: delegated ? "agent" : meta.via,
+    ...(delegated ? { delegation: { agent: delegated.agent, agentAuthority: delegated.agentAuthority, capability: delegated.capability, decisionId: delegated.decisionId, delegationId: delegated.delegationId } } : {}),
     ...(meta.conversationId ? { conversationId: meta.conversationId } : {}),
     ...(meta.messageId ? { messageId: meta.messageId } : {}),
     createdAt: Date.now(),

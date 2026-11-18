@@ -10,22 +10,29 @@
  */
 export interface Grant {
   id: string;
+  /** The agent the grant is for (`agent:<id>`), or null: PersonalOS's executor. */
+  agent?: string | null;
   capabilities: string[];
   expiresAt: number | null;
 }
 
 export interface Grants {
   list(): Promise<Grant[]>;
-  grant(input: { capabilities: string[]; expiresAt?: number }): Promise<Grant>;
+  grant(input: { capabilities: string[]; expiresAt?: number; agent?: string }): Promise<Grant>;
   revoke(id: string): Promise<void>;
 }
 
-export async function setGrants(grants: Grants, want: string[], expiresAt: number | null): Promise<{ granted: string[]; changed: boolean }> {
-  const before = await grants.list();
+/** An agent's AuthBoundry principal, as grants name it. */
+export const agentPrincipal = (agent: string) => (agent.includes(":") ? agent : `agent:${agent}`);
+
+/** `agent` null: the grants to PersonalOS's executor; otherwise the grants to that agent only. Neither touches the other's. */
+export async function setGrants(grants: Grants, want: string[], expiresAt: number | null, agent: string | null = null): Promise<{ granted: string[]; changed: boolean }> {
+  const target = agent === null ? null : agentPrincipal(agent);
+  const before = (await grants.list()).filter((g) => (g.agent ?? null) === target);
   const same = (g: Grant) => g.capabilities.length === want.length && want.every((c) => g.capabilities.includes(c)) && g.expiresAt === expiresAt;
   if (before.length === 1 && same(before[0]!)) return { granted: want, changed: false };
   if (!want.length && !before.length) return { granted: want, changed: false };
-  const inForce = want.length ? (await grants.grant({ capabilities: want, ...(expiresAt ? { expiresAt } : {}) })).id : null;
+  const inForce = want.length ? (await grants.grant({ capabilities: want, ...(expiresAt ? { expiresAt } : {}), ...(target ? { agent: target } : {}) })).id : null;
   for (const g of before) if (g.id !== inForce) await grants.revoke(g.id);
   return { granted: want, changed: true };
 }
