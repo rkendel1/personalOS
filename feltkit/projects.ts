@@ -17,6 +17,7 @@ export const create = app.mutation({
   access: "projects.write",
   args: { name: s.string({ minLength: 1, maxLength: 120 }), description: s.optional(s.string({ maxLength: 2000 })) },
   returns: s.doc(projects),
+  capability: { name: "projects.create", description: "Start a project (name, optional description). Names are unique per owner." },
   retry: { sequenceConflicts: 3 },
   handler: async (ctx, args) => (await ops.createProject(ctx, args, { via: "ui" })).project,
 });
@@ -24,8 +25,8 @@ export const create = app.mutation({
 export const update = app.mutation({
   access: "projects.write",
   args: { id: s.string(), name: s.optional(s.string({ minLength: 1, maxLength: 120 })), description: s.optional(s.string({ maxLength: 2000 })), status: s.optional(s.enum(["active", "paused", "done"] as const)) },
-  handler: async (ctx, { id, ...change }) => {
-    await ops.own(ctx, projects, id, "project");
-    await ctx.db.patch(projects, id, { ...change, updatedAt: Date.now() });
-  },
+  returns: s.doc(projects),
+  capability: { name: "projects.update", description: "Rename or describe a project, or set its status (active, paused, done)." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { id, ...change }) => (await ops.updateProject(ctx, id, change, { via: "ui" })).project,
 });

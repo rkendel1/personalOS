@@ -68,9 +68,11 @@ export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = 
  * grant to that agent; reading never implies writing. Deleting a task is not among them: it stays the
  * person's own act (feltkit/tasks.ts `remove`). Nor is anything that makes a memory trusted or removes one
  * (memory.add, confirm, update, remove): an agent only proposes (memory.propose), and _ops.ts refuses those
- * transitions under a delegation whatever is listed here.
+ * transitions under a delegation whatever is listed here. Nor are a document's upload (prepareUpload,
+ * attach), download link or removal: bytes and bearer links are not passed through an agent, and removing
+ * a document is the person's own act (feltkit/documents.ts).
  */
-export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today", "memory.list", "memory.propose"] as const;
+export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today", "memory.list", "memory.propose", "projects.list", "projects.create", "projects.update", "documents.list", "documents.update"] as const;
 
 export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number], string> = {
   "tasks.list": "See your tasks",
@@ -81,4 +83,9 @@ export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number]
   "briefing.today": "Read your daily briefing",
   "memory.list": "See what PersonalOS remembers about you",
   "memory.propose": "Suggest things to remember (you confirm them)",
+  "projects.list": "See your projects",
+  "projects.create": "Start projects",
+  "projects.update": "Rename your projects, or mark them active, paused or done",
+  "documents.list": "See your saved documents' names and notes (not their contents)",
+  "documents.update": "Change a document's note, or attach it to one of your projects or tasks",
 };

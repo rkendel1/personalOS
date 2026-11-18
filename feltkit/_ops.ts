@@ -292,6 +292,14 @@ export async function forgetMemory(ctx: MutationCtx, id: string, meta: Meta) {
   return { memory, actionId };
 }
 
+export async function updateProject(ctx: MutationCtx, id: string, change: { name?: string; description?: string; status?: "active" | "paused" | "done" }, meta: Meta) {
+  const project = await own<any>(ctx, projects, id, "project");
+  await ctx.db.patch(projects, id, { ...change, updatedAt: Date.now() });
+  const evidence = await verify(ctx, projects, id, change);
+  const actionId = await record(ctx, { kind: "project.update", summary: `Project updated: ${change.name ?? project.name}`, status: "succeeded", input: { id, ...change }, evidence }, meta);
+  return { project: (await ctx.db.get(projects, id))!, actionId };
+}
+
 export async function createProject(ctx: MutationCtx, input: { name: string; description?: string }, meta: Meta) {
   const owner = me(ctx);
   const name = input.name.trim();

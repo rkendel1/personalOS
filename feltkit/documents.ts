@@ -9,7 +9,7 @@
  */
 import { fail, s } from "@feltdb/feltkit";
 import { app, documents, projects, tasks } from "./app.js";
-import { me, own } from "./_ops.js";
+import { me, own, record } from "./_ops.js";
 
 const Doc = s.doc(documents);
 
@@ -55,8 +55,11 @@ export const attach = app.mutation({
 export const update = app.mutation({
   access: "documents.write",
   args: { id: s.string(), note: s.optional(s.string({ maxLength: 500 })), projectId: s.optional(s.nullable(s.string())), taskId: s.optional(s.nullable(s.string())) },
+  returns: Doc,
+  capability: { name: "documents.update", description: "Change a saved document's note, or attach it to (or detach it from) one of your projects or tasks. Its file is unchanged." },
+  retry: { sequenceConflicts: 3 },
   handler: async (ctx, { id, note, projectId, taskId }) => {
-    await own(ctx, documents, id, "document");
+    const doc = await own<{ owner: string; name: string }>(ctx, documents, id, "document");
     if (projectId) await own(ctx, projects, projectId, "project");
     if (taskId) await own(ctx, tasks, taskId, "task");
     await ctx.db.patch(documents, id, {
@@ -64,6 +67,11 @@ export const update = app.mutation({
       ...(projectId !== undefined ? { projectId: projectId ?? undefined } : {}),
       ...(taskId !== undefined ? { taskId: taskId ?? undefined } : {}),
     });
+    const stored = (await ctx.db.get(documents, id))!;
+    const verified = (note === undefined || stored.note === note) && (projectId === undefined || stored.projectId === (projectId ?? undefined)) && (taskId === undefined || stored.taskId === (taskId ?? undefined));
+    if (!verified) fail("INTERNAL", `Verification failed for documents/${id}: the stored record does not match what was written.`);
+    await record(ctx, { kind: "document.update", summary: `Document updated: ${doc.name}`, status: "succeeded", input: { id, ...(note !== undefined ? { note } : {}), ...(projectId !== undefined ? { projectId } : {}), ...(taskId !== undefined ? { taskId } : {}) }, evidence: { collection: "documents", id, version: Number(stored.__version), verified } }, { via: "ui" });
+    return stored;
   },
 });
 
