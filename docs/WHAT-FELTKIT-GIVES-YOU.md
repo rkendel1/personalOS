@@ -16,16 +16,16 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 
 | Class | Files | Lines of code | Meaning |
 |---|--:|--:|---|
-| domain | 43 | 6446 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
+| domain | 43 | 6462 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
 | experience | 33 | 2542 | What people see and use: UI, styles, HTML, browser extension. |
-| infrastructure | 3 | 302 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
+| infrastructure | 16 | 2564 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
 | generated | 2 | 33 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
-| configuration | 9 | 310 | Build, package, deployment and tool configuration. |
-| tests | 38 | 6174 | Tests, fixtures and acceptance scripts. |
-| excluded | 51 | 8702 | Not code: documentation, images, fonts, lockfiles, licences. |
+| configuration | 12 | 381 | Build, package, deployment and tool configuration. |
+| tests | 60 | 12829 | Tests, fixtures and acceptance scripts. |
+| excluded | 54 | 12308 | Not code: documentation, images, fonts, lockfiles, licences. |
 | unclassified | 12 | 0 | No rule applies. Declare it in feltkit.measure.json. |
 
-**Authored by the application** (domain + experience + infrastructure + configuration): 9600 lines in 88 files. Tests: 6174 lines.
+**Authored by the application** (domain + experience + infrastructure + configuration): 11949 lines in 104 files. Tests: 12829 lines.
 
 **Provenance.** Scaffolded by create-feltkit 0.3.22 (tasks): 20 files, 4 unchanged, 15 changed, 1 removed. Generated API: matches regeneration.
 
@@ -35,13 +35,13 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 
 | API | Call sites | Files |
 |---|--:|--:|
-| `@feltdb/feltkit s` | 1562 | 28 |
-| `ctx.db` | 283 | 24 |
-| `@feltdb/feltkit fail` | 75 | 17 |
+| `@feltdb/feltkit s` | 1570 | 28 |
+| `ctx.db` | 284 | 24 |
+| `@feltdb/feltkit fail` | 76 | 17 |
 | `@feltdb/feltkit/testing TestApp` | 55 | 18 |
 | `@feltdb/feltkit/testing createTestApp` | 51 | 20 |
-| `@feltdb/feltkit MutationCtx` | 48 | 9 |
-| `@feltdb/feltkit feltkit` | 46 | 1 |
+| `@feltdb/feltkit MutationCtx` | 49 | 9 |
+| `@feltdb/feltkit feltkit` | 48 | 1 |
 | `ctx.runMutation` | 34 | 4 |
 | `@feltdb/feltkit/react useMutation` | 33 | 5 |
 | `@feltdb/feltkit/react useQuery` | 25 | 5 |
@@ -87,7 +87,7 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 ### Checks
 
 - ✓ generated code current: feltkit/_generated/api.ts matches what codegen writes
-- ✓ declarations match files: 2 declaration(s), each matches a file
+- ✓ declarations match files: 5 declaration(s), each matches a file
 - ✓ every code file classified: every file with code has a class
 - ✓ acknowledged findings still exist: 1 acknowledged finding(s), each still present
 <!-- measure:end -->

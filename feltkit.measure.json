@@ -10,6 +10,21 @@
       "path": "ios/project.yml",
       "class": "configuration",
       "reason": "XcodeGen project definition for the iOS app and its share extension"
+    },
+    {
+      "path": "agent/agent",
+      "class": "infrastructure",
+      "reason": "PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process"
+    },
+    {
+      "path": "agent/test",
+      "class": "tests",
+      "reason": "the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)"
+    },
+    {
+      "path": "agent/appport-host",
+      "class": "tests",
+      "reason": "a stand-in AppPort application the agent's generic suites run against"
     }
   ],
   "acknowledged": {
