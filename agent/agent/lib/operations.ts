@@ -724,6 +724,7 @@ export async function decideOutcome(
   turnOutcome: string,
   invokeCalls: readonly ObservedCall[],
   reply: string,
+  cancelled = false,
 ): Promise<Outcome> {
   const said = reply.length > 0 ? ` Agent reply: ${reply.slice(0, 2000)}` : "";
   const resolved = new Map<string, boolean>();
@@ -754,6 +755,24 @@ export async function decideOutcome(
   const succeeded = [...resolved.values()].filter(Boolean).length;
   const attested =
     settledByOperator.size > 0 ? `; ${settledByOperator.size} settled by an operator` : "";
+  // Stopped at the requester's request: cancelled only once every operation it started has an
+  // established outcome; one that may have taken effect keeps the work indeterminate, never "cancelled".
+  if (cancelled && turnOutcome !== "completed") {
+    if (unresolved.size > 0) {
+      return {
+        decision: `indeterminate: cancelled with ${unresolved.size} AppPort operation(s) without an established outcome: ${[...unresolved].join(", ")}`,
+        evidence,
+        status: "blocked",
+        summary: `Cancelled, but ${unresolved.size} AppPort operation(s) have no established outcome and are not retried automatically.`,
+      };
+    }
+    return {
+      decision: `cancelled: by the requester after ${succeeded} authorized invocation(s)${attested}`,
+      evidence,
+      status: "cancelled",
+      summary: `Cancelled by the requester after ${succeeded} authorized invocation(s).${said}`,
+    };
+  }
   if (turnOutcome !== "completed") {
     return {
       decision: `failed: the eve turn ended ${turnOutcome}`,

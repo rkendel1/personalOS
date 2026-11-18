@@ -405,7 +405,8 @@ describe("durable work recovery (process-group crashes and restarts)", () => {
 
   it("keeps waiting work waiting across a restart", async () => {
     const { body } = await submit(ALICE, "approval", "[approval] Wait for a person");
-    await waitFor(async () => (await read(ALICE, body.workId)).body.status === "running");
+    // Waiting is recorded as soon as eve asks, not only by recovery.
+    await waitFor(async () => (await read(ALICE, body.workId)).body.questions?.length === 1);
     await restartAgent();
     waitingWork = await settled(ALICE, body.workId);
     assert.equal(waitingWork.status, "blocked");
@@ -616,6 +617,139 @@ describe("durable operations (crash-after-effect boundary)", () => {
     assert.equal(work.operations[0].errorCode, "FORBIDDEN");
     assert.equal(effectCount("probe.applykeyed", "BOB1"), 0);
     assert.equal((await read(ALICE, body.workId)).status, 404);
+  });
+});
+
+describe("asking the requester, answering and stopping (work channel)", () => {
+  const WAITING = "waiting: the eve session is waiting for an interaction";
+
+  async function post(user, path, body) {
+    const response = await fetch(new URL(path, agent.url), {
+      body: JSON.stringify(body ?? {}),
+      headers: {
+        authorization: `Bearer ${signJwt(AGENT_JWT_SECRET, subjectOf(user))}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+    return { body: await response.json(), status: response.status };
+  }
+
+  async function asked(user, workId) {
+    let work;
+    await waitFor(async () => {
+      work = (await read(user, workId)).body;
+      return work.questions?.length === 1;
+    });
+    return work;
+  }
+
+  const approveOption = (question) =>
+    question.options.find((option) => /approve|allow|yes|accept/iu.test(`${option.id} ${option.label}`)) ??
+    question.options[0];
+
+  async function sessionEvents(sessionId) {
+    const response = await fetch(
+      new URL(`/eve/v1/session/${sessionId}/stream?startIndex=0&follow=false`, agent.url),
+      { headers: { authorization: `Bearer ${signJwt(AGENT_JWT_SECRET, "operator")}` } },
+    );
+    return (await response.text())
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .flatMap((line) => JSON.parse(line).facts ?? []);
+  }
+
+  async function finished(user, workId) {
+    let work;
+    await waitFor(async () => {
+      work = (await read(user, workId)).body;
+      return ["completed", "cancelled"].includes(work.status) ||
+        (work.status === "blocked" && work.decisions.at(-1) !== WAITING);
+    });
+    return work;
+  }
+
+  it("shows what the work waits on; only the requester answers it, and the answer resumes the same turn to completion", async () => {
+    const { body } = await submit(ALICE, "ask-then-look", "[approval] Check with me, then look up SKU ALPHA-1");
+    const waiting = await asked(ALICE, body.workId);
+    assert.equal(waiting.status, "blocked");
+    assert.equal(waiting.decisions.at(-1), WAITING);
+    const [question] = waiting.questions;
+    assert.equal(question.kind, "approval");
+    assert.ok(question.options.length > 0, "the approval offers its choices");
+    assert.equal(lookupsFor(body.workId).length, 0, "nothing ran before the answer");
+
+    const answer = { answers: [{ interactionId: question.interactionId, optionId: approveOption(question).id }] };
+    assert.equal((await post(BOB, `/work/${body.workId}/answers`, answer)).status, 404, "Bob cannot answer, or see, Alice's work");
+    assert.equal((await post(BOB, `/work/${body.workId}/cancel`)).status, 404, "nor stop it");
+    assert.equal(
+      (await post(ALICE, `/work/${body.workId}/answers`, { answers: [{ interactionId: "int_unknown", optionId: "x" }] })).status,
+      409,
+      "an answer to a question the work is not waiting on is refused",
+    );
+    assert.equal((await post(ALICE, `/work/${body.workId}/answers`, { answers: "yes" })).status, 400);
+
+    const answered = await post(ALICE, `/work/${body.workId}/answers`, answer);
+    assert.equal(answered.status, 202);
+    assert.equal(answered.body.sessionId, body.sessionId, "the answer goes to the session that asked");
+    const work = await finished(ALICE, body.workId);
+    assert.equal(work.status, "completed");
+    assert.deepEqual(work.questions, []);
+    assert.ok(work.decisions.includes(`answered: ${question.interactionId} accepted`));
+    assert.equal(work.operations.length, 1);
+    assert.equal(work.operations[0].capability, "catalog.lookup");
+    assert.equal(work.operations[0].ok, true);
+    assert.equal(lookupsFor(body.workId).length, 1, "the work it asked about ran once");
+
+    const events = await sessionEvents(body.sessionId);
+    assert.equal(events.filter((event) => event.type === "turn.started").length, 1, "one turn: resumed, not restarted");
+    assert.equal(
+      events.filter((event) => event.type === "interaction.settled" && event.data.interactionId === question.interactionId)[0]?.data.outcome,
+      "accepted",
+    );
+    assert.equal((await post(ALICE, `/work/${body.workId}/answers`, answer)).status, 409, "answered once");
+  });
+
+  it("keeps the question across an agent restart, and the answer after it resumes the same work", async () => {
+    const { body } = await submit(ALICE, "ask-restart", "[approval] Check with me, then look up SKU BETA-2");
+    const before = (await asked(ALICE, body.workId)).questions[0];
+    await restartAgent();
+    const after = await asked(ALICE, body.workId);
+    assert.equal(after.questions[0].interactionId, before.interactionId, "the same question, from FeltDB");
+    assert.equal(after.decisions.at(-1), WAITING);
+    const answered = await post(ALICE, `/work/${body.workId}/answers`, {
+      answers: [{ interactionId: before.interactionId, optionId: approveOption(before).id }],
+    });
+    assert.equal(answered.status, 202);
+    const work = await finished(ALICE, body.workId);
+    assert.equal(work.status, "completed");
+    assert.equal(work.sessionId, body.sessionId);
+    assert.equal(lookupsFor(body.workId).length, 1);
+    assert.equal((await sessionEvents(body.sessionId)).filter((event) => event.type === "turn.started").length, 1);
+  });
+
+  it("the requester stops waiting work: the question is withdrawn, nothing runs, and it stays cancelled", async () => {
+    const { body } = await submit(ALICE, "ask-cancel", "[approval] Check with me, then look up SKU ALPHA-1");
+    await asked(ALICE, body.workId);
+    const stopped = await post(ALICE, `/work/${body.workId}/cancel`);
+    assert.equal(stopped.status, 202);
+    const work = await finished(ALICE, body.workId);
+    assert.equal(work.status, "cancelled");
+    assert.deepEqual(work.questions, []);
+    assert.match(work.decisions.at(-1), /^cancelled: by the requester after 0 authorized invocation\(s\)/u);
+    assert.ok(work.cancellation?.requestedAt);
+    assert.equal(lookupsFor(body.workId).length, 0, "nothing ran");
+    assert.equal((await post(ALICE, `/work/${body.workId}/cancel`)).status, 409, "already finished");
+    await restartAgent();
+    assert.equal((await read(ALICE, body.workId)).body.status, "cancelled", "cancelled is final, across a restart");
+  });
+
+  it("finished work cannot be stopped", async () => {
+    const { body } = await submit(ALICE, "done-then-cancel", "Look up SKU ALPHA-1");
+    assert.equal((await finished(ALICE, body.workId)).status, "completed");
+    const refused = await post(ALICE, `/work/${body.workId}/cancel`);
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, "ALREADY_FINISHED");
   });
 });
 

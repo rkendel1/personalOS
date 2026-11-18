@@ -1,4 +1,5 @@
 import { defineChannel, GET, POST } from "eve/channels";
+import { parseAnswers } from "eve/client";
 import { jwtEcdsa, jwtHmac, routeAuth } from "eve/channels/auth";
 import { call } from "eve/events";
 import { toolResultFrom } from "eve/tools";
@@ -10,6 +11,12 @@ import {
   acceptWork,
   bindSession,
   citeNew,
+  openQuestions,
+  readCancellation,
+  recordQuestion,
+  requestCancellation,
+  settleQuestion,
+  WAITING,
   readCallLink,
   readSubmission,
   readWork,
@@ -76,6 +83,28 @@ function operatorAuth() {
 
 const problem = (status: number, code: string, message: string) =>
   Response.json({ code, message, ok: false }, { status });
+
+/**
+ * Who may see, answer or stop this work: its requester, or the identity authority that asserted it
+ * (for the person it named). Anyone else learns nothing, not even that it exists.
+ */
+async function readerOf(request: Request, workId: string) {
+  const authority = identityAuthority();
+  const caller = await routeAuth(request, [...auth, ...(authority?.auth ?? [])]);
+  if (caller instanceof Response) return { ok: false, response: caller } as const;
+  const submission = await readSubmission(workId);
+  const reader =
+    authority?.asserts(caller.principalId) === true
+      ? submission?.asserted_by === caller.principalId
+        ? submission.requester
+        : undefined
+      : caller.principalId;
+  if (reader === undefined || submission === null || submission.requester !== reader)
+    return { ok: false, response: problem(404, "WORK_NOT_FOUND", "No such work.") } as const;
+  return { ok: true, reader, submission } as const;
+}
+
+const MAX_ANSWER_BYTES = 8192;
 
 type Operations = Parameters<typeof reconcileAll>[0];
 let startupReconciliation: Promise<unknown> | undefined;
@@ -171,22 +200,67 @@ export default defineChannel({
     }),
 
     GET("/work/:workId", async (request, { from, params, resolveSession }) => {
-      const authority = identityAuthority();
-      const caller = await routeAuth(request, [...auth, ...(authority?.auth ?? [])]);
-      if (caller instanceof Response) return caller;
-      await reconcileOnce({ from, resolveSession });
       const workId = params.workId ?? "";
-      const submission = await readSubmission(workId);
-      const reader =
-        authority?.asserts(caller.principalId) === true
-          ? submission?.asserted_by === caller.principalId
-            ? submission.requester
-            : undefined
-          : caller.principalId;
-      const work = reader === undefined ? null : await readWork(reader, workId);
+      const allowed = await readerOf(request, workId);
+      if (!allowed.ok) return allowed.response;
+      await reconcileOnce({ from, resolveSession });
+      const work = await readWork(allowed.reader, workId);
       if (work === null) return problem(404, "WORK_NOT_FOUND", "No such work.");
       const live = await resolveSession(workId);
       return Response.json({ ...work, liveSessionId: live?.id ?? null });
+    }),
+
+    // The requester answers what the work is waiting on. The answer goes to the same eve session as the
+    // requester, so eve resumes the turn that asked (never a new one), under its own response policy.
+    POST("/work/:workId/answers", async (request, { from, params, resolveSession }) => {
+      const workId = params.workId ?? "";
+      const allowed = await readerOf(request, workId);
+      if (!allowed.ok) return allowed.response;
+      await reconcileOnce({ from, resolveSession });
+      const text = await request.text();
+      if (text.length > MAX_ANSWER_BYTES)
+        return problem(413, "ANSWER_TOO_LARGE", "The answer is too large.");
+      let answers;
+      try {
+        answers = parseAnswers((JSON.parse(text) as { answers?: unknown }).answers);
+      } catch {
+        return problem(
+          400,
+          "INVALID_ANSWERS",
+          "Send { answers: [{ interactionId, optionId?, text? }] }.",
+        );
+      }
+      const open = new Set((await openQuestions(workId)).map((question) => question.interaction_id));
+      const unknown = answers.filter((answer) => !open.has(answer.interactionId));
+      if (answers.length === 0 || unknown.length > 0)
+        return problem(
+          409,
+          "NOT_WAITING",
+          "The work is not waiting on that question (it was answered, withdrawn, or never asked).",
+        );
+      const delivery = await from(workId).respond(answers, { auth: allowed.submission.auth });
+      return Response.json({ accepted: answers.length, sessionId: delivery.sessionId }, { status: 202 });
+    }),
+
+    // The requester stops the work. The request is recorded before eve is told, so it survives a crash;
+    // the work becomes cancelled only once every operation it started has an established outcome.
+    POST("/work/:workId/cancel", async (request, { from, params, resolveSession }) => {
+      const workId = params.workId ?? "";
+      const allowed = await readerOf(request, workId);
+      if (!allowed.ok) return allowed.response;
+      await reconcileOnce({ from, resolveSession });
+      const work = await readWork(allowed.reader, workId);
+      if (work === null) return problem(404, "WORK_NOT_FOUND", "No such work.");
+      if (work.status === "completed" || work.status === "cancelled")
+        return problem(409, "ALREADY_FINISHED", `The work is already ${work.status}.`);
+      const cancellation = await requestCancellation(workId, allowed.reader);
+      const live = await resolveSession(workId);
+      if (live !== null) await from(workId).cancel();
+      else await reconcileWork({ from, resolveSession }, workId);
+      return Response.json(
+        { cancellation: { requestedAt: cancellation.requested_at }, workId },
+        { status: 202 },
+      );
     }),
 
     // The identity authority finds work it submitted by its own key (after a submission whose answer it
@@ -292,6 +366,37 @@ export default defineChannel({
       });
     },
 
+    async "interaction.opened"(event, ctx) {
+      const workId = ctx.channel.continuation?.token;
+      if (workId === undefined) return;
+      await recordQuestion(workId, ctx.session.id, event.data);
+      await recordProgress(workId, (current) =>
+        current.task.status === "blocked" && current.checkpoint.decisions.at(-1) === WAITING
+          ? null
+          : {
+              decisions: [WAITING],
+              status: "blocked",
+              summary: `Waiting for the requester: ${event.data.request.prompt.slice(0, 500)}`,
+            },
+      );
+    },
+
+    async "interaction.settled"(event, ctx) {
+      const workId = ctx.channel.continuation?.token;
+      if (workId === undefined) return;
+      await settleQuestion(workId, event.data.interactionId, event.data.outcome);
+      if ((await openQuestions(workId)).length > 0) return;
+      await recordProgress(workId, (current) =>
+        current.task.status !== "blocked" || current.checkpoint.decisions.at(-1) !== WAITING
+          ? null
+          : {
+              decisions: [`answered: ${event.data.interactionId} ${event.data.outcome}`],
+              status: "running",
+              summary: `Resumed after the requester's answer (${event.data.outcome}).`,
+            },
+      );
+    },
+
     async "turn.settled"(event, ctx) {
       const workId = ctx.channel.continuation?.token;
       if (workId === undefined) return;
@@ -300,6 +405,7 @@ export default defineChannel({
         event.data.outcome,
         invokeCallsOf(ctx.view),
         replyOf(ctx.view, event.data.turnId),
+        (await readCancellation(workId)) !== null,
       );
       const submission = await readSubmission(workId);
       await fault("checkpoint.final", { objective: submission?.objective ?? "", workId });

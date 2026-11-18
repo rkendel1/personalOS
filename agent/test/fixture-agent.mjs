@@ -16,10 +16,14 @@ export default defineAgent({
       if (String(lastUserMessage).includes("FAIL")) throw new Error("scripted model failure");
       // A model call that never answers: a turn that makes no progress.
       if (String(lastUserMessage).includes("[hang]")) return new Promise(() => undefined);
-      if (String(lastUserMessage).includes("[approval]"))
-        return toolResults.length === 0
-          ? { toolCalls: [{ name: "await_approval", input: {} }] }
-          : "Approved.";
+      if (String(lastUserMessage).includes("[approval]")) {
+        // Asks the person first; once they approve, does the work it asked about.
+        const after = /then look up SKU (\\S+)/u.exec(String(lastUserMessage))?.[1];
+        if (toolResults.length === 0) return { toolCalls: [{ name: "await_approval", input: {} }] };
+        if (after !== undefined && toolResults.length === 1)
+          return { toolCalls: [{ name: "appport_invoke", input: { name: "catalog.lookup", input: { sku: after } } }] };
+        return after === undefined ? "Approved." : "Approved; AppPort answered: " + JSON.stringify(toolResults.at(-1)?.output);
+      }
       const reserve = /Reserve (\\d+) of (\\S+)/u.exec(String(lastUserMessage));
       if (reserve !== null) {
         const calls = String(lastUserMessage).includes("[repeat]") ? 2 : 1;

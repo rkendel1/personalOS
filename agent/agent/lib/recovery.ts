@@ -3,6 +3,7 @@ import {
   calls,
   emptySessionView,
   foldEvents,
+  openInteractions,
   reply,
   runs,
   turns,
@@ -17,6 +18,10 @@ import { decideOutcome } from "./operations";
 import {
   citeNew,
   lastDecision,
+  readCancellation,
+  recordQuestion,
+  WAITING,
+  type AskedInteraction,
   OPERATIONS,
   readSubmission,
   recordedSession,
@@ -34,7 +39,7 @@ export type Execution =
   | { readonly kind: "missing" }
   | { readonly kind: "not-started" }
   | { readonly kind: "running"; readonly lastActivityAt: number; readonly inFlight: boolean }
-  | { readonly kind: "waiting" }
+  | { readonly kind: "waiting"; readonly asked: readonly AskedInteraction[] }
   | {
       readonly kind: "settled";
       readonly invokeCalls: readonly ObservedCall[];
@@ -47,7 +52,14 @@ export function observeExecution(view: SessionView): Execution {
   const last = all.at(-1);
   if (last === undefined) return { kind: "not-started" };
   if (last.status === "running") {
-    if (waiting(view, last.turnId)?.on === "interaction") return { kind: "waiting" };
+    if (waiting(view, last.turnId)?.on === "interaction")
+      return {
+        asked: openInteractions(view).map((open) => ({
+          interactionId: open.interactionId,
+          request: open.request,
+        })),
+        kind: "waiting",
+      };
     // What eve recorded, never what the model says: the latest moment a turn, a model run or a call
     // started or ended; and whether an AppPort operation is outstanding (an appport_invoke call running).
     const times = [...all, ...runs(view), ...calls(view)].flatMap((entry) => [
@@ -202,18 +214,15 @@ export async function reconcileWork(ops: RouteOperations, workId: string): Promi
       );
     }
     case "waiting":
-      return await mark(
-        workId,
-        "waiting",
-        "blocked",
-        "waiting: the eve session is waiting for an interaction",
-      );
+      for (const asked of execution.asked) await recordQuestion(workId, sessionId, asked);
+      return await mark(workId, "waiting", "blocked", WAITING);
     case "settled": {
       const outcome = await decideOutcome(
         workId,
         execution.outcome,
         execution.invokeCalls,
         execution.reply,
+        (await readCancellation(workId)) !== null,
       );
       const wrote = await recordProgress(workId, (current) => {
         if (

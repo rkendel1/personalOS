@@ -14,6 +14,9 @@ export const AGENT_ID = "agent:appport-agent";
 export const APPLICATION_SCOPE = "inventory";
 export const SUBMISSIONS = "work_submissions";
 export const SESSIONS = "work_sessions";
+export const QUESTIONS = "work_questions";
+export const CANCELLATIONS = "work_cancellations";
+export const WAITING = "waiting: the eve session is waiting for an interaction";
 const MAX_HISTORY = 50;
 const OPEN_ATTEMPTS = 50;
 const OPEN_RETRY_MS = 200;
@@ -224,8 +227,19 @@ export async function readWork(requester: string, workId: string) {
       refusal: link.refusal,
     }));
   const submission = await readSubmission(workId);
+  const cancellation = await readCancellation(workId);
   return {
     agent: current.task.owner,
+    questions: (await openQuestions(workId)).map((question) => ({
+      allowFreeform: question.allow_freeform,
+      interactionId: question.interaction_id,
+      kind: question.kind,
+      openedAt: question.opened_at,
+      options: question.options,
+      prompt: question.prompt,
+      title: question.title ?? null,
+    })),
+    cancellation: cancellation === null ? null : { requestedAt: cancellation.requested_at },
     assertedBy: submission?.asserted_by ?? null,
     createdAt: current.task.created_at,
     decisions: current.checkpoint.decisions,
@@ -405,7 +419,7 @@ export interface ObservedCall {
 export interface Outcome {
   readonly decision: string;
   readonly evidence: readonly string[];
-  readonly status: "blocked" | "completed";
+  readonly status: "blocked" | "cancelled" | "completed";
   readonly summary: string;
 }
 
@@ -420,4 +434,123 @@ export function citeNew(current: AgentCheckpoint, operationIds: readonly string[
 
 export function lastDecision(checkpoint: AgentCheckpoint): string | undefined {
   return checkpoint.decisions.at(-1);
+}
+
+/**
+ * What the requester is asked while the work waits: eve's own interaction (an approval or a question),
+ * kept here so the work can show it, and an answer can be checked against it, without reading the session.
+ */
+export interface QuestionRecord {
+  readonly interaction_id: string;
+  readonly work_id: string;
+  readonly session_id: string;
+  readonly kind: string;
+  readonly prompt: string;
+  readonly title?: string | null;
+  readonly options: readonly { readonly id: string; readonly label: string; readonly description?: string }[];
+  readonly allow_freeform: boolean;
+  readonly state: "open" | "settled";
+  readonly outcome?: string | null;
+  readonly opened_at: string;
+  readonly settled_at?: string | null;
+  readonly __version?: number;
+}
+
+export interface AskedInteraction {
+  readonly interactionId: string;
+  readonly request: {
+    readonly kind: string;
+    readonly prompt: string;
+    readonly title?: string;
+    readonly options?: readonly { readonly id: string; readonly label: string; readonly description?: string }[];
+    readonly allowFreeform?: boolean;
+  };
+}
+
+export async function recordQuestion(
+  workId: string,
+  sessionId: string,
+  asked: AskedInteraction,
+): Promise<void> {
+  const { db } = await workStore();
+  const questions = db.collection<QuestionRecord>(QUESTIONS);
+  if ((await questions.get(asked.interactionId)) !== null) return;
+  try {
+    await questions.insert(
+      {
+        allow_freeform: asked.request.allowFreeform === true,
+        interaction_id: asked.interactionId,
+        kind: asked.request.kind,
+        opened_at: new Date().toISOString(),
+        options: (asked.request.options ?? []).map((option) => ({
+          id: option.id,
+          label: option.label,
+          ...(option.description === undefined ? {} : { description: option.description }),
+        })),
+        prompt: asked.request.prompt,
+        session_id: sessionId,
+        state: "open",
+        title: asked.request.title ?? null,
+        work_id: workId,
+      },
+      asked.interactionId,
+      { requireAbsent: true },
+    );
+  } catch (error) {
+    if ((await questions.get(asked.interactionId)) === null) throw error;
+  }
+}
+
+export async function settleQuestion(
+  workId: string,
+  interactionId: string,
+  outcome: string,
+): Promise<void> {
+  const { db } = await workStore();
+  const questions = db.collection<QuestionRecord>(QUESTIONS);
+  const current = await questions.get(interactionId);
+  if (current === null || current.work_id !== workId || current.state !== "open") return;
+  await questions.updateIfVersion(interactionId, current.__version ?? 0, {
+    outcome,
+    settled_at: new Date().toISOString(),
+    state: "settled",
+  });
+}
+
+export async function openQuestions(workId: string): Promise<QuestionRecord[]> {
+  const { db } = await workStore();
+  return (await db.collection<QuestionRecord>(QUESTIONS).find({ work_id: workId }))
+    .filter((question) => question.state === "open")
+    .sort((left, right) => left.opened_at.localeCompare(right.opened_at));
+}
+
+export interface CancellationRecord {
+  readonly work_id: string;
+  readonly requested_at: string;
+  readonly requested_by: string;
+}
+
+/** The requester asked to stop this work: recorded once, before eve is told, so a crash cannot lose it. */
+export async function requestCancellation(
+  workId: string,
+  requestedBy: string,
+): Promise<CancellationRecord> {
+  const { db } = await workStore();
+  const cancellations = db.collection<CancellationRecord>(CANCELLATIONS);
+  const existing = await cancellations.get(workId);
+  if (existing !== null) return existing;
+  const record = { requested_at: new Date().toISOString(), requested_by: requestedBy, work_id: workId };
+  try {
+    await cancellations.insert(record, workId, { requireAbsent: true });
+    return record;
+  } catch (error) {
+    const raced = await cancellations.get(workId);
+    if (raced === null) throw error;
+    return raced;
+  }
+}
+
+export async function readCancellation(workId: string): Promise<CancellationRecord | null> {
+  const { db } = await workStore();
+  return await db.collection<CancellationRecord>(CANCELLATIONS).get(workId);
 }
