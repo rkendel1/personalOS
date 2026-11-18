@@ -24,7 +24,7 @@
   "dependencies": {
     "@appport/resolver-client": "0.3.0",
     "@authboundry/local": "0.1.1",
-    "@feltdb/feltkit": "0.3.30",
+    "@feltdb/feltkit": "0.3.33",
     "@stack-ui/core": "0.8.1",
     "@stack-ui/react": "0.8.1",
     "@stack-ui/tokens": "0.8.1",

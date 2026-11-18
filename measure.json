@@ -2,8 +2,8 @@
   "schema": "feltkit.measure/1",
   "app": {
     "name": "personalos",
-    "feltkit": "0.3.30",
-    "installed": "0.3.30"
+    "feltkit": "0.3.33",
+    "installed": "0.3.33"
   },
   "method": {
     "files": "git ls-files (tracked, and untracked files that are not ignored); node_modules, dist, .feltkit and .git are never counted",
@@ -63,7 +63,7 @@
     },
     "excluded": {
       "files": 51,
-      "lines": 8707
+      "lines": 8702
     },
     "unclassified": {
       "files": 12,
@@ -1190,7 +1190,7 @@
       "path": "package-lock.json",
       "class": "excluded",
       "basis": "lockfile",
-      "lines": 3983
+      "lines": 3978
     },
     {
       "path": "package.json",
