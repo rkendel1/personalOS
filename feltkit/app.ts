@@ -373,7 +373,10 @@ export const memories = app.collection(
     /** confirmed: the user said it or confirmed it. inferred: the assistant concluded it; never used as fact. */
     status: s.enum(["confirmed", "inferred"] as const),
     source: s.object({
-      kind: s.enum(["conversation", "manual", "model"] as const),
+      /** agent: proposed by an agent outside PersonalOS for the owner (always inferred until the owner confirms it). */
+      kind: s.enum(["conversation", "manual", "model", "agent"] as const),
+      /** The agent that proposed it (kind "agent"), as FeltKit verified it. */
+      agent: s.optional(s.string()),
       conversationId: s.optional(s.string()),
       messageId: s.optional(s.string()),
       quote: s.optional(s.string({ maxLength: 500 })),

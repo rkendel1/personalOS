@@ -227,7 +227,7 @@ function group(tasks: Task[], today: string): Array<readonly [string, Task[]]> {
   ] as const;
 }
 
-type Memory = { id: string; kind: string; subject: string; content: string; status: "confirmed" | "inferred"; date?: string; source: { kind: string; conversationId?: string; quote?: string }; createdAt: number; updatedAt: number; confirmedAt?: number };
+type Memory = { id: string; kind: string; subject: string; content: string; status: "confirmed" | "inferred"; date?: string; source: { kind: string; agent?: string; conversationId?: string; quote?: string }; createdAt: number; updatedAt: number; confirmedAt?: number };
 const KINDS = ["preference", "person", "project", "decision", "date", "instruction", "fact"] as const;
 
 export function MemoryScreen({ onError, onOpenConversation }: Err & { onOpenConversation: (id: string) => void }) {
@@ -264,7 +264,7 @@ export function MemoryScreen({ onError, onOpenConversation }: Err & { onOpenConv
             {m.source.conversationId ? (
               <button className="link small" onClick={() => onOpenConversation(m.source.conversationId!)}>{m.source.kind === "model" ? "model · source" : "source"}</button>
             ) : (
-              <span>{m.source.kind === "manual" ? "added by hand" : m.source.kind}</span>
+              <span>{m.source.kind === "manual" ? "added by hand" : m.source.kind === "agent" ? `suggested by ${m.source.agent ?? "an agent"}` : m.source.kind}</span>
             )}
           </div>
           <div className="row end tools">

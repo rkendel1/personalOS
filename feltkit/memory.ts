@@ -20,6 +20,22 @@ export const add = app.mutation({
   handler: async (ctx, args) => (await ops.remember(ctx, { ...args, status: "confirmed" }, ui)).memory,
 });
 
+/**
+ * Propose something to remember, for the owner to confirm. Always stored as inferred (never used as fact),
+ * whoever calls it. The capability an agent outside PersonalOS is given instead of memory.add.
+ */
+export const propose = app.mutation({
+  access: "memory.write",
+  args: { kind: s.enum(MEMORY_KINDS), subject: s.string({ maxLength: 200 }), content: s.string({ minLength: 1, maxLength: 2000 }), date: s.optional(s.string()), quote: s.optional(s.string({ maxLength: 500 })) },
+  returns: s.object({ id: s.string(), status: s.enum(["confirmed", "inferred"] as const), proposed: s.boolean() }),
+  capability: { name: "memory.propose", description: "Propose something to remember. Stored as inferred (unconfirmed) until the owner confirms it in PersonalOS." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, args) => {
+    const { memory, duplicate } = await ops.remember(ctx, { ...args, status: "inferred" }, ui);
+    return { id: memory.id, status: memory.status, proposed: !duplicate };
+  },
+});
+
 export const confirm = app.mutation({
   access: "memory.write",
   args: { id: s.string() },

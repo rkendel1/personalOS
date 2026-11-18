@@ -217,8 +217,19 @@ export interface MemoryInput {
   quote?: string;
 }
 
+/**
+ * Making a memory trusted (confirming it, or the owner's own statement or edit) and forgetting one are the
+ * owner's own acts. An agent acting for them (FeltKit's verified delegation) may only add inferred notes.
+ */
+function ownerOnly(ctx: MutationCtx, what: string) {
+  const delegated = delegationOf(ctx);
+  if (delegated) fail("FORBIDDEN", `Only the owner can ${what}; ${delegated.agent} acts for them and may only propose (inferred).`);
+}
+
 export async function remember(ctx: MutationCtx, input: MemoryInput, meta: Meta) {
+  if (input.status === "confirmed") ownerOnly(ctx, "record a memory as confirmed");
   const owner = me(ctx);
+  const agent = delegationOf(ctx)?.agent;
   const now = Date.now();
   const content = input.content.trim();
   if (!content) fail("INVALID_ARGUMENT", "There is nothing to remember.");
@@ -234,7 +245,7 @@ export async function remember(ctx: MutationCtx, input: MemoryInput, meta: Meta)
     subject: input.subject.trim().toLowerCase().slice(0, 200),
     content,
     status: input.status,
-    source: { kind: meta.via === "chat" ? "conversation" : meta.via === "model" ? "model" : "manual", ...(meta.conversationId ? { conversationId: meta.conversationId } : {}), ...(meta.messageId ? { messageId: meta.messageId } : {}), ...(input.quote ? { quote: input.quote.slice(0, 500) } : {}) },
+    source: { kind: agent ? "agent" : meta.via === "chat" ? "conversation" : meta.via === "model" ? "model" : "manual", ...(agent ? { agent } : {}), ...(meta.conversationId ? { conversationId: meta.conversationId } : {}), ...(meta.messageId ? { messageId: meta.messageId } : {}), ...(input.quote ? { quote: input.quote.slice(0, 500) } : {}) },
     ...(input.date ? { date: input.date } : {}),
     createdAt: now,
     updatedAt: now,
@@ -246,6 +257,7 @@ export async function remember(ctx: MutationCtx, input: MemoryInput, meta: Meta)
 }
 
 export async function confirmMemory(ctx: MutationCtx, id: string, meta: Meta) {
+  ownerOnly(ctx, "confirm a memory");
   const memory = await own<any>(ctx, memories, id, "memory");
   await ctx.db.patch(memories, id, { status: "confirmed", confirmedAt: Date.now(), updatedAt: Date.now() });
   const evidence = await verify(ctx, memories, id, { status: "confirmed" });
@@ -254,6 +266,7 @@ export async function confirmMemory(ctx: MutationCtx, id: string, meta: Meta) {
 }
 
 export async function updateMemory(ctx: MutationCtx, id: string, change: { content?: string; kind?: MemoryKind; subject?: string; date?: Day | null }, meta: Meta) {
+  ownerOnly(ctx, "edit a memory");
   const memory = await own<any>(ctx, memories, id, "memory");
   // An edit by the user is the user's own statement: it is confirmed.
   await ctx.db.patch(memories, id, {
@@ -271,6 +284,7 @@ export async function updateMemory(ctx: MutationCtx, id: string, change: { conte
 }
 
 export async function forgetMemory(ctx: MutationCtx, id: string, meta: Meta) {
+  ownerOnly(ctx, "forget a memory");
   const memory = await own<any>(ctx, memories, id, "memory");
   await ctx.db.delete(memories, id);
   if (await ctx.db.get(memories, id)) fail("INTERNAL", `Verification failed: memory ${id} still exists.`);
