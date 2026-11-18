@@ -178,3 +178,47 @@ test("a provider failure mid-turn ends the turn with an honest reply and no chan
     await model.close();
   }
 });
+
+test("provenance: an approved model proposal is the model's in the action log (which model, from which message), a memory it proposes is confirmed only by the owner's approval, and rejecting one records nothing as done", async () => {
+  const { t, model } = await withModel();
+  try {
+    model.scripts.push({ toolCalls: [
+      { id: "call_t", name: "tasks_create", args: JSON.stringify({ title: "Book the movers" }) },
+      { id: "call_m", name: "memory_add", args: JSON.stringify({ kind: "preference", subject: "moving", content: "Ada prefers morning moves", proposedBy: { model: "forged/model", messageId: "forged" } }) },
+      { id: "call_x", name: "tasks_create", args: JSON.stringify({ title: "Something Ada will refuse" }) },
+    ] });
+    model.scripts.push({ text: ["I've proposed those; they need your approval."] });
+    const out = await turn(t, "ada", { text: "Plan the move: book movers, and remember I like mornings.", clientId: "client-prov" });
+    const reply = await lastReply(t, "ada", out.conversationId);
+    const [task, memory, refused] = reply.agent!.proposals;
+    const userMessage = (await t.as("ada").query(api.conversations.messagesOf, { conversationId: out.conversationId })).find((m) => m.role === "user")!;
+    // The turn, not the model, says who proposed it: a forged proposedBy from the model is replaced.
+    assert.deepEqual(memory!.input.proposedBy, { model: "ollama/loop", messageId: userMessage.id });
+    assert.deepEqual(task!.input.proposedBy, { model: "ollama/loop", messageId: userMessage.id });
+    assert.equal((await t.as("ada").query(api.memory.list, {})).length, 0, "nothing is remembered before approval");
+
+    const ada = { id: "ada", type: "user" as const, roles: ["owner", "admin"] };
+    await t.runtime.agent.approveOwn(task!.taskId, task!.actionId, ada);
+    await t.runtime.agent.approveOwn(memory!.taskId, memory!.actionId, ada);
+    await t.runtime.agent.rejectOwn(refused!.taskId, refused!.actionId, ada);
+
+    const log = await t.as("ada").query(api.actions.list, {});
+    const created = log.find((a) => a.kind === "task.create" && (a.input as any).title === "Book the movers")!;
+    assert.equal(created.via, "model", "an approved model proposal is not recorded as the person's own UI action");
+    assert.deepEqual(created.proposedBy, { model: "ollama/loop", messageId: userMessage.id });
+    assert.equal(created.messageId, userMessage.id);
+    assert.equal(created.conversationId, out.conversationId);
+    const remembered = (await t.as("ada").query(api.memory.list, {})).find((m) => m.content === "Ada prefers morning moves")!;
+    assert.equal(remembered.status, "confirmed", "the owner's approval is the confirmation");
+    assert.equal(remembered.source.kind, "model");
+    assert.equal(log.filter((a) => a.kind === "task.create" && (a.input as any).title === "Something Ada will refuse").length, 0, "a rejected proposal leaves no action");
+    assert.equal((await t.as("ada").query(api.tasks.list, {})).some((x) => x.title === "Something Ada will refuse"), false);
+
+    // proposedBy names the owner's own message, or nothing runs: it can attribute, never reach another person.
+    const grace = await t.as("grace").mutation(api.assistant.send, { text: "remind me to call mum tomorrow" });
+    await assert.rejects(t.as("ada").mutation(api.tasks.create, { title: "x", proposedBy: { model: "m", messageId: grace.messageId } }), /NOT_FOUND|No message/);
+  } finally {
+    await t.close();
+    await model.close();
+  }
+});

@@ -177,8 +177,12 @@ export async function saveShared(ctx: MutationCtx, inv: any): Promise<{ text: st
     const content = `Saved from ${surfaceLabel(inv.surface.adapter)}: ${what}`.slice(0, 1000);
     const meta = { via: "job" as const, conversationId: inv.conversationId };
     const messageId = await appendMessage(ctx, inv.conversationId, { role: "user", text: `${inv.instruction || "Keep this"}\n\n${describeContext(inv.context)}`.slice(0, 4000) });
-    await ops.remember(ctx, { kind: "fact", subject: (c.title ?? c.name ?? "shared").slice(0, 100), content, status: "confirmed" }, { ...meta, messageId });
-    const text = `Saved it to your notes: ${what.slice(0, 300)}. Ask me about it any time.`;
+    // "Keep this" in the person's own words is theirs; a model's reading of what they wanted is a suggestion.
+    const byModel = inv.interpretation?.basis === "model";
+    await ops.remember(ctx, { kind: "fact", subject: (c.title ?? c.name ?? "shared").slice(0, 100), content, status: byModel ? "inferred" : "confirmed" }, { ...meta, ...(byModel ? { via: "model" as const } : {}), messageId });
+    const text = byModel
+      ? `Kept it as a suggested note: ${what.slice(0, 300)}. Confirm it in Memory if you want me to rely on it.`
+      : `Saved it to your notes: ${what.slice(0, 300)}. Ask me about it any time.`;
     const replyId = await appendMessage(ctx, inv.conversationId, { role: "assistant", text });
     return { text, replyId };
 }

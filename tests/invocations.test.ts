@@ -351,3 +351,35 @@ test("with a model: it plans to assess the shared organization (no search), and 
     assert.equal(model.requests.length, 2, "plan and assessment; no email, no other call");
   } finally { await t.close(); await model.close(); }
 });
+
+test("a share the model judged to be \"keep it\" is a suggested (inferred) note from the model, never a confirmed fact; the person's own \"Remember this\" is confirmed", async () => {
+  const { startStreamingModel } = await import("./fixtures/streaming-model.js");
+  const model = await startStreamingModel();
+  authority.grant("ada");
+  const t = await fresh();
+  const ada = { id: "ada", type: "user" as const, roles: ["owner", "admin"] };
+  try {
+    await t.runtime.services.asPrincipal(ada as never, (v) => t.runtime.services.intelligence!.set({ ...t.runtime.services.scope, provider: "ollama", model: "loop", endpoint: `${model.url}/v1` }, v));
+    model.scripts.push({ text: [JSON.stringify({ intent: "save", reason: "they seem to want it kept" })] });
+    const byModel = envelope("hmm, this one", [{ kind: "selection", url: "https://example.com/heat-pumps", text: "Cold-climate heat pumps keep 70% capacity at -15C." }]);
+    await t.as("ada").mutation(api.invocations.submit, { envelope: byModel });
+    await settle(t);
+    const judged = (await get(t, "ada", byModel.invocationId)).invocation;
+    assert.deepEqual([judged.state, judged.interpretation.intent, judged.interpretation.basis], ["completed", "save", "model"]);
+    const suggested = (await t.as("ada").query(api.memory.list, {})).find((m: any) => /heat pumps keep 70%/.test(m.content))!;
+    assert.equal(suggested.status, "inferred", "the model's reading of what Ada wanted is a suggestion");
+    assert.equal(suggested.source.kind, "model");
+    assert.equal(suggested.confirmedAt, undefined);
+    assert.match(judged.result?.text ?? JSON.stringify(judged), /suggested note/);
+
+    const explicit = envelope("Remember this", [{ kind: "selection", url: "https://example.com/rebates", text: "The state rebate ends in March." }]);
+    await t.as("ada").mutation(api.invocations.submit, { envelope: explicit });
+    await settle(t);
+    const kept = (await t.as("ada").query(api.memory.list, {})).find((m: any) => /rebate ends in March/.test(m.content))!;
+    assert.equal(kept.status, "confirmed", "Ada's own words are hers");
+
+    // Confirming the suggestion is Ada's act, and makes it confirmed.
+    await t.as("ada").mutation(api.memory.confirm, { id: suggested.id });
+    assert.equal((await t.as("ada").query(api.memory.list, {})).find((m: any) => m.id === suggested.id)!.status, "confirmed");
+  } finally { await t.close(); await model.close(); }
+});

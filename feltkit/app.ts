@@ -503,11 +503,20 @@ export const actions = app.collection(
     delegation: s.optional(s.object({ agent: s.string(), agentAuthority: s.string(), capability: s.string(), decisionId: s.string(), delegationId: s.string() })),
     conversationId: s.optional(s.string()),
     messageId: s.optional(s.string()),
+    /** A model proposed this and the owner approved it (feltkit/turn.ts): which model, from which message. */
+    proposedBy: s.optional(s.object({ model: s.string({ maxLength: 200 }), messageId: s.string({ maxLength: 100 }) })),
     createdAt: s.number(),
     decidedAt: s.optional(s.number()),
   },
   { indexes: [{ fields: ["owner", "seq"] }, { fields: ["owner", "status"] }] },
 );
+
+/**
+ * Set by PersonalOS's own turn (feltkit/turn.ts) on what a model proposes: the model and the message it
+ * answered. It is part of the proposal's input, so the owner's approval covers it; it can only attribute
+ * a change to a model, never widen what the caller may do.
+ */
+export const PROPOSED_BY = s.optional(s.object({ model: s.string({ minLength: 1, maxLength: 200 }), messageId: s.string({ minLength: 1, maxLength: 100 }) }));
 
 export const settings = app.collection(
   "settings",
