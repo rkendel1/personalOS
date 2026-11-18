@@ -10,7 +10,7 @@
  * other's data.
  */
 import { feltkit, s } from "@feltdb/feltkit";
-import { CAPABILITIES } from "./_authority.js";
+import { AGENT_CAPABILITIES, CAPABILITIES } from "./_authority.js";
 
 /** What a person who owns an assistant may do. */
 const OWNER = [
@@ -78,7 +78,10 @@ export const app = feltkit({
     identitylinker: ["identity.resolve", "identity.link", "links.write"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
     xadapter: XADAPTER,
-    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*"],
+    // An agent outside PersonalOS (docs/AGENTS.md): its session holds nothing of its own; it acts only for a
+    // person, under that person's grants to it (FeltKit's delegated /appport).
+    agent: [],
+    admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*", "feltkit.authority.agents"],
   },
   auth: { accounts: { roles: ["owner"] } },
   dev: {
@@ -99,7 +102,7 @@ export const app = feltkit({
   authority: {
     local: true,
     url: { env: "AUTHBOUNDRY_URL" },
-    capabilities: [...CAPABILITIES],
+    capabilities: [...CAPABILITIES, ...AGENT_CAPABILITIES],
     application: { env: "AUTHBOUNDRY_APPLICATION", development: "personalos" },
     checkCredential: "credential-ref:authboundry-check",
     executor: { principal: "agent:personalos", type: "agent" },
@@ -441,7 +444,9 @@ export const actions = app.collection(
     input: s.record(s.unknown()),
     evidence: s.optional(s.object({ collection: s.string(), id: s.string(), version: s.number(), verified: s.boolean() })),
     error: s.optional(s.object({ code: s.string(), message: s.string() })),
-    via: s.enum(["chat", "ui", "model", "job"] as const),
+    via: s.enum(["chat", "ui", "model", "job", "agent"] as const),
+    /** An agent outside PersonalOS acted for the owner (FeltKit's verified delegation): who, under which AuthBoundry decision. */
+    delegation: s.optional(s.object({ agent: s.string(), agentAuthority: s.string(), capability: s.string(), decisionId: s.string(), delegationId: s.string() })),
     conversationId: s.optional(s.string()),
     messageId: s.optional(s.string()),
     createdAt: s.number(),
