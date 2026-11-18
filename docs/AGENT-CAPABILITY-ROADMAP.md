@@ -1,6 +1,6 @@
 # What a person can delegate to PersonalOS: capabilities and roadmap
 
-**Status:** research only. Nothing was implemented, versioned, deployed or published for this report.
+**Status:** research; decisions recorded in §11 (2026-11-18). Nothing was implemented, versioned, deployed or published for this report.
 **Dated:** 2026-11-18.
 **Read at:**
 
@@ -554,19 +554,78 @@ Nothing in the roadmap below is a prerequisite.
 
 ---
 
-## 11. Open questions
+## 11. Decisions (2026-11-18)
 
-1. **What should chat hand to eve?**
-   - Everything?
-   - Only what the person marks "work on this"?
-   - Only what the rules or the model judge to be multi-step?
-   - PersonalOS must keep working without eve and without a model.
-2. **Standing approval for low-risk external actions** (for example accepting a meeting from a known contact): ever, or always per action?
-3. **Which provider first: Google or Microsoft?** Should mail be read-only at first?
-4. **Push channel:** web push, the iOS app (APNs) or e-mail first?
-5. **Should proactive reviews ever act**, or always end in proposals? This report assumes proposals.
-6. **Where should the PersonalOS eve agent live?** In this repository or its own. Today it is an eve2 example.
-7. **Should owner-started research have a budget**, and should model-classified saves be inferred (U6, U14)?
+**The product invariant.** PersonalOS stays fully functional on its own. eve is the durable execution engine for work that benefits from delegation, and the person never has to understand the difference to use it.
+
+| Question | Decision |
+| --- | --- |
+| What does chat hand to eve? | Work that needs durable, multi-step execution goes automatically. Simple interactions stay in PersonalOS. |
+| Must the person mark "work on this"? | No. **Work on this** is an explicit override, not a requirement. |
+| Can a model decide what is delegated? | It may recommend. Deterministic rules and the person's explicit intent control the handoff. |
+| Must PersonalOS work without eve or a model? | Yes. This is a product invariant. |
+| Standing approval for external actions? | Not initially. Every external write needs approval. |
+| First account provider | Google, behind provider-neutral integration contracts. |
+| Mail access | Read-only first, drafting next, sending only once delegated approval (U7) exists. |
+| First notification channel | E-mail, then web push, then APNs. |
+| Can proactive reviews act? | Not initially. They end in proposals, with no autonomous external actions. |
+| Where does the PersonalOS eve agent live? | In this repository, as PersonalOS's own agent application. eve2 stays the framework. |
+| Research budgets | Owner-started research gets configurable limits (U14). |
+| Model-classified saves | Stored as inferred until the person confirms (U6). |
+
+### How chat routes work
+
+There is no model authority over the handoff. The deterministic rules recognize these and hand them to eve:
+- multi-step objectives;
+- work that takes significant time;
+- work spanning several tools or records;
+- research with several stages;
+- work that must continue after a disconnect;
+- work that will need the person's questions or approvals;
+- explicit requests to delegate, continue or work in the background.
+
+| Kind of request | Example | Where it goes |
+| --- | --- | --- |
+| Simple | "What's on today?" | PersonalOS, unchanged |
+| Ambiguous | "Help me think through the kitchen remodel." | Starts normally in PersonalOS, and offers **Work on this** |
+
+**Delegation is not authorization.** eve still needs the person's grant for every capability it invokes.
+
+### Without eve, or without a model
+
+**If eve is unavailable:**
+- tasks, reminders, projects, memory, documents and the briefing continue;
+- a request that needs eve gets a clear "unavailable, kept" status;
+- work is never discarded or falsely reported as complete.
+
+**If the model is unavailable:**
+- deterministic functions and scheduled reminders continue;
+- delegated work can recover where its remaining steps are deterministic;
+- new reasoning-dependent work waits or asks the person to retry.
+
+### External authority
+
+| Allowed under the grant | Needs per-action approval | Never automated |
+| --- | --- | --- |
+| Reading mail and calendar, drafting mail, proposing events | Sending mail; creating, moving or accepting events; booking | Purchases and payments (the person acts) |
+
+Standing grants for narrowly defined actions may come later. Each would need explicit configuration, expiry, revocation and an auditable scope.
+
+### Changes to the sequence in §10
+
+1. **U7 (delegated proposals) is a security boundary**, not an integration feature. It comes before any external write is considered, ahead of the rest of Slice D.
+2. **Deployment does not wait for Slice C.** What exists is useful now. Slice B is developed while PersonalOS is in use, provided the eve and FeltKit persistence requirements in §9 are met.
+
+**Revised order:**
+1. Universal delegation (B, plus U6, plus moving the agent here).
+2. Personal knowledge (C).
+3. Communication and accounts: notifications, Google read-only, U7 before any write.
+4. Continuous agent (E, with U4 and U5).
+5. Refinement: U14, U17, specialist agents only where justified.
+
+One slice at a time, each reviewed before the next.
+
+**Success criterion for Slice B.** Open PersonalOS, ask it to do meaningful work, close the app, come back later, see what happened, answer a question if needed, and trust that it neither repeated nor invented any action.
 
 ---
 
