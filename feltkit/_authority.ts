@@ -72,7 +72,7 @@ export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = 
  * attach), download link or removal: bytes and bearer links are not passed through an agent, and removing
  * a document is the person's own act (feltkit/documents.ts).
  */
-export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today", "memory.list", "memory.propose", "projects.list", "projects.create", "projects.update", "documents.list", "documents.update"] as const;
+export const AGENT_CAPABILITIES = ["tasks.list", "tasks.create", "tasks.update", "tasks.complete", "tasks.reopen", "briefing.today", "memory.list", "memory.propose", "projects.list", "projects.create", "projects.update", "documents.list", "documents.update", "research.start", "research.list", "research.get", "research.cancel", "research.retry"] as const;
 
 export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number], string> = {
   "tasks.list": "See your tasks",
@@ -88,4 +88,9 @@ export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number]
   "projects.update": "Rename your projects, or mark them active, paused or done",
   "documents.list": "See your saved documents' names and notes (not their contents)",
   "documents.update": "Change a document's note, or attach it to one of your projects or tasks",
+  "research.start": "Start research for you, within the research budget you set for it",
+  "research.list": "See your research runs",
+  "research.get": "Read a research run's sources and results",
+  "research.cancel": "Stop your research runs",
+  "research.retry": "Resume research it started (never completed research), within budget",
 };

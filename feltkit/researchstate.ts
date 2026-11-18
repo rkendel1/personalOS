@@ -3,10 +3,10 @@
  * and its discovery, and replying in the conversation. Separate from research.ts so those actions can
  * name them through the generated API.
  */
-import { fail, s } from "@feltdb/feltkit";
-import { app, conversations, memories, messages, prospects, researchRuns, researchSources } from "./app.js";
+import { fail, s, type MutationCtx } from "@feltdb/feltkit";
+import { app, conversations, memories, messages, prospects, researchBudgets, researchRuns, researchSources } from "./app.js";
 import { describeDiscovery, type Discovery } from "./_capabilities.js";
-import { companyName, domainOf, planQueries, productKnowledge } from "./_research.js";
+import { companyName, domainOf, outcomeOf, planQueries, productKnowledge } from "./_research.js";
 import { followResearch } from "./invocationstate.js";
 import { appendMessage } from "./assistant.js";
 import * as ops from "./_ops.js";
@@ -144,11 +144,33 @@ export const resume = app.mutation({
   access: "research.run",
   args: { runId: s.string(), discovery: s.record(s.unknown()) },
   returns: RunView,
-  handler: async (ctx, { runId, discovery }) => {
-    const run = await ops.own<any>(ctx, researchRuns, runId, "research run");
+  handler: async (ctx, { runId, discovery }) => resumeRun(ctx, await ops.own<any>(ctx, researchRuns, runId, "research run"), discovery as unknown as Discovery),
+});
+
+/**
+ * Resume a stopped run (resume, retryRun). A completed run is never run again. A run an agent started
+ * continues only within its budget: the calls it has not charged are reserved again if they were released,
+ * plus any `more` the caller asks for, from what the owner still allows that agent.
+ */
+async function resumeRun(ctx: MutationCtx, run: any, d: Discovery, more = 0) {
+    const runId = run.id;
     if (run.status === "running") return { runId, conversationId: run.conversationId, status: run.status, reply: "Still running.", messageId: "", replyId: "" };
     if (run.status === "completed") fail("FAILED_PRECONDITION", "This research is complete. Ask again to start a new one.");
-    const d = discovery as unknown as Discovery;
+    let budget = run.budget;
+    if (budget) {
+      const allocation = budget.allocation + more;
+      if (allocation - budget.charged <= 0) fail("FORBIDDEN", `This research has used all ${budget.allocation} calls it was given; retry it with more (budget) to continue.`);
+      const need = (budget.released ? budget.allocation - budget.charged : 0) + more;
+      if (need > 0) await reserve(ctx, run.owner, budget.agent, need);
+      budget = { ...budget, allocation, released: false };
+    } else if (more) fail("INVALID_ARGUMENT", "This research has no budget to add to.");
+    if (!Array.isArray((d as { needs?: unknown } | undefined)?.needs)) {
+      // Stopped before its first step discovered anything: it starts there again.
+      await ctx.db.patch(researchRuns, runId, { status: "running", phase: "discovering", ...(budget ? { budget } : {}), cancelRequested: false, cancelledBy: undefined, blocker: undefined, completedAt: undefined, updatedAt: Date.now() });
+      enqueueStep(ctx, runId);
+      return { runId, conversationId: run.conversationId, status: "running", reply: "Starting the research again.", messageId: "", replyId: "" };
+    }
+    const discovery = d as unknown as Record<string, unknown>;
     const blocker = blockerOf(d);
     const queries = run.queries.map((q: any) => (q.state === "failed" ? { ...q, state: "pending", attempts: 0, error: undefined } : q));
     const candidates = run.candidates?.map((c: any) => (c.state === "failed" ? { ...c, state: c.pageIds?.length ? "read" : "pending", attempts: 0 } : c));
@@ -156,15 +178,14 @@ export const resume = app.mutation({
     const rerun = queries.some((q: any, i: number) => q.state === "pending" && run.queries[i].state === "failed");
     const phase = rerun && run.phase && run.phase !== "planning" ? "searching" : run.phase === "done" ? "finishing" : run.phase;
     const status = blocker ? "blocked" : "running";
-    await ctx.db.patch(researchRuns, runId, { status, discovery, queries, ...(candidates ? { candidates } : {}), ...(phase ? { phase } : {}), cancelRequested: false, blocker: blocker ?? undefined, completedAt: undefined, updatedAt: Date.now() });
+    await ctx.db.patch(researchRuns, runId, { status, discovery, queries, ...(candidates ? { candidates } : {}), ...(phase ? { phase } : {}), ...(budget ? { budget } : {}), cancelRequested: false, cancelledBy: undefined, blocker: blocker ?? undefined, completedAt: undefined, updatedAt: Date.now() });
     const left = queries.filter((q: any) => q.state === "pending").length;
     const reply = blocker ? blockedReply(run.product, d, blocker) : `Resuming the research for ${run.product}${left ? `: ${left} search(es) to go` : ""}.`;
     const replyId = run.conversationId ? await appendMessage(ctx, run.conversationId, { role: "assistant", text: reply }) : "";
     if (!blocker) enqueueStep(ctx, runId);
     await followResearch(ctx, run, status, reply);
     return { runId, conversationId: run.conversationId, status, reply, messageId: replyId, replyId };
-  },
-});
+}
 
 
 /** Record a question about what PersonalOS can do, and the answer discovery gave (no model involved). */
@@ -243,12 +264,152 @@ export const advance = app.mutation({
     const usage = { ...ZERO_USAGE, ...(run.usage ?? {}) } as Record<string, number>;
     for (const [k, v] of Object.entries(a.usage ?? {})) usage[k] = (usage[k] ?? 0) + v;
     const steps = [...(run.steps ?? []), { at: now, ...a.step }].slice(-200);
-    await ctx.db.patch(researchRuns, run.id, { ...patch, usage, steps, updatedAt: now } as any);
+    // A run that has finished gives back the budget it did not charge (a blocked run keeps it, to resume).
+    const ended = ["completed", "partial", "failed"].includes(String(patch.status ?? ""));
+    const budget = ended ? await releaseBudget(ctx, run) : undefined;
+    await ctx.db.patch(researchRuns, run.id, { ...patch, usage, steps, ...(budget ? { budget } : {}), updatedAt: now } as any);
     if (a.reply && run.conversationId) await appendMessage(ctx, run.conversationId, { role: "assistant", text: a.reply });
     // A run an invocation started: the invocation follows it when it ends (or stops short).
     const status = (patch.status as string | undefined) ?? run.status;
     if (status !== "running") await followResearch(ctx, run as any, status, a.reply ?? a.step.outcome);
     if (a.next) enqueueStep(ctx, run.id, a.delayMs ?? 0);
     return { applied: true, sourceIds };
+  },
+});
+
+// ── Research an agent runs for the owner (research.start, under FeltKit's verified delegation) ──────
+
+/** Reserve `calls` from what the owner lets `agent` spend on research. Fails closed: no budget, or not enough left. */
+async function reserve(ctx: MutationCtx, owner: string, agent: string, calls: number) {
+  const record = (await ctx.db.find(researchBudgets, { owner, agent }))[0];
+  if (!record) fail("FORBIDDEN", `No research budget is set for ${agent}: the owner sets one (delegation.setResearchBudget) before it can start research.`);
+  const left = record.calls - record.reserved;
+  if (calls > left) fail("FORBIDDEN", `The research budget for ${agent} has ${Math.max(0, left)} call(s) left; ${calls} asked for.`);
+  await ctx.db.patch(researchBudgets, record.id, { reserved: record.reserved + calls, updatedAt: Date.now() });
+}
+
+/** Give back what a run that has stopped did not charge (once). What it charged stays spent. */
+export async function releaseBudget(ctx: MutationCtx, run: any) {
+  const b = run.budget;
+  if (!b || b.released) return undefined;
+  const record = (await ctx.db.find(researchBudgets, { owner: run.owner, agent: b.agent }))[0];
+  if (record) await ctx.db.patch(researchBudgets, record.id, { reserved: Math.max(0, record.reserved - (b.allocation - b.charged)), updatedAt: Date.now() });
+  return { ...b, released: true };
+}
+
+const Started = s.object({ runId: s.string(), conversationId: s.string(), status: s.string(), budget: s.nullable(s.object({ agent: s.string(), allocation: s.number(), charged: s.number(), released: s.boolean() })) });
+
+/**
+ * Start research for an outcome stated in words, as a transaction: the run is recorded (and, for an agent
+ * acting for the owner, its budget reserved) here; the first step discovers what the platform offers and
+ * plans. An agent must name a budget (billable calls), within what the owner lets it spend.
+ */
+export const start = app.mutation({
+  access: "research.run",
+  args: { text: s.string({ minLength: 1, maxLength: 4000 }), budget: s.optional(s.integer({ minimum: 1, maximum: 1000 })) },
+  returns: Started,
+  capability: { name: "research.start", description: "Start research for an outcome (for example: find new customers for <product>). An agent acting for the owner must give a budget: the most billable calls (model generations and web searches) the run may make." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { text, budget }) => {
+    const owner = ops.me(ctx);
+    const delegated = ops.delegationOf(ctx);
+    if (delegated && budget === undefined) fail("INVALID_ARGUMENT", "Research started for the owner needs a budget: the most billable calls it may make.");
+    if (delegated) await reserve(ctx, owner, delegated.agentAuthority, budget!);
+    const allocation = delegated ? { agent: delegated.agentAuthority, allocation: budget!, charged: 0, released: false } : null;
+    const outcome = outcomeOf(text);
+    const now = Date.now();
+    const conversationId = await ctx.db.insert(conversations, { owner, title: titleOf(text), createdAt: now, updatedAt: now, messageCount: 0 });
+    await appendMessage(ctx, conversationId, { role: "user", text });
+    const runId = await ctx.db.insert(researchRuns, {
+      owner, kind: "prospects", request: text, product: outcome?.product ?? "(planning)", objective: outcome?.objective ?? text.slice(0, 1000),
+      status: "running", phase: "discovering", discovery: {}, profile: { statements: [], keywords: [] }, queries: [],
+      ...(allocation ? { budget: allocation } : {}), conversationId, createdAt: now, updatedAt: now,
+    });
+    const stored = (await ctx.db.get(researchRuns, runId))!;
+    await ops.record(ctx, { kind: "research.start", summary: `Research started: ${text}`, status: "succeeded", input: { text, ...(budget !== undefined ? { budget } : {}) }, evidence: { collection: "researchRuns", id: runId, version: Number(stored.__version), verified: stored.status === "running" } }, { via: "ui", conversationId });
+    enqueueStep(ctx, runId);
+    return { runId, conversationId, status: "running", budget: allocation };
+  },
+});
+
+/** A started run's first step: what discovery found, and the plan (as `create` makes it when research begins in the app). */
+export const prepare = app.mutation({
+  access: "research.work",
+  args: { runId: s.string(), expectUpdatedAt: s.number(), discovery: s.record(s.unknown()), planning: s.enum(["rules", "model"] as const) },
+  returns: s.object({ applied: s.boolean() }),
+  handler: async (ctx, a) => {
+    const run = await ctx.db.get(researchRuns, a.runId);
+    if (!run || run.owner !== ops.me(ctx)) fail("NOT_FOUND", "research run not found");
+    if (run.status !== "running" || run.cancelRequested || run.updatedAt !== a.expectUpdatedAt || run.phase !== "discovering") return { applied: false };
+    const d = a.discovery as unknown as Discovery;
+    const product = run.product === "(planning)" ? "" : run.product;
+    const known = (await ctx.db.find(memories, { owner: run.owner })).map((m: any) => ({ id: m.id, content: String(m.content), status: m.status }));
+    const knowledge = productKnowledge(product || "\u0000", known);
+    const now = Date.now();
+    if (a.planning === "rules" && !product) {
+      const blocker = { need: "a research outcome", state: "failed", detail: "Without a model, research needs an outcome it recognizes, such as: find new customers for <product>." };
+      const budget = await releaseBudget(ctx, run);
+      await ctx.db.patch(researchRuns, run.id, { status: "failed", phase: "done", discovery: a.discovery, profile: knowledge, blocker, ...(budget ? { budget } : {}), completedAt: now, updatedAt: now });
+      if (run.conversationId) await appendMessage(ctx, run.conversationId, { role: "assistant", text: `I can't pursue that without a model: ${blocker.detail} Nothing was searched.` });
+      return { applied: true };
+    }
+    const queries = a.planning === "rules" ? planQueries(product, knowledge) : [];
+    const blocker = blockerOf(d);
+    await ctx.db.patch(researchRuns, run.id, {
+      discovery: a.discovery, profile: knowledge, phase: a.planning === "model" ? "planning" : "searching",
+      ...(a.planning === "rules" ? { plan: { basis: "rules" as const, criteria: knowledge.keywords.map((k) => `mentions "${k}"`) } } : {}),
+      queries: queries.map((text) => ({ text, state: "pending" as const, attempts: 0, origin: "plan" as const })),
+      status: blocker ? "blocked" : "running", ...(blocker ? { blocker } : {}), updatedAt: now,
+    });
+    const reply = blocker ? blockedReply(product || "this request", d, blocker) : a.planning === "model" ? planningReply(d) : startReply(product, queries, d, knowledge);
+    if (run.conversationId) await appendMessage(ctx, run.conversationId, { role: "assistant", text: reply });
+    if (!blocker) enqueueStep(ctx, run.id);
+    return { applied: true };
+  },
+});
+
+/**
+ * Charge one billable call (a model generation or a web search) to a run an agent started, before the call
+ * is made. Refused if the run has stopped, moved on, or used its allocation (then it stops, saying why).
+ */
+export const charge = app.mutation({
+  access: "research.work",
+  args: { runId: s.string(), expectUpdatedAt: s.number(), call: s.enum(["model", "search"] as const) },
+  returns: s.object({ ok: s.boolean(), updatedAt: s.number(), reason: s.optional(s.string()) }),
+  handler: async (ctx, a) => {
+    const run = await ctx.db.get(researchRuns, a.runId);
+    if (!run || run.owner !== ops.me(ctx)) fail("NOT_FOUND", "research run not found");
+    if (!run.budget) return { ok: true, updatedAt: run.updatedAt };
+    if (run.status !== "running" || run.cancelRequested || run.updatedAt !== a.expectUpdatedAt) return { ok: false, updatedAt: run.updatedAt, reason: "stopped" };
+    const now = Date.now();
+    if (run.budget.charged >= run.budget.allocation) {
+      const blocker = { need: "research budget", state: "exhausted", detail: `This research used all ${run.budget.allocation} billable calls it was given.`, howToEnable: "Retry it with more budget, within what you allow the agent." };
+      await ctx.db.patch(researchRuns, run.id, { status: "blocked", blocker, updatedAt: now, steps: [...(run.steps ?? []), { at: now, phase: run.phase ?? "", ms: 0, outcome: `stopped before a ${a.call} call: budget used` }].slice(-200) });
+      if (run.conversationId) await appendMessage(ctx, run.conversationId, { role: "assistant", text: `I stopped the research for ${run.product}: it used all ${run.budget.allocation} calls it was given. What I found is kept.` });
+      return { ok: false, updatedAt: now, reason: "exhausted" };
+    }
+    await ctx.db.patch(researchRuns, run.id, { budget: { ...run.budget, charged: run.budget.charged + 1 }, updatedAt: now });
+    return { ok: true, updatedAt: now };
+  },
+});
+
+/**
+ * Retry a stopped run (failed, partial, blocked, or cancelled by the agent). Never a completed run. An agent
+ * retries only runs it started, never one the owner stopped, and within budget (`budget`: calls to add).
+ */
+export const retryRun = app.mutation({
+  access: "research.run",
+  args: { runId: s.string(), budget: s.optional(s.integer({ minimum: 1, maximum: 1000 })) },
+  returns: RunView,
+  capability: { name: "research.retry", description: "Continue a stopped research run where it left off (never a completed one), within its budget; `budget` adds calls from what the owner allows." },
+  retry: { sequenceConflicts: 3 },
+  handler: async (ctx, { runId, budget }) => {
+    const run = await ops.own<any>(ctx, researchRuns, runId, "research run");
+    const delegated = ops.delegationOf(ctx);
+    if (delegated && run.budget?.agent !== delegated.agentAuthority) fail("FORBIDDEN", "An agent retries only research it started.");
+    if (delegated && run.cancelledBy === "owner") fail("FORBIDDEN", "The owner stopped this research; only they can resume it.");
+    const result = await resumeRun(ctx, run, run.discovery as unknown as Discovery, budget ?? 0);
+    if (result.status !== run.status) await ops.record(ctx, { kind: "research.retry", summary: `Research resumed: ${run.request}`.slice(0, 500), status: "succeeded", input: { runId, ...(budget ? { budget } : {}) } }, { via: "ui", ...(run.conversationId ? { conversationId: run.conversationId } : {}) });
+    return result;
   },
 });

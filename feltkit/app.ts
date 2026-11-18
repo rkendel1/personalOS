@@ -671,7 +671,7 @@ export const researchRuns = app.collection(
       ms: s.optional(s.number()),
     })),
     /** Which step runs next. Absent on runs from before steps (they run search, then prospects). */
-    phase: s.optional(s.enum(["planning", "searching", "selecting", "reading", "assessing", "finishing", "done"] as const)),
+    phase: s.optional(s.enum(["discovering", "planning", "searching", "selecting", "reading", "assessing", "finishing", "done"] as const)),
     /** How the plan was made: rules, or a model proposal (its generation) that the rules accepted. */
     plan: s.optional(s.object({
       basis: s.enum(["rules", "model"] as const),
@@ -717,6 +717,14 @@ export const researchRuns = app.collection(
     /** Why it stopped short, in the person's terms, with what would unblock it. */
     blocker: s.optional(s.object({ need: s.string(), state: s.string(), detail: s.string({ maxLength: 1000 }), howToEnable: s.optional(s.string({ maxLength: 1000 })) })),
     cancelRequested: s.optional(s.boolean()),
+    /** Who stopped it: "owner", or the agent (its AuthBoundry principal) that cancelled it for them. */
+    cancelledBy: s.optional(s.string()),
+    /**
+     * A run an agent started for the owner (research.start under FeltKit's delegation): the calls reserved
+     * for it from the owner's research budget for that agent, and those charged. A model generation or a web
+     * search is charged before it is made; none is made once `charged` reaches `allocation`.
+     */
+    budget: s.optional(s.object({ agent: s.string(), allocation: s.number(), charged: s.number(), released: s.boolean() })),
     conversationId: s.optional(s.string()),
     prospectCount: s.optional(s.number()),
     createdAt: s.number(),
@@ -724,6 +732,17 @@ export const researchRuns = app.collection(
     completedAt: s.optional(s.number()),
   },
   { indexes: [{ fields: ["owner", "createdAt"] }] },
+);
+
+/**
+ * What the owner lets an agent spend on research for them, in billable calls (a model generation or a web
+ * search). Set by the owner only (delegation.setResearchBudget). `reserved`: what running runs hold plus
+ * what finished runs charged; a run the agent starts reserves its allocation here, atomically.
+ */
+export const researchBudgets = app.collection(
+  "researchBudgets",
+  { owner, agent: s.string(), calls: s.number(), reserved: s.number(), updatedAt: s.number() },
+  { indexes: [{ fields: ["owner", "agent"] }] },
 );
 
 /** What a source returned, verbatim, and when: the evidence. Never edited by an assessment. */
