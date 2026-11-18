@@ -1,0 +1,6 @@
+{
+  "items": [
+    { "sku": "ALPHA-1", "name": "Alpha widget", "quantity": 42 },
+    { "sku": "BETA-2", "name": "Beta gadget", "quantity": 7 }
+  ]
+}

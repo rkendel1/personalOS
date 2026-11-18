@@ -1,0 +1,11 @@
+.appport-host/
+appport-provenance.jsonl
+.appport-agent-work/
+.acceptance-agent/
+.idempotency-agent/
+.reserve-agent/
+node_modules/
+.output/
+.eve/
+.*-agent/
+.feltkit-platform/

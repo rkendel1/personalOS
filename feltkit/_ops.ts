@@ -6,7 +6,7 @@
  */
 import { fail } from "@feltdb/feltkit";
 import type { MutationCtx } from "@feltdb/feltkit";
-import { actions, documents, memories, projects, tasks } from "./app.js";
+import { actions, documents, memories, messages, projects, tasks } from "./app.js";
 import { instant, nextOccurrence, type Day } from "./_dates.js";
 import type { MemoryKind } from "./_interpret.js";
 
@@ -17,6 +17,19 @@ export interface Meta {
   proposalId?: string;
   conversationId?: string;
   messageId?: string;
+  /** A model proposed it (and the owner approved): recorded as via "model", with which model. */
+  proposedBy?: { model: string; messageId: string };
+}
+
+/**
+ * The meta for a capability call: a model's approved proposal (`proposedBy`, which must name one of the
+ * owner's own messages) is the model's, otherwise the caller's interface (`fallback`).
+ */
+export async function originOf(ctx: MutationCtx, proposedBy: { model: string; messageId: string } | undefined, fallback: Meta): Promise<Meta> {
+  if (!proposedBy) return fallback;
+  const message = await ctx.db.get(messages, proposedBy.messageId);
+  if (!message || message.owner !== me(ctx)) fail("NOT_FOUND", `No message ${proposedBy.messageId}.`);
+  return { via: "model", proposedBy, conversationId: message.conversationId, messageId: proposedBy.messageId };
 }
 
 /**
@@ -74,6 +87,7 @@ export async function record(
     ...(delegated ? { delegation: { agent: delegated.agent, agentAuthority: delegated.agentAuthority, capability: delegated.capability, decisionId: delegated.decisionId, delegationId: delegated.delegationId } } : {}),
     ...(meta.conversationId ? { conversationId: meta.conversationId } : {}),
     ...(meta.messageId ? { messageId: meta.messageId } : {}),
+    ...(meta.proposedBy && !delegated ? { proposedBy: meta.proposedBy } : {}),
     createdAt: Date.now(),
     ...(entry.status !== "proposed" ? { decidedAt: Date.now() } : {}),
   });

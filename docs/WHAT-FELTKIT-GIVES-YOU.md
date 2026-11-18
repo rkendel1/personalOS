@@ -16,45 +16,45 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 
 | Class | Files | Lines of code | Meaning |
 |---|--:|--:|---|
-| domain | 43 | 6446 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
-| experience | 33 | 2542 | What people see and use: UI, styles, HTML, browser extension. |
-| infrastructure | 3 | 302 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
-| generated | 2 | 33 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
-| configuration | 9 | 310 | Build, package, deployment and tool configuration. |
-| tests | 38 | 6174 | Tests, fixtures and acceptance scripts. |
-| excluded | 51 | 8702 | Not code: documentation, images, fonts, lockfiles, licences. |
+| domain | 45 | 6710 | Server code that expresses the application: collections, rules, queries, mutations, actions (feltkit/). |
+| experience | 33 | 2639 | What people see and use: UI, styles, HTML, browser extension. |
+| infrastructure | 16 | 2802 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
+| generated | 2 | 34 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
+| configuration | 12 | 381 | Build, package, deployment and tool configuration. |
+| tests | 61 | 13169 | Tests, fixtures and acceptance scripts. |
+| excluded | 54 | 12308 | Not code: documentation, images, fonts, lockfiles, licences. |
 | unclassified | 12 | 0 | No rule applies. Declare it in feltkit.measure.json. |
 
-**Authored by the application** (domain + experience + infrastructure + configuration): 9600 lines in 88 files. Tests: 6174 lines.
+**Authored by the application** (domain + experience + infrastructure + configuration): 12532 lines in 106 files. Tests: 13169 lines.
 
 **Provenance.** Scaffolded by create-feltkit 0.3.22 (tasks): 20 files, 4 unchanged, 15 changed, 1 removed. Generated API: matches regeneration.
 
-**Definitions** (`app.*` in feltkit/): 11 action, 2 agent, 17 collection, 6 integration, 67 mutation, 27 query. Collections: documents, conversations, messages, memories, tasks, projects, actions, settings, identityLinks, invocations, interactions, researchRuns, researchBudgets, researchSources, prospects, xPosts, xState.
+**Definitions** (`app.*` in feltkit/): 11 action, 2 agent, 18 collection, 6 integration, 71 mutation, 28 query. Collections: documents, conversations, messages, memories, tasks, projects, actions, settings, identityLinks, agentwork, invocations, interactions, researchRuns, researchBudgets, researchSources, prospects, xPosts, xState.
 
 ### Platform consumption (static call sites)
 
 | API | Call sites | Files |
 |---|--:|--:|
-| `@feltdb/feltkit s` | 1562 | 28 |
-| `ctx.db` | 283 | 24 |
-| `@feltdb/feltkit fail` | 75 | 17 |
-| `@feltdb/feltkit/testing TestApp` | 55 | 18 |
-| `@feltdb/feltkit/testing createTestApp` | 51 | 20 |
-| `@feltdb/feltkit MutationCtx` | 48 | 9 |
-| `@feltdb/feltkit feltkit` | 46 | 1 |
-| `ctx.runMutation` | 34 | 4 |
-| `@feltdb/feltkit/react useMutation` | 33 | 5 |
-| `@feltdb/feltkit/react useQuery` | 25 | 5 |
+| `@feltdb/feltkit s` | 1640 | 29 |
+| `ctx.db` | 298 | 25 |
+| `@feltdb/feltkit fail` | 84 | 18 |
+| `@feltdb/feltkit/testing TestApp` | 60 | 19 |
+| `@feltdb/feltkit/testing createTestApp` | 55 | 21 |
+| `@feltdb/feltkit feltkit` | 51 | 1 |
+| `@feltdb/feltkit MutationCtx` | 50 | 10 |
+| `@feltdb/feltkit/react useMutation` | 36 | 5 |
+| `ctx.runMutation` | 36 | 4 |
+| `@feltdb/feltkit/react useQuery` | 26 | 5 |
 | `ctx.agent` | 21 | 4 |
-| `ctx.auth` | 20 | 11 |
+| `ctx.auth` | 21 | 11 |
 | `ctx.authority` | 19 | 7 |
 | `@feltdb/feltkit ActionCtx` | 14 | 3 |
 | `@feltdb/feltkit/client ref` | 11 | 1 |
 | `@feltdb/feltkit/react useFeltKit` | 10 | 6 |
 | `ctx.afterCommit.jobs` | 10 | 7 |
+| `ctx.integrations` | 10 | 4 |
 | `ctx.model` | 9 | 3 |
 | `ctx.runQuery` | 9 | 4 |
-| `ctx.integrations` | 8 | 4 |
 | `@feltdb/feltkit/server startServer` | 6 | 5 |
 | `ctx.afterCommit.notifications` | 5 | 4 |
 | `@feltdb/feltkit/client createClient` | 4 | 3 |
@@ -81,13 +81,13 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.33 (installed 0.3
 
 | Finding | Where | Evidence | Platform alternative |
 |---|---|---|---|
-| App-built business audit trail (acknowledged: the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part) | `feltkit/app.ts:488` | `export const actions = app.collection(` | app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence) |
+| App-built business audit trail (acknowledged: the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part) | `feltkit/app.ts:504` | `export const actions = app.collection(` | app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence) |
 | App-built queue or scheduler | `scripts/share-acceptance.mjs:84` | `const timer = setInterval(async () => {` | ctx.afterCommit.jobs.enqueue and operator-managed schedules |
 
 ### Checks
 
 - ✓ generated code current: feltkit/_generated/api.ts matches what codegen writes
-- ✓ declarations match files: 2 declaration(s), each matches a file
+- ✓ declarations match files: 5 declaration(s), each matches a file
 - ✓ every code file classified: every file with code has a class
 - ✓ acknowledged findings still exist: 1 acknowledged finding(s), each still present
 <!-- measure:end -->

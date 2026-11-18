@@ -1,0 +1,29 @@
+{
+  "name": "personalos-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "eve build",
+    "start": "eve start",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "appport-host": "node appport-host/server.mjs",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@appport/client": "1.1.8",
+    "@appport/protocol": "1.5.0",
+    "@appport/transport-http": "1.1.8",
+    "@feltdb/core": "0.22.0",
+    "ai": "^7.0.172",
+    "eve": "npm:@appport/eve@1.0.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@appport/resolver": "0.4.1",
+    "@appport/sdk": "1.9.0",
+    "@authboundry/core": "1.20.0",
+    "@authboundry/local": "0.1.1",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

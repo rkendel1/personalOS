@@ -1,5 +1,5 @@
 import { s } from "@feltdb/feltkit";
-import { app, memories, MEMORY_KINDS } from "./app.js";
+import { app, memories, MEMORY_KINDS, PROPOSED_BY } from "./app.js";
 import * as ops from "./_ops.js";
 
 const ui = { via: "ui" as const };
@@ -13,11 +13,11 @@ export const list = app.query({
 
 export const add = app.mutation({
   access: "memory.write",
-  args: { kind: s.enum(MEMORY_KINDS), subject: s.string({ maxLength: 200 }), content: s.string({ minLength: 1, maxLength: 2000 }), date: s.optional(s.string()) },
+  args: { kind: s.enum(MEMORY_KINDS), subject: s.string({ maxLength: 200 }), content: s.string({ minLength: 1, maxLength: 2000 }), date: s.optional(s.string()), proposedBy: PROPOSED_BY },
   returns: s.doc(memories),
-  capability: { name: "memory.add", description: "Record something the user states (stored as confirmed)." },
+  capability: { name: "memory.add", description: "Record something the user states (stored as confirmed). A model's proposal of it is confirmed by the owner's approval." },
   retry: { sequenceConflicts: 3 },
-  handler: async (ctx, args) => (await ops.remember(ctx, { ...args, status: "confirmed" }, ui)).memory,
+  handler: async (ctx, { proposedBy, ...args }) => (await ops.remember(ctx, { ...args, status: "confirmed" }, await ops.originOf(ctx, proposedBy, ui))).memory,
 });
 
 /**

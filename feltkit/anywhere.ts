@@ -28,7 +28,7 @@
  * follow-up job it queues, so neither a bridge nor a person can submit or redirect agent work.
  */
 import { s, type MutationCtx } from "@feltdb/feltkit";
-import { app, interactions, invocations } from "./app.js";
+import { agentwork, app, interactions, invocations } from "./app.js";
 import { appendMessage } from "./assistant.js";
 import { moveInvocation } from "./invocationstate.js";
 import { announce } from "./interactions.js";
@@ -38,7 +38,12 @@ import * as ops from "./_ops.js";
 export const HANDOFF_CAPABILITY = "personalos.assistant.converse";
 /** How long agent work is followed before PersonalOS stops and says so. */
 export const FOLLOW_FOR_MS = 24 * 60 * 60_000;
+/** Work handed over from a conversation (feltkit/agentwork.ts) may wait on the person for days. */
+export const WORK_FOLLOW_FOR_MS = 14 * 24 * 60 * 60_000;
 const MAX_DELAY_MS = 60_000;
+/** While the agent waits on the person, there is nothing to look at often. */
+const WAITING_DELAY_MS = 5 * 60_000;
+const followFor = (kind: Kind) => (kind === "work" ? WORK_FOLLOW_FOR_MS : FOLLOW_FOR_MS);
 
 export const agentConnected = (): boolean => Boolean(process.env.PERSONALOS_AGENT_URL);
 const pollMs = () => {
@@ -46,9 +51,12 @@ const pollMs = () => {
   return Number.isFinite(configured) && configured > 0 ? configured : 2000;
 };
 
-type Kind = "interaction" | "invocation";
+type Kind = "interaction" | "invocation" | "work";
+type Question = { interactionId: string; kind: string; prompt: string; options: Array<{ id: string; label: string }>; allowFreeform: boolean; shown?: boolean };
+type Answer = { interactionId: string; optionId?: string; text?: string; at: number; sentAt?: number; error?: string };
 type AgentRecord = {
-  key: string; state: "submitting" | "accepted" | "completed" | "blocked" | "refused" | "expired";
+  key: string; state: "submitting" | "accepted" | "waiting" | "completed" | "blocked" | "cancelling" | "cancelled" | "refused" | "expired" | "unavailable";
+  questions?: Question[]; answers?: Answer[]; cancel?: { requestedAt: number; sentAt?: number };
   objective: string; surface: Record<string, string>; workId?: string; status?: string; decision?: string; summary?: string;
   operations?: Array<{ capability: string; operationId: string; state: string; requestIds: string[] }>;
   reported?: string; next?: string; attempts: number; error?: string; submittedAt?: number; checkedAt?: number;
@@ -79,11 +87,12 @@ function why(decision: string | undefined): string {
 }
 
 async function record(ctx: MutationCtx, kind: Kind, id: string): Promise<any> {
-  return kind === "interaction" ? ctx.db.get(interactions, id) : ctx.db.get(invocations, id);
+  return kind === "interaction" ? ctx.db.get(interactions, id) : kind === "work" ? ctx.db.get(agentwork, id) : ctx.db.get(invocations, id);
 }
 
 async function save(ctx: MutationCtx, kind: Kind, id: string, agent: AgentRecord): Promise<void> {
   if (kind === "interaction") await ctx.db.patch(interactions, id, { agent: agent as any, updatedAt: Date.now() });
+  else if (kind === "work") await ctx.db.patch(agentwork, id, { agent: agent as any, updatedAt: Date.now() });
   else await ctx.db.patch(invocations, id, { agent: agent as any, updatedAt: Date.now() });
 }
 
@@ -91,7 +100,7 @@ async function save(ctx: MutationCtx, kind: Kind, id: string, agent: AgentRecord
 async function later(ctx: MutationCtx, kind: Kind, id: string, agent: AgentRecord): Promise<void> {
   const next = `${agent.attempts}`;
   await save(ctx, kind, id, { ...agent, next });
-  const delay = Math.min(pollMs() * 2 ** Math.min(Math.max(agent.attempts - 1, 0), 5), MAX_DELAY_MS);
+  const delay = agent.state === "waiting" ? Math.max(WAITING_DELAY_MS, pollMs()) : Math.min(pollMs() * 2 ** Math.min(Math.max(agent.attempts - 1, 0), 5), MAX_DELAY_MS);
   ctx.afterCommit.jobs.enqueue("anywhere.follow", { kind, id, next }, { runAt: new Date(Date.now() + delay).toISOString(), maxAttempts: 3 });
 }
 
@@ -105,6 +114,8 @@ async function report(ctx: MutationCtx, kind: Kind, rec: any, state: "working" |
   const owner = rec.owner as string;
   const octx = ops.actingFor(ctx, owner);
   if (rec.conversationId) await appendMessage(octx, rec.conversationId, { role: "assistant", text: full.slice(0, 8000) });
+  // Work from a conversation reports in that conversation only.
+  if (kind === "work") return;
   if (kind === "invocation") {
     await moveInvocation(ctx, rec, state === "working" ? "processing" : state, full.slice(0, 2000));
     return;
@@ -146,14 +157,21 @@ async function lookup(ctx: MutationCtx, owner: string, key: string): Promise<str
 export async function step(ctx: MutationCtx, kind: Kind, id: string, next?: string): Promise<void> {
   const rec = await record(ctx, kind, id);
   const current = rec?.agent as AgentRecord | undefined;
-  if (!rec?.owner || !current || ["completed", "refused", "expired"].includes(current.state)) return;
+  if (!rec?.owner || !current || ["completed", "cancelled", "refused", "expired", "unavailable"].includes(current.state)) return;
   if (next !== undefined && current.next !== next) return;
   const now = Date.now();
   let agent: AgentRecord = { ...current, attempts: current.attempts + 1, checkedAt: now };
 
-  if (now - rec.createdAt > FOLLOW_FOR_MS) {
+  if (now - rec.createdAt > followFor(kind)) {
     await save(ctx, kind, id, { ...agent, state: "expired" });
-    await report(ctx, kind, rec, "failed", `The connected agent's work${agent.workId ? ` ${agent.workId}` : ""} did not finish within a day${agent.decision ? `: ${why(agent.decision)}` : ""}. PersonalOS stopped following it; its own record is authoritative.`);
+    await report(ctx, kind, rec, "failed", `The connected agent's work${agent.workId ? ` ${agent.workId}` : ""} did not finish within ${kind === "work" ? "two weeks" : "a day"}${agent.decision ? `: ${why(agent.decision)}` : ""}. PersonalOS stopped following it; its own record is authoritative.`);
+    return;
+  }
+
+  // Stopped before it was ever sent: nothing reached the agent, so there is nothing to stop there.
+  if (!agent.workId && agent.cancel && current.attempts === 0) {
+    await save(ctx, kind, id, { ...agent, state: "cancelled", cancel: { ...agent.cancel, sentAt: now } });
+    await report(ctx, kind, rec, "failed", "Stopped before your agent started it. Nothing was done.");
     return;
   }
 
@@ -176,6 +194,32 @@ export async function step(ctx: MutationCtx, kind: Kind, id: string, next?: stri
     }
   }
 
+  // What the person decided goes first: a stop, then answers. Each is delivered once; the agent refusing
+  // it (already finished, no longer asking) is final, and anything else is tried again later.
+  const stop = agent.cancel;
+  if (stop && !stop.sentAt) {
+    try {
+      await ctx.integrations.invoke("agent.cancel", { workId: agent.workId! });
+      agent = { ...agent, cancel: { ...stop, sentAt: now } };
+    } catch (e) {
+      if (!refusedBy(e)) return later(ctx, kind, id, { ...agent, error: errorText(e) });
+      agent = { ...agent, cancel: { ...stop, sentAt: now }, error: errorText(e) };
+    }
+  }
+  const unsent = (agent.answers ?? []).filter((a) => a.sentAt === undefined);
+  if (unsent.length) {
+    const sending = unsent.map((a) => ({ interactionId: a.interactionId, ...(a.optionId !== undefined ? { optionId: a.optionId } : {}), ...(a.text !== undefined ? { text: a.text } : {}) }));
+    let refusal: string | undefined;
+    try {
+      await ctx.integrations.invoke("agent.answer", { workId: agent.workId!, answers: sending });
+    } catch (e) {
+      if (!refusedBy(e)) return later(ctx, kind, id, { ...agent, error: errorText(e) });
+      refusal = errorText(e);
+    }
+    agent = { ...agent, answers: (agent.answers ?? []).map((a) => (a.sentAt === undefined ? { ...a, sentAt: now, ...(refusal ? { error: refusal } : {}) } : a)) };
+    if (refusal) await report(ctx, kind, rec, "working", "Your agent was no longer asking that, so your answer was not used.");
+  }
+
   let work: any;
   try {
     work = await ctx.integrations.invoke("agent.read", { workId: agent.workId! });
@@ -188,13 +232,35 @@ export async function step(ctx: MutationCtx, kind: Kind, id: string, next?: stri
     operations: (Array.isArray(work?.ledger) ? work.ledger : []).slice(0, 50).map((o: any) => ({ capability: String(o.capability), operationId: String(o.operationId), state: String(o.state), requestIds: (o.requestIds ?? []).map(String) })),
   };
   const ref = `(work ${agent.workId}${agent.operations?.length ? `; ${agent.operations.map((o) => `${o.capability} ${o.state}`).join(", ")}` : ""})`;
+  const asked: Question[] = (Array.isArray(work?.questions) ? work.questions : []).slice(0, 10).map((q: any) => ({
+    interactionId: String(q.interactionId).slice(0, 200), kind: String(q.kind).slice(0, 50), prompt: String(q.prompt ?? "").slice(0, 2000),
+    options: (Array.isArray(q.options) ? q.options : []).slice(0, 20).map((o: any) => ({ id: String(o.id).slice(0, 200), label: String(o.label ?? o.id).slice(0, 300) })),
+    allowFreeform: q.allowFreeform === true,
+    shown: (agent.questions ?? []).some((known) => known.interactionId === String(q.interactionId) && known.shown),
+  }));
+  agent = { ...agent, questions: asked };
 
+  if (agent.status === "cancelled") {
+    await save(ctx, kind, id, { ...agent, state: "cancelled", reported: "cancelled" });
+    await report(ctx, kind, rec, "failed", `Stopped, as you asked. ${agent.summary} ${ref}`);
+    return;
+  }
   if (agent.status === "completed") {
     await save(ctx, kind, id, { ...agent, state: "completed", reported: "completed" });
     await report(ctx, kind, rec, "completed", `${agent.summary} ${ref}`);
     return;
   }
-  if (agent.status === "blocked") {
+  if (agent.status === "blocked" && asked.length && !agent.cancel) {
+    agent = { ...agent, state: "waiting" };
+    for (const question of asked.filter((q) => !q.shown)) {
+      const choices = question.options.length ? ` Choices: ${question.options.map((o) => o.label).join(" / ")}.` : "";
+      await report(ctx, kind, rec, "working", `Your agent asks: ${question.prompt}${choices} Answer it here; the work continues where it stopped.`);
+    }
+    agent = { ...agent, questions: asked.map((q) => ({ ...q, shown: true })) };
+    return later(ctx, kind, id, agent);
+  }
+  if (agent.cancel) agent = { ...agent, state: "cancelling" };
+  else if (agent.status === "blocked") {
     agent = { ...agent, state: "blocked" };
     if (agent.reported !== agent.decision) {
       agent = { ...agent, reported: agent.decision };
@@ -216,6 +282,6 @@ export const anywhereAgent = app.agent("anywhere", {
 /** The `anywhere.follow` job: the next step of one request, queued by the agent (runs as it). */
 export const follow = app.mutation({
   access: "anywhere.agent",
-  args: { kind: s.enum(["interaction", "invocation"] as const), id: s.string({ maxLength: 100 }), next: s.string({ maxLength: 20 }) },
+  args: { kind: s.enum(["interaction", "invocation", "work"] as const), id: s.string({ maxLength: 100 }), next: s.string({ maxLength: 20 }) },
   handler: async (ctx, { kind, id, next }) => step(ctx, kind, id, next),
 });

@@ -30,28 +30,28 @@
   },
   "totals": {
     "domain": {
-      "files": 43,
-      "lines": 6446
+      "files": 45,
+      "lines": 6710
     },
     "experience": {
       "files": 33,
-      "lines": 2542
+      "lines": 2639
     },
     "infrastructure": {
-      "files": 3,
-      "lines": 302
+      "files": 16,
+      "lines": 2802
     },
     "generated": {
       "files": 2,
-      "lines": 33
+      "lines": 34
     },
     "configuration": {
-      "files": 9,
-      "lines": 310
+      "files": 12,
+      "lines": 381
     },
     "tests": {
-      "files": 38,
-      "lines": 6174
+      "files": 61,
+      "lines": 13169
     },
     "third-party": {
       "files": 0,
@@ -62,8 +62,8 @@
       "lines": 0
     },
     "excluded": {
-      "files": 51,
-      "lines": 8702
+      "files": 54,
+      "lines": 12308
     },
     "unclassified": {
       "files": 12,
@@ -71,17 +71,17 @@
     }
   },
   "authored": {
-    "files": 88,
-    "lines": 9600
+    "files": 106,
+    "lines": 12532
   },
   "definitions": {
     "app": {
       "action": 11,
       "agent": 2,
-      "collection": 17,
+      "collection": 18,
       "integration": 6,
-      "mutation": 67,
-      "query": 27
+      "mutation": 71,
+      "query": 28
     },
     "collections": [
       "documents",
@@ -93,6 +93,7 @@
       "actions",
       "settings",
       "identityLinks",
+      "agentwork",
       "invocations",
       "interactions",
       "researchRuns",
@@ -106,52 +107,52 @@
   "consumption": [
     {
       "api": "@feltdb/feltkit s",
-      "callSites": 1562,
-      "files": 28
+      "callSites": 1640,
+      "files": 29
     },
     {
       "api": "ctx.db",
-      "callSites": 283,
-      "files": 24
+      "callSites": 298,
+      "files": 25
     },
     {
       "api": "@feltdb/feltkit fail",
-      "callSites": 75,
-      "files": 17
-    },
-    {
-      "api": "@feltdb/feltkit/testing TestApp",
-      "callSites": 55,
+      "callSites": 84,
       "files": 18
     },
     {
-      "api": "@feltdb/feltkit/testing createTestApp",
-      "callSites": 51,
-      "files": 20
+      "api": "@feltdb/feltkit/testing TestApp",
+      "callSites": 60,
+      "files": 19
     },
     {
-      "api": "@feltdb/feltkit MutationCtx",
-      "callSites": 48,
-      "files": 9
+      "api": "@feltdb/feltkit/testing createTestApp",
+      "callSites": 55,
+      "files": 21
     },
     {
       "api": "@feltdb/feltkit feltkit",
-      "callSites": 46,
+      "callSites": 51,
       "files": 1
     },
     {
-      "api": "ctx.runMutation",
-      "callSites": 34,
-      "files": 4
+      "api": "@feltdb/feltkit MutationCtx",
+      "callSites": 50,
+      "files": 10
     },
     {
       "api": "@feltdb/feltkit/react useMutation",
-      "callSites": 33,
+      "callSites": 36,
       "files": 5
     },
     {
+      "api": "ctx.runMutation",
+      "callSites": 36,
+      "files": 4
+    },
+    {
       "api": "@feltdb/feltkit/react useQuery",
-      "callSites": 25,
+      "callSites": 26,
       "files": 5
     },
     {
@@ -161,7 +162,7 @@
     },
     {
       "api": "ctx.auth",
-      "callSites": 20,
+      "callSites": 21,
       "files": 11
     },
     {
@@ -190,6 +191,11 @@
       "files": 7
     },
     {
+      "api": "ctx.integrations",
+      "callSites": 10,
+      "files": 4
+    },
+    {
       "api": "ctx.model",
       "callSites": 9,
       "files": 3
@@ -197,11 +203,6 @@
     {
       "api": "ctx.runQuery",
       "callSites": 9,
-      "files": 4
-    },
-    {
-      "api": "ctx.integrations",
-      "callSites": 8,
       "files": 4
     },
     {
@@ -315,7 +316,7 @@
       "id": "audit-trail",
       "title": "App-built business audit trail",
       "file": "feltkit/app.ts",
-      "line": 488,
+      "line": 504,
       "evidence": "export const actions = app.collection(",
       "platform": "app.auditTrail (events written in the change's transaction, ordered per subject by a FeltDB sequence)",
       "acknowledged": "the actions collection is the assistant's proposal and approval log (status, approval, evidence), not a business audit trail; FeltKit's agent proposals cover the model's part"
@@ -339,7 +340,7 @@
     {
       "name": "declarations match files",
       "ok": true,
-      "detail": "2 declaration(s), each matches a file",
+      "detail": "5 declaration(s), each matches a file",
       "fix": "Remove or correct the stale entries in feltkit.measure.json."
     },
     {
@@ -393,6 +394,252 @@
       "basis": "documentation",
       "lines": 0,
       "scaffold": "modified"
+    },
+    {
+      "path": "agent/.gitignore",
+      "class": "configuration",
+      "basis": "configuration file",
+      "lines": 0
+    },
+    {
+      "path": "agent/README.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
+    },
+    {
+      "path": "agent/agent/agent.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 6
+    },
+    {
+      "path": "agent/agent/channels/eve.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 13
+    },
+    {
+      "path": "agent/agent/channels/work.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 379
+    },
+    {
+      "path": "agent/agent/instructions.md",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 0
+    },
+    {
+      "path": "agent/agent/lib/appport.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 400
+    },
+    {
+      "path": "agent/agent/lib/faults.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 10
+    },
+    {
+      "path": "agent/agent/lib/operations.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 753
+    },
+    {
+      "path": "agent/agent/lib/reconcile.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 62
+    },
+    {
+      "path": "agent/agent/lib/recovery.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 248
+    },
+    {
+      "path": "agent/agent/lib/work.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 502
+    },
+    {
+      "path": "agent/agent/tools/appport_capabilities.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 13
+    },
+    {
+      "path": "agent/agent/tools/appport_contract.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 13
+    },
+    {
+      "path": "agent/agent/tools/appport_invoke.ts",
+      "class": "infrastructure",
+      "basis": "declared: PersonalOS's own eve agent (agent/): the durable work channel, operation ledger and AppPort tools that carry out delegated work through PersonalOS's /appport; a separate process",
+      "lines": 101
+    },
+    {
+      "path": "agent/appport-host/catalog.json",
+      "class": "tests",
+      "basis": "declared: a stand-in AppPort application the agent's generic suites run against",
+      "lines": 6
+    },
+    {
+      "path": "agent/appport-host/host.mjs",
+      "class": "tests",
+      "basis": "declared: a stand-in AppPort application the agent's generic suites run against",
+      "lines": 295
+    },
+    {
+      "path": "agent/appport-host/idempotency-store.mjs",
+      "class": "tests",
+      "basis": "declared: a stand-in AppPort application the agent's generic suites run against",
+      "lines": 107
+    },
+    {
+      "path": "agent/appport-host/inventory.mjs",
+      "class": "tests",
+      "basis": "declared: a stand-in AppPort application the agent's generic suites run against",
+      "lines": 131
+    },
+    {
+      "path": "agent/appport-host/server.mjs",
+      "class": "tests",
+      "basis": "declared: a stand-in AppPort application the agent's generic suites run against",
+      "lines": 19
+    },
+    {
+      "path": "agent/package-lock.json",
+      "class": "excluded",
+      "basis": "lockfile",
+      "lines": 3606
+    },
+    {
+      "path": "agent/package.json",
+      "class": "configuration",
+      "basis": "configuration file",
+      "lines": 29
+    },
+    {
+      "path": "agent/test/acceptance.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 369
+    },
+    {
+      "path": "agent/test/anywhere.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 814
+    },
+    {
+      "path": "agent/test/feltkit-host.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 144
+    },
+    {
+      "path": "agent/test/feltkit.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 252
+    },
+    {
+      "path": "agent/test/fixture-agent.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 130
+    },
+    {
+      "path": "agent/test/host-process.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 65
+    },
+    {
+      "path": "agent/test/idempotency.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 344
+    },
+    {
+      "path": "agent/test/personalos-host.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 180
+    },
+    {
+      "path": "agent/test/personalos.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 955
+    },
+    {
+      "path": "agent/test/probe-host.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 90
+    },
+    {
+      "path": "agent/test/reconcile-decide.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 61
+    },
+    {
+      "path": "agent/test/replacement.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 680
+    },
+    {
+      "path": "agent/test/reserve.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 371
+    },
+    {
+      "path": "agent/test/safety.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 435
+    },
+    {
+      "path": "agent/test/settle.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 458
+    },
+    {
+      "path": "agent/test/support.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 79
+    },
+    {
+      "path": "agent/test/work.test.mjs",
+      "class": "tests",
+      "basis": "declared: the agent's suites and their process harnesses (real eve, FeltDB, AppPort, AuthBoundry, Resolver, and PersonalOS itself)",
+      "lines": 727
+    },
+    {
+      "path": "agent/tsconfig.json",
+      "class": "configuration",
+      "basis": "configuration file",
+      "lines": 27
+    },
+    {
+      "path": "docs/AGENT-CAPABILITY-ROADMAP.md",
+      "class": "excluded",
+      "basis": "documentation",
+      "lines": 0
     },
     {
       "path": "docs/AGENTS.md",
@@ -824,7 +1071,7 @@
       "path": "feltkit.measure.json",
       "class": "configuration",
       "basis": "configuration file",
-      "lines": 18
+      "lines": 33
     },
     {
       "path": "feltkit.scaffold.json",
@@ -878,7 +1125,7 @@
       "path": "feltkit/_generated/api.ts",
       "class": "generated",
       "basis": "codegen (matches regeneration)",
-      "lines": 28,
+      "lines": 29,
       "scaffold": "modified"
     },
     {
@@ -903,7 +1150,7 @@
       "path": "feltkit/_ops.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 278
+      "lines": 286
     },
     {
       "path": "feltkit/_pages.ts",
@@ -930,6 +1177,12 @@
       "lines": 102
     },
     {
+      "path": "feltkit/_route.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 26
+    },
+    {
       "path": "feltkit/_search.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
@@ -948,16 +1201,22 @@
       "lines": 50
     },
     {
+      "path": "feltkit/agentwork.ts",
+      "class": "domain",
+      "basis": "path: feltkit/ (server functions)",
+      "lines": 110
+    },
+    {
       "path": "feltkit/anywhere.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 155
+      "lines": 213
     },
     {
       "path": "feltkit/app.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 650,
+      "lines": 698,
       "scaffold": "modified"
     },
     {
@@ -1025,7 +1284,7 @@
       "path": "feltkit/invocationstate.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 185
+      "lines": 188
     },
     {
       "path": "feltkit/links.ts",
@@ -1081,7 +1340,7 @@
       "path": "feltkit/turn.ts",
       "class": "domain",
       "basis": "path: feltkit/ (server functions)",
-      "lines": 193
+      "lines": 204
     },
     {
       "path": "feltkit/turnstate.ts",
@@ -1268,7 +1527,7 @@
       "path": "src/chat.tsx",
       "class": "experience",
       "basis": "path: src/ (UI)",
-      "lines": 329
+      "lines": 426
     },
     {
       "path": "src/main.tsx",
@@ -1332,6 +1591,12 @@
       "class": "tests",
       "basis": "path: tests",
       "lines": 212
+    },
+    {
+      "path": "tests/agentwork.test.ts",
+      "class": "tests",
+      "basis": "path: tests",
+      "lines": 217
     },
     {
       "path": "tests/assistant.test.ts",
@@ -1445,7 +1710,7 @@
       "path": "tests/invocations.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 300
+      "lines": 328
     },
     {
       "path": "tests/pages.test.ts",
@@ -1487,7 +1752,7 @@
       "path": "tests/turn.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 148
+      "lines": 186
     },
     {
       "path": "tests/x-authboundry-real.test.ts",

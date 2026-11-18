@@ -22,12 +22,16 @@ import { app } from "./app.js";
 import { clockFor, offsetFor, type Clock } from "./_clock.js";
 import { outcomeOf } from "./_research.js";
 import { retryResearch, startResearch } from "./research.js";
+import { agentConnected } from "./anywhere.js";
+import { routeOf } from "./_route.js";
 import { declaredCapabilities, PROSPECT_NEEDS, describeDiscovery, discover } from "./_capabilities.js";
 
 /** The capabilities the model may use, as tools. Everything else stays with the person. */
 const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "memory.add", "memory.list", "briefing.today", "projects.list", "documents.list"];
 /** Inputs the app fills in itself (from the caller's clock), so the model never guesses them. */
-const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset"], "tasks.update": ["tzOffset"], "briefing.today": ["today"] };
+const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset", "proposedBy"], "tasks.update": ["tzOffset", "proposedBy"], "tasks.complete": ["proposedBy"], "memory.add": ["proposedBy"], "briefing.today": ["today"] };
+/** What the model may propose (not read): each carries which model proposed it, from which message. */
+const PROPOSES = new Set(["tasks.create", "tasks.update", "tasks.complete", "memory.add"]);
 const MAX_ROUNDS = 3;
 /** Not a PersonalOS capability the model can call: a request that PersonalOS starts research (feltkit/research.ts). */
 const START_RESEARCH = {
@@ -77,7 +81,8 @@ const trim = (value: unknown) => {
 };
 
 const Result = s.object({
-  mode: s.enum(["model", "rules"] as const),
+  /** model | rules: answered here. agent: handed to the person's agent (feltkit/agentwork.ts). */
+  mode: s.enum(["model", "rules", "agent"] as const),
   conversationId: s.string(),
   messageId: s.string(),
   replyId: s.string(),
@@ -92,6 +97,14 @@ export const turn = app.action({
   returns: Result,
   handler: async (ctx, { conversationId, clientId, text }) => {
     const clock = clockFor(ctx.auth.context.timeZone);
+    // Work that needs durable, multi-step execution goes to the person's agent, when one is connected and
+    // they may hand work to it; the rules decide (feltkit/_route.ts), never a model. Everything else stays.
+    const route = routeOf(text);
+    if (route.delegate && agentConnected() && ctx.auth.has("agentwork.write")) {
+      const user = await ctx.runMutation(api.turnstate.recordUser, { ...(conversationId ? { conversationId } : {}), clientId, text });
+      const handed = (await ctx.runMutation(api.agentwork.handOver, { messageId: user.messageId, reason: route.reason })) as { replyId: string | null };
+      return { mode: "agent" as const, conversationId: user.conversationId, messageId: user.messageId, replyId: handed.replyId ?? "", replayed: user.replyId !== null, reason: route.reason };
+    }
     // An outcome to research ("find me new customers for FeltKit") is pursued by research, with or
     // without a model: discovery decides what can run, not the tools a model turn would be given.
     if (outcomeOf(text) && ctx.auth.has("research.run")) {
@@ -198,6 +211,8 @@ export const turn = app.action({
             continue;
           }
           const input = normalize(call.name, call.input, clock);
+          delete input.proposedBy;
+          if (PROPOSES.has(call.name)) input.proposedBy = { model: `${g.receipt.provider}/${g.receipt.model}`, messageId: user.messageId };
           try {
             const p = await ctx.agent.propose(taskId, { capability: call.name, input, reason: text.slice(0, 500), idempotencyKey: call.id, model: { provider: g.receipt.provider, model: g.receipt.model, generation: { generationId: g.generationId, memoryId: g.memoryId, toolCallId: call.id } } });
             proposals.push({ taskId, actionId: p.actionId, capability: p.capability, effect: p.effect, state: p.state, input });
