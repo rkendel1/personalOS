@@ -51,7 +51,7 @@
     },
     "tests": {
       "files": 38,
-      "lines": 6169
+      "lines": 6174
     },
     "third-party": {
       "files": 0,
@@ -1421,7 +1421,7 @@
       "path": "tests/identity-linking.test.ts",
       "class": "tests",
       "basis": "path: tests",
-      "lines": 294
+      "lines": 299
     },
     {
       "path": "tests/interactions.test.ts",

@@ -21,11 +21,11 @@ Measured by `feltkit measure` (feltkit.measure/1). FeltKit 0.3.30 (installed 0.3
 | infrastructure | 3 | 302 | Plumbing the application wrote for itself: scripts, servers, adapters, app-built audit or queues. |
 | generated | 2 | 33 | Written by a tool and unchanged: codegen output, or scaffolded files still identical to the template. |
 | configuration | 9 | 310 | Build, package, deployment and tool configuration. |
-| tests | 38 | 6169 | Tests, fixtures and acceptance scripts. |
+| tests | 38 | 6174 | Tests, fixtures and acceptance scripts. |
 | excluded | 51 | 8707 | Not code: documentation, images, fonts, lockfiles, licences. |
 | unclassified | 12 | 0 | No rule applies. Declare it in feltkit.measure.json. |
 
-**Authored by the application** (domain + experience + infrastructure + configuration): 9600 lines in 88 files. Tests: 6169 lines.
+**Authored by the application** (domain + experience + infrastructure + configuration): 9600 lines in 88 files. Tests: 6174 lines.
 
 **Provenance.** Scaffolded by create-feltkit 0.3.22 (tasks): 20 files, 4 unchanged, 15 changed, 1 removed. Generated API: matches regeneration.
 
