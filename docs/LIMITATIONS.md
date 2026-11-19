@@ -8,9 +8,15 @@ What PersonalOS doesn't do, and why. Each item names what would change it.
   only if the words overlap (`relevance()` in `feltkit/_interpret.ts`: keywords, plural folding,
   prefixes). FeltDB has no text or vector index yet (`ctx.db.search` is a bounded scan). Semantic
   retrieval needs an index in FeltDB.
-- **No email, calendar, messaging or web research.** No integration is configured, so none is
-  offered, and the assistant never claims it sent or scheduled anything outside the app. FeltKit's
-  `app.integration` is the way to add one.
+- **Email and calendar are Google only** (Gmail, Google Calendar primary), and read headers and snippets,
+  never message bodies. Each needs a Google OAuth client on the server (README). A send or new event is
+  delivered once; if Google never answers, it is marked "unknown" and not resent automatically (Gmail has
+  no idempotency key, so a resend could send twice).
+- **No messaging integration.** Slack's OAuth returns a person's token in a non-standard field
+  (`authed_user.access_token`) and asks for user scopes with `user_scope`, which FeltKit's per-person OAuth
+  doesn't read; Microsoft Teams via Graph would fit but isn't built.
+- **Web search needs a provider** (Brave Search API or OpenAI web search). Without one the assistant says
+  so instead of answering from memory.
 - **API keys are off.** An API key authenticates as its own identity, so anything it created would be
   owned by the key, not by you. They stay off until a key can act for a person.
 - **Per-person recurrence is a job chain.** Reminders and check-ins run as the person who set them up

@@ -17,10 +17,10 @@ export const Receipt = s.object({
   replayed: s.boolean(),
   receivedAt: s.number(),
   conversationId: s.string(),
-  /** Where to look in PersonalOS: a path below the app's address (#/chat/<id>, #/research). */
+  /** Where to look in Anywhere Aide: a path below the app's address (#/chat/<id>, #/research). */
   open: s.string(),
   message: s.string(),
-  /** Where the person goes back to: PersonalOS, or the page they shared (`url`). */
+  /** Where the person goes back to: Anywhere Aide, or the page they shared (`url`). */
   returnTo: s.object({ kind: s.string(), url: s.optional(s.string()) }),
   updates: s.array(s.object({ seq: s.number(), state: s.string(), text: s.string(), at: s.number() })),
   error: s.optional(s.object({ code: s.string(), message: s.string() })),

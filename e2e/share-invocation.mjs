@@ -86,7 +86,7 @@ try {
   base = await start();
   log("feltkit dev", base, MODEL ? "(model: openai/gpt-4.1-mini via AI Gateway)" : "(no model: rules)");
 
-  // 1. The person has a PersonalOS account; the app signs in to it (as SignInView does).
+  // 1. The person has a Anywhere Aide account; the app signs in to it (as SignInView does).
   const email = `ada+${Date.now()}@example.com`;
   const password = "correct horse battery staple";
   const up = await post("/api/auth/signup", { email, password });
@@ -99,7 +99,7 @@ try {
   note("signed in", { account, sessionExpires: signIn.body.expiresAt, tokenInBody: Boolean(token) });
   await call("mutation", "memory:add", { kind: "project", subject: "feltkit", content: "FeltKit is my product: a TypeScript framework for building internal tools and agent-ready applications on an embedded database, with auth, background jobs and integrations." }, token);
 
-  // 2. In AuthBoundry: the account, and its delegation to PersonalOS for research (an administrator's step).
+  // 2. In AuthBoundry: the account, and its delegation to Anywhere Aide for research (an administrator's step).
   await ab.control("/_authboundry/control-plane/applications/personalos/principals", { method: "POST", body: { id: `user:${account}`, kind: "human", claims: { role: "member" } } });
   await ab.control("/_authboundry/policies", { method: "POST", body: { application: "personalos", principal_id: `user:${account}`, capabilities: [...CAPABILITIES] } });
   await ab.delegate("share-e2e", account, ["personalos.research.run"]);
@@ -150,7 +150,7 @@ try {
   assert.ok(["completed", "failed"].includes(inv.state), `the work reached an outcome (${inv.state})`);
   assert.equal(inv.authority.delegationId, "share-e2e");
   const inbox = (await call("query", "inbox:list", {}, token)).body.value ?? [];
-  note("in PersonalOS", { conversation: `${base}/#/chat/${inv.conversationId}`, inbox: inbox.filter((n) => n.type === "invocation.updated").map((n) => n.title) });
+  note("in Anywhere Aide", { conversation: `${base}/#/chat/${inv.conversationId}`, inbox: inbox.filter((n) => n.type === "invocation.updated").map((n) => n.title) });
 
   // 6. Another account sees none of it.
   const graceToken = (await post("/api/auth/signup", { email: `grace+${Date.now()}@example.com`, password })).body.token;

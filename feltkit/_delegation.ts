@@ -1,5 +1,5 @@
 /**
- * Make a person's grants to PersonalOS exactly one set of capabilities (feltkit/delegation.ts `set`).
+ * Make a person's grants to Anywhere Aide exactly one set of capabilities (feltkit/delegation.ts `set`).
  *
  * Not atomic: one grant of the wanted capabilities, then the earlier grants revoked. A run can stop
  * part-way (a revoke fails) and the caller retries. The retry must keep the grant now in force: the
@@ -10,7 +10,7 @@
  */
 export interface Grant {
   id: string;
-  /** The agent the grant is for (`agent:<id>`), or null: PersonalOS's executor. */
+  /** The agent the grant is for (`agent:<id>`), or null: Anywhere Aide's executor. */
   agent?: string | null;
   capabilities: string[];
   expiresAt: number | null;
@@ -25,7 +25,7 @@ export interface Grants {
 /** An agent's AuthBoundry principal, as grants name it. */
 export const agentPrincipal = (agent: string) => (agent.includes(":") ? agent : `agent:${agent}`);
 
-/** `agent` null: the grants to PersonalOS's executor; otherwise the grants to that agent only. Neither touches the other's. */
+/** `agent` null: the grants to Anywhere Aide's executor; otherwise the grants to that agent only. Neither touches the other's. */
 export async function setGrants(grants: Grants, want: string[], expiresAt: number | null, agent: string | null = null): Promise<{ granted: string[]; changed: boolean }> {
   const target = agent === null ? null : agentPrincipal(agent);
   const before = (await grants.list()).filter((g) => (g.agent ?? null) === target);

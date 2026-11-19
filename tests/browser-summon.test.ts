@@ -1,7 +1,7 @@
 /**
- * Browser summoning (the Chrome extension's "Summon PersonalOS"): what it builds from the page
- * (extension/src/summon.ts) and what PersonalOS does with it (the same personalos.invocation/1 path as
- * every surface). The envelopes here are made by the extension's own code; the server is PersonalOS
+ * Browser summoning (the Chrome extension's "Summon Anywhere Aide"): what it builds from the page
+ * (extension/src/summon.ts) and what Anywhere Aide does with it (the same personalos.invocation/1 path as
+ * every surface). The envelopes here are made by the extension's own code; the server is Anywhere Aide
  * in-process with the AuthBoundry stand-in. The real browser and the real AuthBoundry are in
  * e2e/browser-summon.mjs.
  */
@@ -73,8 +73,8 @@ test("capture: missing, foreign or oversized context is refused with the reason;
   refused({ tab: { url: "chrome://settings/" } }, /http and https pages/);
   refused({ tab: { url: "not a url" } }, /no web address/);
   refused({ tab: { url: "https://user:pw@example.com/" } }, /user name or password/);
-  refused({ tab: { url: `https://example.com/${"a".repeat(2100)}` } }, /longer than PersonalOS takes/);
-  refused({ page: { url: PAGE, title: "x", selection: "y".repeat(20_001) } }, /Your selection is 20,001 characters; PersonalOS takes up to 20,000\. Select less, or send without it\./);
+  refused({ tab: { url: `https://example.com/${"a".repeat(2100)}` } }, /longer than Anywhere Aide takes/);
+  refused({ page: { url: PAGE, title: "x", selection: "y".repeat(20_001) } }, /Your selection is 20,001 characters; Anywhere Aide takes up to 20,000\. Select less, or send without it\./);
   refused({ instruction: "z".repeat(2001) }, /2,000 characters or fewer/);
   const moved = buildEnvelope(input({ page: { url: "https://other.example/", title: "Other", selection: "secret from another page" } }));
   assert.ok(!("error" in moved));
@@ -87,7 +87,7 @@ test("capture: missing, foreign or oversized context is refused with the reason;
   assert.ok(sameDocument("https://a.example/x#1", "https://a.example/x#2") && !sameDocument("https://a.example/x", "https://a.example/y"));
 });
 
-// ── Through PersonalOS ────────────────────────────────────────────────────────────────────────
+// ── Through Anywhere Aide ────────────────────────────────────────────────────────────────────────
 
 test("ACCEPTANCE (in-process): a browser summon is accepted, worked as research under the delegation, and keeps who, where, what was shared, what was asked, how it was read, what was checked, what was done, and the way back", async () => {
   authority.grant("ada");
@@ -149,7 +149,7 @@ test("the return destination must be the shared page: never an arbitrary link", 
   } finally { await t.close(); }
 });
 
-test("page content is untrusted: a selection that tells PersonalOS what to do is kept as data; only the person's instruction is acted on", async () => {
+test("page content is untrusted: a selection that tells Anywhere Aide what to do is kept as data; only the person's instruction is acted on", async () => {
   authority.grant("ada");
   authority.decisions.length = 0;
   const t = await fresh();

@@ -4,7 +4,7 @@
  *   npm run extension:build && node e2e/extension.mjs <evidence-dir>
  *
  * Starts, as separate processes: a loopback OpenAI-compatible model that streams slowly, and
- * PersonalOS (`feltkit dev`, model pointed at it with the real CLI). Then drives the side panel
+ * Anywhere Aide (`feltkit dev`, model pointed at it with the real CLI). Then drives the side panel
  * page (chrome-extension://<id>/sidepanel.html) through its UI:
  *
  *   install · connect · sign-in · rendering at side-panel width · capabilities (task via chat,
@@ -119,7 +119,7 @@ const model = createServer((req, res) => {
 await new Promise((r) => model.listen(0, "127.0.0.1", r));
 const MODEL_ENDPOINT = `http://127.0.0.1:${model.address().port}/v1`;
 
-// ---- PersonalOS ---------------------------------------------------------------------------------
+// ---- Anywhere Aide ---------------------------------------------------------------------------------
 rmSync(join(root, ".feltkit/development/state"), { recursive: true, force: true });
 const appEnv = { ...cleanEnv, FELTKIT_SESSION_RECHECK_MS: "1000" };
 let app;
@@ -130,7 +130,7 @@ for (let attempt = 0; attempt < 30 && !app; attempt += 1) {
   else await new Promise((r) => setTimeout(r, 1000));
 }
 cli("model", "set", "--provider", "ollama", "--model", "fake-stream", "--endpoint", MODEL_ENDPOINT);
-log(`PersonalOS at ${ORIGIN}; model → loopback streaming server`);
+log(`Anywhere Aide at ${ORIGIN}; model → loopback streaming server`);
 
 // ---- The extension, as built, plus the two test-only manifest additions ------------------------
 const ext = mkdtempSync(join(tmpdir(), "personalos-ext-"));

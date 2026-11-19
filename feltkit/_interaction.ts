@@ -1,6 +1,6 @@
 /**
  * The canonical interaction contract, `personalos.interaction/1`: what any communication surface
- * (Multiplayer today; Slack, email, … later) hands PersonalOS when someone asks it for something.
+ * (Multiplayer today; Slack, email, … later) hands Anywhere Aide when someone asks it for something.
  * It is independent of the surface that produced it. Documented in docs/INTERACTION-CONTRACT.md.
  *
  * Five identities are kept apart, and only one of them is authority:
@@ -10,7 +10,7 @@
  *   source identity      `sender.sourcePrincipalId`: the sender's principal *in the source system*.
  *                        The adapter vouches for it from its own authenticated session (never from a
  *                        message's text or a display name). Trusted only as far as the adapter is.
- *   PersonalOS account   resolved by PersonalOS from an active identity link the account's owner
+ *   Anywhere Aide account   resolved by Anywhere Aide from an active identity link the account's owner
  *                        created (feltkit/links.ts). Never supplied in the envelope.
  *   display name         `sender.displayName`, `handle`: presentation only.
  *   claimed identity     `sender.claimed`: anything the sender or metadata asserted (a signature
@@ -83,9 +83,9 @@ export const Envelope = s.object({
     /** The thread the request was made in (its root message id), if any. */
     threadId: s.optional(s.string({ maxLength: 200 })),
     parentMessageId: s.optional(s.string({ maxLength: 200 })),
-    /** People and agents in the conversation, the requester and PersonalOS included. */
+    /** People and agents in the conversation, the requester and Anywhere Aide included. */
     participantCount: s.number(),
-    /** A direct conversation between the requester and PersonalOS only: nobody else can read the reply. */
+    /** A direct conversation between the requester and Anywhere Aide only: nobody else can read the reply. */
     directWithAssistant: s.boolean(),
   }),
   message: s.object({
@@ -97,7 +97,7 @@ export const Envelope = s.object({
   context: s.object({
     scope: s.enum(["thread", "channel", "none"] as const),
     messages: s.array(ContextMessage, { maxItems: LIMITS.contextMessages }),
-    /** What the adapter left out, so PersonalOS can say its view is partial. */
+    /** What the adapter left out, so Anywhere Aide can say its view is partial. */
     limits: s.object({ maxMessages: s.number(), maxChars: s.number(), truncated: s.boolean() }),
   }),
   /** Where replies go: normally the originating conversation and thread. */
@@ -118,7 +118,7 @@ export type EnvelopeT = {
 };
 
 /**
- * Who can read the reply. Only a direct conversation between the requester and PersonalOS is
+ * Who can read the reply. Only a direct conversation between the requester and Anywhere Aide is
  * private; everything else (a channel, a group, a DM with another person) is shared, and a shared
  * reply never carries the owner's private data (memory, task lists, briefings, other conversations).
  */
@@ -126,12 +126,12 @@ export function audienceOf(e: Pick<EnvelopeT, "conversation">): "private" | "sha
   return e.conversation.directWithAssistant && e.conversation.kind === "dm" && e.conversation.participantCount <= 2 ? "private" : "shared";
 }
 
-/** One PersonalOS conversation per source thread (or per source conversation, outside threads). */
+/** One Anywhere Aide conversation per source thread (or per source conversation, outside threads). */
 export function threadKey(adapter: string, e: Pick<EnvelopeT, "source" | "conversation">): string {
   return [adapter, e.source.instance, e.conversation.workspaceId, e.conversation.conversationId, e.conversation.threadId ?? "-"].join("|");
 }
 
-/** "Multiplayer · #general" — what the PersonalOS conversation is called. */
+/** "Multiplayer · #general" — what the Anywhere Aide conversation is called. */
 export function conversationTitle(adapterLabel: string, e: Pick<EnvelopeT, "conversation">): string {
   const c = e.conversation;
   const where = c.kind === "public" || c.kind === "private" ? `#${c.name ?? "channel"}` : c.directWithAssistant ? "direct message" : c.kind === "group" ? "group" : "DM";

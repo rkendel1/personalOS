@@ -1,7 +1,7 @@
 /**
- * An agent outside PersonalOS runs research for a person over /appport, under their grants to it and a
+ * An agent outside Anywhere Aide runs research for a person over /appport, under their grants to it and a
  * research budget only they set (FeltKit's delegated execution, the REAL private AuthBoundry, real HTTP,
- * real durable jobs, PersonalOS's own research pipeline). Every billable call (here: a web search through
+ * real durable jobs, Anywhere Aide's own research pipeline). Every billable call (here: a web search through
  * the websearch integration) is charged to the run before it is made, and none is made past its budget,
  * after it is cancelled, or once the person revokes the grant.
  *
@@ -147,7 +147,7 @@ test("an agent runs Ada's research only with her grant and within the budget she
   assert.deepEqual([raised.ok, raised.error?.code], [false, "FORBIDDEN"]);
   assert.equal((await budgetOf("ada"))!.calls, 10);
 
-  // Start: recorded in PersonalOS, attributed, 2 calls reserved. It stops before its third search.
+  // Start: recorded in Anywhere Aide, attributed, 2 calls reserved. It stops before its third search.
   let searches = search.requests.length;
   const started = await appport("research.start", { text: TEXT, budget: 2 }, "ada", "eve-r1");
   assert.equal(started.ok, true, JSON.stringify(started));

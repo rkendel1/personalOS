@@ -1,5 +1,5 @@
 /**
- * Cross-surface continuity: one PersonalOS conversation carried between Multiplayer (the bridge's
+ * Cross-surface continuity: one Anywhere Aide conversation carried between Multiplayer (the bridge's
  * personalos.interaction/1, Resolver identity), Chrome (the extension's personalos.invocation/1, made by
  * its own code) and iOS (the same invocation contract), with each part's surface, shared material,
  * authority and result kept apart. In-process, with Resolver and an AuthBoundry stand-in; the real
@@ -165,7 +165,7 @@ test("Scenario D, authority: continuing needs AuthBoundry's say now; a denial is
     authority.policy.set("user:ada", new Set(CAPABILITIES.filter((c) => c !== "personalos.conversation.continue")));
     const denied = await mp(t, `continue ${first.conversationId}`);
     assert.equal(denied.state, "refused");
-    assert.match(denied.reply, /You aren't allowed to continue PersonalOS conversations through Multiplayer \(personalos\.conversation\.continue: delegation_missing\)/);
+    assert.match(denied.reply, /You aren't allowed to continue Anywhere Aide conversations through Multiplayer \(personalos\.conversation\.continue: delegation_missing\)/);
     const evidence = (await work(t, "ada", first.conversationId)).entries.find((x: any) => x.kind === "interaction")!;
     assert.deepEqual([evidence.state, evidence.authority!.outcome, evidence.authority!.capability], ["refused", "deny", "personalos.conversation.continue"], "the denial is in that conversation's history");
     assert.notEqual((await mp(t, "status")).conversationId, first.conversationId, "a refused continue does not move the thread");
@@ -188,7 +188,7 @@ test("Scenario E, isolation: Grace's surfaces can't reach Ada's conversation or 
     await settle(t);
     const tried = await mp(t, `continue ${conversationId}`, { from: "grace" });
     assert.deepEqual([tried.state, tried.refusal?.code, tried.conversationId], ["refused", "NOT_FOUND", null], "refused as if it did not exist, and tied to nothing");
-    assert.match(tried.reply, /There's no conversation .* in your PersonalOS/);
+    assert.match(tried.reply, /There's no conversation .* in your Anywhere Aide/);
     await assert.rejects(t.as("grace").mutation(api.invocations.submit, { envelope: chrome({ conversationId }) }), (x: any) => x.code === "NOT_FOUND");
     await assert.rejects(t.as("grace").query(api.continuity.of, { conversationId }), (x: any) => x.code === "NOT_FOUND");
     await assert.rejects(t.as("grace").query(api.invocationstate.get, { invocationId: e.invocationId }), (x: any) => x.code === "NOT_FOUND");
@@ -236,7 +236,7 @@ test("without a model, Summarize says so instead of pretending: failed, with the
   });
 });
 
-test("iOS contract compatibility: an iOS share (adapter ios-share, return to PersonalOS) continues the same conversation and is reported as iOS", async () => {
+test("iOS contract compatibility: an iOS share (adapter ios-share, return to Anywhere Aide) continues the same conversation and is reported as iOS", async () => {
   await withStack(async (t) => {
     const first = await mp(t, "remind me to call Acme on Monday");
     const ios = { contract: INVOCATION_CONTRACT, invocationId: `ios-${Date.now()}`, surface: { adapter: "ios-share", device: "iPhone", version: "1.0" }, instruction: "Remember this", context: [{ kind: "url", url: "https://www.acme-ops.com/pricing", title: "Pricing" }], submittedAt: Date.now(), timeZone: "America/New_York", returnTo: { kind: "personalos" }, correlation: { conversationId: first.conversationId! } };

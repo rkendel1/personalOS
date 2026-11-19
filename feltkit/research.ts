@@ -1,6 +1,6 @@
 /**
  * Research outcomes: the person asks for an outcome ("find me some new customers for FeltKit", "who
- * competes with Liveblocks?"), and PersonalOS pursues it with what the platform can actually do.
+ * competes with Liveblocks?"), and Anywhere Aide pursues it with what the platform can actually do.
  *
  *   begin (action)  discover the capability landscape (ctx.agent.catalog: what exists, what this
  *                   person may use, what is configured), then record the run (researchstate.create)
@@ -199,7 +199,7 @@ export const step = app.action({
     const run = view.run;
     const phase: string = run.phase ?? "searching";
     const started = Date.now();
-    // Work an invocation started from outside PersonalOS runs on the person's delegation, so every step
+    // Work an invocation started from outside Anywhere Aide runs on the person's delegation, so every step
     // asks again: a delegation revoked mid-run stops the next step.
     if ((run.invocationId || run.budget) && phase !== "finishing") {
       const denied = run.budget ? await agentDenied(ctx, run, phase) : await delegationDenied(ctx, run, phase);
@@ -243,14 +243,14 @@ export const step = app.action({
 });
 
 /**
- * Whether the person's delegation to PersonalOS still allows research (AuthBoundry, on their behalf).
+ * Whether the person's delegation to Anywhere Aide still allows research (AuthBoundry, on their behalf).
  * A denial is the reason to stop; an authority that cannot answer is thrown, so the job tries again.
  */
 async function delegationDenied(ctx: ActionCtx, run: Run, phase: string): Promise<{ need: string; state: string; detail: string; howToEnable: string } | null> {
   const decision = await ctx.authority.decide({ capability: "personalos.research.run", onBehalfOf: authorityPrincipal(run.owner), context: { invocation: String(run.invocationId).slice(0, 100), step: phase } });
   if (decision.outcome === "unavailable" || decision.outcome === "invalid") throw new FeltKitError("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); the step will try again.`);
   if (decision.allowed) return null;
-  return { need: "your permission", state: "needs-authorization", detail: `PersonalOS is no longer allowed to research for you (personalos.research.run${decision.reason ? `: ${decision.reason}` : ""}).`, howToEnable: "Restore the delegation in AuthBoundry, then say \"retry research\"." };
+  return { need: "your permission", state: "needs-authorization", detail: `Anywhere Aide is no longer allowed to research for you (personalos.research.run${decision.reason ? `: ${decision.reason}` : ""}).`, howToEnable: "Restore the delegation in AuthBoundry, then say \"retry research\"." };
 }
 
 /**

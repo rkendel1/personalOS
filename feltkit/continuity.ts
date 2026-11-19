@@ -7,11 +7,11 @@
  *   surface     where that part came from (Multiplayer, your browser, iOS), not where you are now
  *   asked       what the person asked there, in their words
  *   shared      what they shared there (each share is its own evidence; nothing replaces it)
- *   inferred    how PersonalOS read it (rules or a model)
+ *   inferred    how Anywhere Aide read it (rules or a model)
  *   authority   AuthBoundry's decision at the time it ran (never reused: each continuation asks again)
- *   did         what PersonalOS did, and the state it is in now
+ *   did         what Anywhere Aide did, and the state it is in now
  *
- * Read by PersonalOS's chat (`continuity:of`) and by a continued Multiplayer thread ("status").
+ * Read by Anywhere Aide's chat (`continuity:of`) and by a continued Multiplayer thread ("status").
  */
 import { fail, s } from "@feltdb/feltkit";
 import { app, conversations, interactions, invocations, researchRuns, tasks } from "./app.js";
@@ -29,7 +29,7 @@ export interface WorkEntry {
   did: string;
   state: string;
   ref: string;
-  /** An invocation waiting for its owner to run it from PersonalOS (asked from X): its id. */
+  /** An invocation waiting for its owner to run it from Anywhere Aide (asked from X): its id. */
   run?: string;
   /** Asked from X: the post, which the owner may explicitly reply to (xsurface:publish). */
   xPostId?: string;
@@ -66,7 +66,7 @@ export async function workIn(db: Db, owner: string, conversationId: string): Pro
   }
   for (const r of (await db.find(researchRuns, { owner })).filter((x) => x.conversationId === conversationId)) {
     entries.push({
-      at: r.createdAt, kind: "research", surface: r.invocationId ? "started by an invocation" : "PersonalOS",
+      at: r.createdAt, kind: "research", surface: r.invocationId ? "started by an invocation" : "Anywhere Aide",
       asked: null, shared: r.seed ? [r.seed.url] : [], inferred: r.plan ? `${r.kind} of ${r.product} (${r.plan.basis === "model" ? "a model's plan" : "rules"}${r.plan.scope === "this" ? ", the shared organization" : ""})` : null,
       authority: null,
       did: `${r.prospectCount ?? 0} result(s); ${r.blocker ? `stopped: ${r.blocker.detail}` : (r.steps?.at(-1)?.outcome ?? "started")}`.slice(0, 400),
@@ -74,7 +74,7 @@ export async function workIn(db: Db, owner: string, conversationId: string): Pro
     });
   }
   for (const t of (await db.find(tasks, { owner })).filter((x) => x.source?.conversationId === conversationId)) {
-    entries.push({ at: t.createdAt, kind: "task", surface: "PersonalOS", asked: null, shared: [], inferred: null, authority: null, did: `task "${t.title}"${t.remindAt ? `, reminder ${new Date(t.remindAt).toISOString()}` : ""}`, state: t.status, ref: `task ${t.id}` });
+    entries.push({ at: t.createdAt, kind: "task", surface: "Anywhere Aide", asked: null, shared: [], inferred: null, authority: null, did: `task "${t.title}"${t.remindAt ? `, reminder ${new Date(t.remindAt).toISOString()}` : ""}`, state: t.status, ref: `task ${t.id}` });
   }
   return entries.sort((a, b) => a.at - b.at);
 }

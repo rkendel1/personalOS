@@ -1,5 +1,5 @@
 /**
- * An agent outside PersonalOS reads a person's memory and proposes notes for them over /appport, under
+ * An agent outside Anywhere Aide reads a person's memory and proposes notes for them over /appport, under
  * their grants to it (FeltKit's delegated execution, the REAL private AuthBoundry, real HTTP). A proposal
  * is always inferred; only the owner makes a memory trusted (confirm, edit, their own statement) or
  * forgets one, and _ops.ts refuses those transitions under a delegation whatever is published or granted.
@@ -128,7 +128,7 @@ test("an agent reads Ada's memory and proposes notes; only Ada makes them truste
   }
   assert.equal((await memoriesOf("ada")).find((m) => m.id === id)!.status, "inferred");
 
-  // Ada confirms in PersonalOS (the Memory screen's own mutation): now trusted, and the agent sees it so.
+  // Ada confirms in Anywhere Aide (the Memory screen's own mutation): now trusted, and the agent sees it so.
   await t.as("ada").mutation(api.memory.confirm, { id });
   const confirmed = (await memoriesOf("ada")).find((m) => m.id === id)!;
   assert.equal(confirmed.status, "confirmed");

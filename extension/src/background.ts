@@ -1,7 +1,7 @@
 /**
  * Service worker. It owns only what must exist outside the panel: the toolbar button opens the
  * side panel, and the right-click menu hands a selection, link or page to it. It never talks to the
- * PersonalOS instance and holds no session; the panel does that, as the signed-in person.
+ * Anywhere Aide instance and holds no session; the panel does that, as the signed-in person.
  */
 import { lockStorage, PENDING_KEY, type Pending } from "./config";
 
@@ -13,10 +13,10 @@ chrome.runtime.onInstalled.addListener(() => {
   void lockStorage();
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "summon", title: "Summon PersonalOS with this…", contexts: ["selection", "page"] });
-    chrome.contextMenus.create({ id: "ask", title: "Ask PersonalOS about “%s”", contexts: ["selection"] });
-    chrome.contextMenus.create({ id: "task", title: "Add to my PersonalOS tasks", contexts: ["selection", "link", "page"] });
-    chrome.contextMenus.create({ id: "page", title: "Save this page to PersonalOS", contexts: ["page"] });
+    chrome.contextMenus.create({ id: "summon", title: "Summon Anywhere Aide with this…", contexts: ["selection", "page"] });
+    chrome.contextMenus.create({ id: "ask", title: "Ask Anywhere Aide about “%s”", contexts: ["selection"] });
+    chrome.contextMenus.create({ id: "task", title: "Add to my Anywhere Aide tasks", contexts: ["selection", "link", "page"] });
+    chrome.contextMenus.create({ id: "page", title: "Save this page to Anywhere Aide", contexts: ["page"] });
   });
 });
 

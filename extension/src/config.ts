@@ -1,5 +1,5 @@
 /**
- * What the extension remembers: which PersonalOS instance it is connected to, and the session
+ * What the extension remembers: which Anywhere Aide instance it is connected to, and the session
  * FeltKit issued when the person signed in to their account. Both live in chrome.storage.local,
  * locked to the extension's trusted pages (side panel, service worker): by default Chrome also lets
  * the extension's content scripts, which run inside web pages, read it, and they must never see the

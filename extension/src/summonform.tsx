@@ -1,7 +1,7 @@
 /**
- * Summon PersonalOS with the page you're on: its address and title, the text you selected (if you
+ * Summon Anywhere Aide with the page you're on: its address and title, the text you selected (if you
  * want), and what to do. It submits a `personalos.invocation/1` with the panel's session and shows
- * the receipt and, live, what becomes of it. The work runs in PersonalOS: you can close the page and
+ * the receipt and, live, what becomes of it. The work runs in Anywhere Aide: you can close the page and
  * the panel; the result is in the conversation (and the inbox) when you come back.
  */
 import { useEffect, useRef, useState } from "react";
@@ -93,7 +93,7 @@ export function SummonForm({ target, readPage, initialSelection, ask, onClose }:
   const selection = page?.selection ?? "";
   return (
     <div className="summon" data-testid="summon">
-      <div className="small"><strong>Summon PersonalOS</strong> with <span title={target.url}>{page?.title || target.title || target.url}</span></div>
+      <div className="small"><strong>Summon Anywhere Aide</strong> with <span title={target.url}>{page?.title || target.title || target.url}</span></div>
       {readError && <p className="muted small">{readError} Sending the address and title only.</p>}
       {selection && (
         <label className="small summon-selection">
@@ -101,7 +101,7 @@ export function SummonForm({ target, readPage, initialSelection, ask, onClose }:
           Include the text you selected ({selection.length.toLocaleString()} characters)
         </label>
       )}
-      <textarea aria-label="What should PersonalOS do?" placeholder={ask ? "What do you want to know about it?" : "What should PersonalOS do? (optional)"} rows={3} value={instruction} autoFocus={ask} onChange={(e) => setInstruction(e.target.value)} />
+      <textarea aria-label="What should Anywhere Aide do?" placeholder={ask ? "What do you want to know about it?" : "What should Anywhere Aide do? (optional)"} rows={3} value={instruction} autoFocus={ask} onChange={(e) => setInstruction(e.target.value)} />
       {!ask && (
         <div className="row wrap">
           {SUGGESTIONS.map((s) => <button key={s} className="ghost tiny" onClick={() => setInstruction(s)}>{s}</button>)}
@@ -113,7 +113,7 @@ export function SummonForm({ target, readPage, initialSelection, ask, onClose }:
           {previous.title ? `Continue the open conversation: ${previous.title}` : `Continue the conversation from your last summon on this page (${new Date(previous.at).toLocaleString()})`}
         </label>
       )}
-      <p className="muted small">PersonalOS works on it after you close this page. What the page says is treated as information, never as instructions; nothing is sent to anyone.</p>
+      <p className="muted small">Anywhere Aide works on it after you close this page. What the page says is treated as information, never as instructions; nothing is sent to anyone.</p>
       {error && <p className="error-text small" role="alert">{error}</p>}
       <div className="row">
         <button className="tiny" disabled={sending || !page || (ask && !instruction.trim())} onClick={() => void send()}>{sending ? "Sending…" : "Send"}</button>

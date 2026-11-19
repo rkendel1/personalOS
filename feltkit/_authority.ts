@@ -1,12 +1,12 @@
 /**
  * What a request from a connected surface needs from AuthBoundry: the capability each understood
  * request requires. The decision itself is FeltKit's `ctx.authority.decide` (the same AuthBoundry
- * contract and implementation FeltKit's platform uses), asked as PersonalOS's executor
+ * contract and implementation FeltKit's platform uses), asked as Anywhere Aide's executor
  * (`agent:personalos`, feltkit/app.ts `authority`) on behalf of the resolved account: AuthBoundry
- * answers from that person's delegation to PersonalOS alone (interactions.ts).
+ * answers from that person's delegation to Anywhere Aide alone (interactions.ts).
  */
 
-/** The AuthBoundry principal of a PersonalOS account: the requester, the delegator. */
+/** The AuthBoundry principal of a Anywhere Aide account: the requester, the delegator. */
 export const authorityPrincipal = (owner: string) => `user:${owner}`;
 
 /**
@@ -25,7 +25,7 @@ export function capabilityFor(intent: string, detail: { reminder?: boolean } = {
     case "recall": return "personalos.memory.read";
     case "project.create": return "personalos.projects.create";
     case "conversation.summary": case "conversation.decisions": return "personalos.conversation.read";
-    // Continuing one of your PersonalOS conversations from a surface, and reading its work there.
+    // Continuing one of your Anywhere Aide conversations from a surface, and reading its work there.
     case "conversation.continue": case "conversation.work": return "personalos.conversation.continue";
     default: return "personalos.assistant.converse";
   }
@@ -36,15 +36,15 @@ export const CAPABILITIES = [
   "personalos.assistant.converse", "personalos.conversation.read",
   "personalos.tasks.read", "personalos.tasks.create", "personalos.tasks.update", "personalos.tasks.delete", "personalos.reminders.create",
   "personalos.memory.read", "personalos.memory.write", "personalos.memory.delete", "personalos.projects.create",
-  // Research started from outside PersonalOS (feltkit/invocations.ts): checked when it starts and before every step.
+  // Research started from outside Anywhere Aide (feltkit/invocations.ts): checked when it starts and before every step.
   "personalos.research.run",
-  // Continuing a PersonalOS conversation (and reading its work) from a surface (feltkit/interactions.ts).
+  // Continuing a Anywhere Aide conversation (and reading its work) from a surface (feltkit/interactions.ts).
   "personalos.conversation.continue",
-  // Publishing something to X from PersonalOS (feltkit/xsurface.ts): the owner's explicit act, decided here too.
+  // Publishing something to X from Anywhere Aide (feltkit/xsurface.ts): the owner's explicit act, decided here too.
   "personalos.x.publish",
 ] as const;
 
-/** What each capability lets PersonalOS do for a person, in their words (Settings → What PersonalOS may do for you). */
+/** What each capability lets Anywhere Aide do for a person, in their words (Settings → What Anywhere Aide may do for you). */
 export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = {
   "personalos.assistant.converse": "Answer you when you mention it",
   "personalos.conversation.read": "Read the conversation it's mentioned in (summaries, decisions)",
@@ -58,12 +58,12 @@ export const CAPABILITY_LABELS: Record<(typeof CAPABILITIES)[number], string> = 
   "personalos.memory.delete": "Forget things",
   "personalos.projects.create": "Start projects",
   "personalos.research.run": "Research for you",
-  "personalos.conversation.continue": "Continue your PersonalOS conversations",
+  "personalos.conversation.continue": "Continue your Anywhere Aide conversations",
   "personalos.x.publish": "Publish on X for you, as the bot",
 };
 
 /**
- * PersonalOS's own published capabilities a person may delegate to an agent outside PersonalOS (an agent
+ * Anywhere Aide's own published capabilities a person may delegate to an agent outside Anywhere Aide (an agent
  * calling /appport for them: FeltKit's delegated execution, `ctx.auth.delegation`). Each one needs its own
  * grant to that agent; reading never implies writing. Deleting a task is not among them: it stays the
  * person's own act (feltkit/tasks.ts `remove`). Nor is anything that makes a memory trusted or removes one
@@ -81,7 +81,7 @@ export const AGENT_CAPABILITY_LABELS: Record<(typeof AGENT_CAPABILITIES)[number]
   "tasks.complete": "Mark your tasks done",
   "tasks.reopen": "Reopen your done tasks",
   "briefing.today": "Read your daily briefing",
-  "memory.list": "See what PersonalOS remembers about you",
+  "memory.list": "See what Anywhere Aide remembers about you",
   "memory.propose": "Suggest things to remember (you confirm them)",
   "projects.list": "See your projects",
   "projects.create": "Start projects",

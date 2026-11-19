@@ -1,5 +1,5 @@
 /**
- * An agent outside PersonalOS works with a person's projects and documents over /appport, under their
+ * An agent outside Anywhere Aide works with a person's projects and documents over /appport, under their
  * grants to it (FeltKit's delegated execution, the REAL private AuthBoundry, real HTTP, real Files).
  * Project and document authority are separate grants; a document's bytes, its download link and its
  * removal never pass through an agent.
@@ -103,7 +103,7 @@ test("an agent works with Ada's projects and documents only as each is granted, 
   const again = await appport("projects.create", { name: "Kitchen", description: "Redo the counters" }, "ada", "eve-p1");
   assert.deepEqual(again.output, kitchen.output, "the same key replays");
   const named = await appport("projects.create", { name: "kitchen" }, "ada", "eve-p2");
-  assert.equal(named.error.code, "feltkit.FAILED_PRECONDITION", "PersonalOS's own rule: one project per name");
+  assert.equal(named.error.code, "feltkit.FAILED_PRECONDITION", "Anywhere Aide's own rule: one project per name");
   assert.equal((await t.as("ada").query(api.projects.list, {})).filter((p) => p.name === "Kitchen").length, 1);
   const created = (await t.as("ada").query(api.actions.list, {})).find((a) => a.kind === "project.create" && a.evidence?.id === kitchen.output.id)!;
   assert.deepEqual([created.via, created.delegation?.agent, created.delegation?.capability], ["agent", "eve", "projects.create"]);
@@ -131,7 +131,7 @@ test("an agent works with Ada's projects and documents only as each is granted, 
   await grantEve("ada", ["projects.list", "projects.create", "projects.update", "documents.list", "documents.update"]);
   const moved = await appport("documents.update", { id: lease.id, projectId: kitchen.output.id, note: "for the contractor" }, "ada", "eve-d1");
   assert.deepEqual([moved.ok, moved.output.projectId, moved.output.note], [true, kitchen.output.id, "for the contractor"]);
-  assert.deepEqual((await t.as("ada").query(api.documents.list, { projectId: kitchen.output.id })).map((d) => d.id), [lease.id], "visible on PersonalOS's own read");
+  assert.deepEqual((await t.as("ada").query(api.documents.list, { projectId: kitchen.output.id })).map((d) => d.id), [lease.id], "visible on Anywhere Aide's own read");
   const docAction = (await t.as("ada").query(api.actions.list, {})).find((a) => a.kind === "document.update")!;
   assert.deepEqual([docAction.via, docAction.evidence?.id, docAction.evidence?.verified, docAction.delegation?.capability], ["agent", lease.id, true, "documents.update"]);
   await refused(appport("documents.update", { id: lease.id, projectId: garden.id }, "ada"), "ada", "not to Grace's project", "NOT_FOUND");

@@ -1,5 +1,5 @@
 /**
- * PersonalOS Anywhere, the PersonalOS side: interactions delivered by a connected surface's bridge
+ * Anywhere Aide, the Anywhere Aide side: interactions delivered by a connected surface's bridge
  * (personalos.interaction/1), on the real FeltKit runtime and an isolated FeltDB instance.
  * The Multiplayer side (the adapter) is tested in the multiplayer repository; the two together in
  * its e2e/personalos-anywhere.e2e.mjs.
@@ -49,7 +49,7 @@ async function deliverKeyed(t: TestApp, text: string, o: Opts = {}) {
   return { ...(await t.as(BRIDGE).mutation(api.interactions.receive, { envelope: e as any })), key: e.idempotencyKey };
 }
 
-/** Link a source identity to a PersonalOS account the real way: a code here, sent in a DM there, confirmed here. */
+/** Link a source identity to a Anywhere Aide account the real way: a code here, sent in a DM there, confirmed here. */
 async function link(t: TestApp, owner: string, source: string, o: Opts = {}) {
   const { id, code } = await t.as(owner).mutation(api.links.start, {});
   const r = await deliver(t, `link ${code}`, { from: source, direct: true, ...o });
@@ -89,7 +89,7 @@ async function withApp(fn: (t: TestApp) => Promise<void>) {
 
 // ── Identity and linking ─────────────────────────────────────────────────────
 
-test("linking: a code issued in PersonalOS, sent by the authenticated sender in a DM, and confirmed by the owner binds that sender to that account", () => withApp(async (t) => {
+test("linking: a code issued in Anywhere Aide, sent by the authenticated sender in a DM, and confirmed by the owner binds that sender to that account", () => withApp(async (t) => {
   const { id, code } = await t.as("ada").mutation(api.links.start, {});
   const r = await deliver(t, `link ${code}`, { from: "ada", direct: true });
   assert.match(r.reply, /Almost connected.*confirm/s);
@@ -129,7 +129,7 @@ test("identity security: a code someone else saw and sent first shows THEIR acco
 test("identity security: only the owner who issued a code can confirm it; another account and the bridge cannot", () => withApp(async (t) => {
   const { id, code } = await t.as("ada").mutation(api.links.start, {});
   await deliver(t, `link ${code}`, { from: "grace", direct: true });
-  // Grace (another PersonalOS account) cannot confirm Ada's presented code to bind her identity to Ada's account.
+  // Grace (another Anywhere Aide account) cannot confirm Ada's presented code to bind her identity to Ada's account.
   await rejects(t.as("grace").mutation(api.links.confirm, { id }), "NOT_FOUND");
   // The surface's bridge cannot confirm, start or revoke links at all (no links.* permission).
   await rejects(t.as(BRIDGE).mutation(api.links.confirm, { id }), "FORBIDDEN");
@@ -262,7 +262,7 @@ test("forged identity: display name, claims and text are never identity; a forge
 
 // ── Execution ───────────────────────────────────────────────────────────────
 
-test("a reminder from a channel: created in the requester's account, with evidence, visible in PersonalOS", () => withApp(async (t) => {
+test("a reminder from a channel: created in the requester's account, with evidence, visible in Anywhere Aide", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   const r = await deliver(t, "@PersonalOS remind me to follow up with Sarah tomorrow at 10am", { from: "ada" });
   assert.equal(r.state, "completed");
@@ -273,7 +273,7 @@ test("a reminder from a channel: created in the requester's account, with eviden
   assert.ok(task!.remindAt! > Date.now());
   const [action] = (await t.as("ada").query(api.actions.list, {})).filter((a) => a.kind === "reminder.create");
   assert.deepEqual([action!.status, action!.evidence?.verified, action!.evidence?.id], ["succeeded", true, task!.id]);
-  // The same interaction in PersonalOS: the conversation, and the interaction with its provenance.
+  // The same interaction in Anywhere Aide: the conversation, and the interaction with its provenance.
   const [i] = (await t.as("ada").query(api.interactions.list, {})).filter((x) => x.intent === "task.create");
   assert.deepEqual([i!.surface, i!.where, i!.from, i!.state], ["Multiplayer", "Multiplayer · #general", "ada", "completed"]);
   assert.deepEqual(i!.actionIds, [action!.id]);
@@ -298,14 +298,14 @@ test("duplicate and replayed delivery execute once (also across a restart)", () 
   assert.equal((await t.as("ada").query(api.actions.list, {})).filter((a) => a.kind === "task.create").length, 1);
 }));
 
-test("clarification: PersonalOS asks, the answer in the same thread completes the request; out-of-order never merges backwards", () => withApp(async (t) => {
+test("clarification: Anywhere Aide asks, the answer in the same thread completes the request; out-of-order never merges backwards", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   const q = await deliver(t, "@personalos remind me to follow up with Sarah", { from: "ada", thread: "root-1", sequence: 10 });
   assert.equal(q.state, "needs_clarification");
   assert.match(q.reply, /When should I remind you/);
   const a = await deliver(t, "@personalos tomorrow at 10am", { from: "ada", thread: "root-1", sequence: 11 });
   assert.equal(a.state, "completed", a.reply);
-  assert.equal(a.conversationId, q.conversationId, "one PersonalOS conversation per source thread");
+  assert.equal(a.conversationId, q.conversationId, "one Anywhere Aide conversation per source thread");
   assert.equal((await t.as("ada").query(api.tasks.list, {}))[0]?.title, "Follow up with Sarah");
 
   // Out of order: the answer (seq 21) arrives before the question (seq 20). It is not merged into a later question.
@@ -316,7 +316,7 @@ test("clarification: PersonalOS asks, the answer in the same thread completes th
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 1);
 }));
 
-test("approval: a destructive request waits for the owner in PersonalOS; approve and deny are reflected as updates", () => withApp(async (t) => {
+test("approval: a destructive request waits for the owner in Anywhere Aide; approve and deny are reflected as updates", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   await t.as("ada").mutation(api.tasks.create, { title: "Renew passport (confidential case 4471)" });
   await t.as("ada").mutation(api.tasks.create, { title: "Old draft" });
@@ -329,10 +329,10 @@ test("approval: a destructive request waits for the owner in PersonalOS; approve
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 2, "nothing deleted before approval");
   // The bridge cannot approve.
   await rejects(t.as(BRIDGE).mutation(api.actions.approve, { id: r.approval!.actionId }), "FORBIDDEN");
-  // The owner approves in PersonalOS (the existing approval workflow).
+  // The owner approves in Anywhere Aide (the existing approval workflow).
   await t.as("ada").mutation(api.actions.approve, { id: r.approval!.actionId });
   const s = await t.as(BRIDGE).mutation(api.interactions.status, { key: r.key, afterSeq: r.updateSeq });
-  assert.deepEqual([s.state, s.updates.map((u) => u.text)], ["completed", ["Approved in PersonalOS and done."]]);
+  assert.deepEqual([s.state, s.updates.map((u) => u.text)], ["completed", ["Approved in Anywhere Aide and done."]]);
   assert.deepEqual((await t.as("ada").query(api.tasks.list, {})).map((x) => x.title), ["Old draft"]);
 
   // Denied.
@@ -340,7 +340,7 @@ test("approval: a destructive request waits for the owner in PersonalOS; approve
   await t.as("ada").mutation(api.actions.reject, { id: d.approval!.actionId });
   const ds = await t.as(BRIDGE).mutation(api.interactions.status, { key: d.key, afterSeq: 0 });
   assert.equal(ds.state, "cancelled");
-  assert.equal(ds.updates.at(-1)!.text, "Declined in PersonalOS. Nothing was changed.");
+  assert.equal(ds.updates.at(-1)!.text, "Declined in Anywhere Aide. Nothing was changed.");
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 1);
 }));
 
@@ -411,7 +411,7 @@ test("thread context: summary, decisions and action items read only the conversa
   assert.equal(sum.conversationId, items.conversationId);
 }));
 
-test("a mention in a shared conversation never exposes the owner's private data; a DM with PersonalOS may", () => withApp(async (t) => {
+test("a mention in a shared conversation never exposes the owner's private data; a DM with Anywhere Aide may", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   await t.as("ada").mutation(api.memory.add, { kind: "person", subject: "sam", content: "Sam is my manager and is on medical leave" });
   await t.as("ada").mutation(api.tasks.create, { title: "Call the divorce lawyer", due: "2026-11-13" });
@@ -419,12 +419,12 @@ test("a mention in a shared conversation never exposes the owner's private data;
     const r = await deliver(t, text, { from: "ada" });
     assert.doesNotMatch(r.reply, /medical|manager|lawyer/i, `shared reply to "${text}" leaks private data: ${r.reply}`);
     assert.match(r.reply, /private/);
-    // The full answer is in PersonalOS, for the owner only.
+    // The full answer is in Anywhere Aide, for the owner only.
     const msgs = await t.as("ada").query(api.conversations.messagesOf, { conversationId: r.conversationId! });
     assert.ok(msgs.at(-1)!.text.length > 0);
   }
   const dm = await deliver(t, "what do you know about Sam?", { from: "ada", direct: true });
-  assert.match(dm.reply, /medical leave/, "a direct conversation with PersonalOS is private to its owner");
+  assert.match(dm.reply, /medical leave/, "a direct conversation with Anywhere Aide is private to its owner");
   // A DM between Ada and another person is shared.
   const otherDm = await deliver(t, "@personalos what do you know about Sam?", { from: "ada", kind: "dm", channel: "dm-ada-grace" });
   assert.doesNotMatch(otherDm.reply, /medical/);
@@ -487,11 +487,11 @@ test("a bridge-queued reminder fires as the owner while the link is active, and 
   assert.equal((await t.as("ada").query(api.inbox.list, { unread: true }))[0]?.type, "reminder.due", "Ada is notified, not the bridge");
 }));
 
-test("continuity: the interaction is one conversation in PersonalOS; continuing there and approving there both land in one history", () => withApp(async (t) => {
+test("continuity: the interaction is one conversation in Anywhere Aide; continuing there and approving there both land in one history", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   await t.as("ada").mutation(api.tasks.create, { title: "Draft budget" });
   const r = await deliver(t, "@personalos delete draft budget", { from: "ada", thread: "th-9" });
-  // Ada continues the same conversation in PersonalOS.
+  // Ada continues the same conversation in Anywhere Aide.
   await t.as("ada").mutation(api.assistant.send, { conversationId: r.conversationId!, text: "add buy coffee to my list" });
   const conv = (await t.as("ada").query(api.conversations.list)).find((c) => c.id === r.conversationId)!;
   assert.equal(conv.title, "Multiplayer · #general (thread)");
@@ -566,7 +566,7 @@ test("Resolver: a planted reference whose stored identity differs from the sende
   assert.equal((await t.as("ada").query(api.interactions.list, {})).filter((i) => i.state !== "refused" && i.intent !== "link").length, 0);
 }));
 
-test("Resolver: revoking in PersonalOS revokes the Resolver reference; it stops resolving and its history stays", () => withApp(async (t) => {
+test("Resolver: revoking in Anywhere Aide revokes the Resolver reference; it stops resolving and its history stays", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   const [l] = await t.as("ada").query(api.links.list);
   await t.as("ada").mutation(api.links.revoke, { id: l!.id });
@@ -597,7 +597,7 @@ test("Resolver: unreachable or unconfigured, nothing resolves and nothing runs (
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 1);
 }));
 
-test("Resolver: PersonalOS's keys are least privilege: neither reads or writes outside ref://identity/personalos/", async () => {
+test("Resolver: Anywhere Aide's keys are least privilege: neither reads or writes outside ref://identity/personalos/", async () => {
   await resolver.admin.put({ ref: "ref://prod/secret-config", kind: "value", binding: { value: { x: 1 } } as any, expectedRevision: 0 } as any);
   for (const key of [resolver.keys.read.secret, resolver.keys.write.secret]) {
     assert.equal((await resolverCall(key, "resolver.resolve", { ref: "ref://prod/secret-config" })).status, 403);
@@ -613,7 +613,7 @@ test("AuthBoundry: each request is decided on its exact capability before it run
   const ok = await deliver(t, "@personalos remind me to call the bank tomorrow at 9am", { from: "ada" });
   assert.equal(ok.state, "completed");
   const d = authority.decisions.at(-1)!;
-  // Requester and executor stay distinct: PersonalOS's agent asks, on behalf of Ada, under Ada's delegation.
+  // Requester and executor stay distinct: Anywhere Aide's agent asks, on behalf of Ada, under Ada's delegation.
   assert.deepEqual([d.principal, d.onBehalfOf, d.capability, d.decision, d.delegationId], ["agent:personalos", "user:ada", "personalos.reminders.create", "allow", "delegation-user:ada"]);
   const [i] = (await t.as("ada").query(api.interactions.list, {})).filter((x) => x.intent === "task.create");
   assert.ok(i);
@@ -686,7 +686,7 @@ test("delegation: an allow that does not name the requester and a delegation fai
   assert.equal((await t.as("ada").query(api.tasks.list, {})).length, 0);
 }));
 
-test("approval: seeing the conversation is not authority; only the requester approves, in PersonalOS, the exact proposed action", () => withApp(async (t) => {
+test("approval: seeing the conversation is not authority; only the requester approves, in Anywhere Aide, the exact proposed action", () => withApp(async (t) => {
   await link(t, "ada", "ada");
   await link(t, "grace", "grace");
   await t.as("ada").mutation(api.tasks.create, { title: "Budget draft" });

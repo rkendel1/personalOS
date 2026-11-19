@@ -1,15 +1,15 @@
 /**
- * Work a person hands to their agent from a PersonalOS conversation, and what they do with it after.
+ * Work a person hands to their agent from a Anywhere Aide conversation, and what they do with it after.
  *
- *   start    one piece of work per message: by PersonalOS's routing rules (feltkit/_route.ts, from the turn)
+ *   start    one piece of work per message: by Anywhere Aide's routing rules (feltkit/_route.ts, from the turn)
  *            or by the person's "Work on this". Recorded here first; the `anywhere` agent submits it to the
  *            connected agent and follows it (feltkit/anywhere.ts), so it continues after the person leaves.
  *   answer   the person answers what the agent asks; delivered to the same work, which resumes where it asked.
  *   cancel   the person stops it; delivered to the agent, which stops once nothing it started is uncertain.
  *
  * Delegation is not authorization: the agent acts only under the person's own grants to it, decided by
- * AuthBoundry at every call on PersonalOS's delegated /appport. Without a connected agent nothing is sent:
- * the request stays in the conversation, marked so, and PersonalOS works as before.
+ * AuthBoundry at every call on Anywhere Aide's delegated /appport. Without a connected agent nothing is sent:
+ * the request stays in the conversation, marked so, and Anywhere Aide works as before.
  */
 import { fail, s, type MutationCtx } from "@feltdb/feltkit";
 import { agentwork, app, messages } from "./app.js";
@@ -40,12 +40,12 @@ export async function startWork(ctx: MutationCtx, messageId: string, routedBy: "
   if (!connected) {
     await appendMessage(ctx, message.conversationId, {
       role: "assistant",
-      text: "No agent is connected to this PersonalOS, so nothing was started. Your request is kept here; choose Work on this once one is connected.",
+      text: "No agent is connected to this Anywhere Aide, so nothing was started. Your request is kept here; choose Work on this once one is connected.",
     });
   } else {
     await appendMessage(ctx, message.conversationId, {
       role: "assistant",
-      text: `Handed to your agent (${reason}). It keeps working if you close PersonalOS; its progress, any questions for you, and what it did will appear here.`,
+      text: `Handed to your agent (${reason}). It keeps working if you close Anywhere Aide; its progress, any questions for you, and what it did will appear here.`,
     });
     handOff(ctx, "work", id);
   }

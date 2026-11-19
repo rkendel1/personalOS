@@ -1,6 +1,6 @@
 /**
  * Verified identity linking (Slice 5 of the AppPort foundation): an external surface account is bound
- * to a PersonalOS person only with proof of both sides, exactly once, revocably, and without granting
+ * to a Anywhere Aide person only with proof of both sides, exactly once, revocably, and without granting
  * anything. Real FeltKit runtime, the REAL Resolver server (tests/fixtures/anywhere.ts) and the REAL
  * private AuthBoundry (@authboundry/local, no stub authority): what a link does or does not change in
  * delegation is AuthBoundry's own answer.
@@ -94,7 +94,7 @@ async function withApp(fn: (t: TestApp) => Promise<void>) {
 // ── Proof of both sides ───────────────────────────────────────────────────────
 
 test("1-3: an authenticated person initiates; an unverified identity cannot be linked; a verified one links to that person", () => withApp(async (t) => {
-  // Initiating needs a PersonalOS session: anonymous and viewer sessions cannot.
+  // Initiating needs a Anywhere Aide session: anonymous and viewer sessions cannot.
   await rejects(t.as(null as never).mutation(api.links.start, {}), "UNAUTHORIZED");
   await rejects(t.as("guest").mutation(api.links.start, {}), "FORBIDDEN");
   const { id, code, expiresAt } = await t.as("ada").mutation(api.links.start, {});
@@ -203,7 +203,7 @@ test("11, 13: one surface account belongs to one person; a later claim is refuse
   await deliver(t, `link ${graces.code}`, { from: "sam", direct: true });
   await link(t, "ada", "sam");
   // Grace confirming now does not move sam to her: refused in her own confirmation, with the reason.
-  await assert.rejects(t.as("grace").mutation(api.links.confirm, { id: graces.id }), (e: any) => e.code === "FAILED_PRECONDITION" && /already connected, or being connected, to a different PersonalOS account/.test(e.message));
+  await assert.rejects(t.as("grace").mutation(api.links.confirm, { id: graces.id }), (e: any) => e.code === "FAILED_PRECONDITION" && /already connected, or being connected, to a different Anywhere Aide account/.test(e.message));
   await settle(t);
   assert.deepEqual((await linksOf(t, "grace")).map((l) => l.status), ["presented"]);
   // A fresh code from Grace presented by sam is refused at presentation.
@@ -255,7 +255,7 @@ test("14-17: a person sees and unlinks their identities; an unlinked one never r
   assert.equal((await refsFor("sam")).length, 2);
 }));
 
-test("21: a restart of PersonalOS and of Resolver keeps verified links and revocations", () => withApp(async (t) => {
+test("21: a restart of Anywhere Aide and of Resolver keeps verified links and revocations", () => withApp(async (t) => {
   await link(t, "ada", "sam");
   const gone = await link(t, "ada", "sam-old");
   await t.as("ada").mutation(api.links.revoke, { id: gone });
@@ -296,7 +296,7 @@ test("22: failed attempts leave no partial link: no Resolver reference, no owner
 // ── Identity is not authority ────────────────────────────────────────────────
 
 test("18-20: a link creates and changes no AuthBoundry grant, grants nothing, and leaves the person's own session as it was", () => withApp(async (t) => {
-  // Grants to PersonalOS's own executor always; an outside agent's too where this FeltKit has them.
+  // Grants to Anywhere Aide's own executor always; an outside agent's too where this FeltKit has them.
   if (AGENTS) await (t.as("ada") as any).action(api.delegation.registerAgent, { id: "eve" });
   await t.as("ada").action(api.delegation.set, { capabilities: ["personalos.tasks.read"] });
   if (AGENTS) await t.as("ada").action(api.delegation.set, { agent: "eve", capabilities: ["tasks.list"] });
@@ -306,7 +306,7 @@ test("18-20: a link creates and changes no AuthBoundry grant, grants nothing, an
   const id = await link(t, "ada", "sam");
   await link(t, "grace", "gus");
   assert.deepEqual({ ada: await grants("ada"), grace: await grants("grace") }, before, "linking changed no grant");
-  // Grace granted PersonalOS nothing: her linked account resolves to her and is refused by AuthBoundry.
+  // Grace granted Anywhere Aide nothing: her linked account resolves to her and is refused by AuthBoundry.
   const refused = await deliver(t, "@personalos add buy milk to my list", { from: "gus" });
   assert.notEqual(refused.state, "completed", JSON.stringify(refused));
   assert.deepEqual(await t.as("grace").query(api.tasks.list, {}), []);
@@ -362,7 +362,7 @@ test("a link recorded before ownership claims existed still cannot be taken over
   // Grace's code is presented by sam while sam is not linked to anyone.
   const graces = await t.as("grace").mutation(api.links.start, {});
   await deliver(t, `link ${graces.code}`, { from: "sam", direct: true });
-  // Then a link of sam to Ada appears in Resolver that PersonalOS holds no claim for (an older link).
+  // Then a link of sam to Ada appears in Resolver that Anywhere Aide holds no claim for (an older link).
   const external = { adapter: "multiplayer", instance: INSTANCE, principalId: "sam" };
   const ref = `ref://identity/personalos/multiplayer/${await hex(INSTANCE)}/${await hex("sam")}/legacy`;
   await resolver.admin.put({ ref, kind: "value", binding: { value: { canonical: "personalos:account:ada", external, verification: { method: "personalos.link-code/dm+owner-confirmed", challengeId: "legacy", verifiedAt: new Date().toISOString() }, linkedAt: new Date().toISOString() } }, expectedRevision: 0, ttlSeconds: 0, lookup: await lookupEntry(external) } as any);
@@ -370,7 +370,7 @@ test("a link recorded before ownership claims existed still cannot be taken over
   await t.as("grace").mutation(api.links.confirm, { id: graces.id });
   await settle(t);
   const [g] = await linksOf(t, "grace");
-  assert.deepEqual([g!.status, g!.error], ["presented", "That account is already connected to a different PersonalOS account."]);
+  assert.deepEqual([g!.status, g!.error], ["presented", "That account is already connected to a different Anywhere Aide account."]);
   assert.deepEqual((await activeRefs("sam")).map((r) => r.ref), [ref]);
   // The refused confirmation released its claim (a held claim would refuse this one), and is refused again.
   await t.as("grace").mutation(api.links.confirm, { id: graces.id });

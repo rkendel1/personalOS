@@ -1,5 +1,5 @@
 /**
- * The side panel is the PersonalOS web app itself (src/App.tsx), pointed at the person's deployed
+ * The side panel is the Anywhere Aide web app itself (src/App.tsx), pointed at the person's deployed
  * instance with a bearer session. Same account, same collections, same functions, same services
  * (files, notifications, jobs, model), so there is nothing to keep in sync. What the extension adds
  * is the page beside it: a bar with what the person is looking at, and a right-click menu.

@@ -1,10 +1,10 @@
 /**
  * Connected surfaces: binding a sender on another surface (a Multiplayer account) to this
- * PersonalOS account. Both sides authenticate:
+ * Anywhere Aide account. Both sides authenticate:
  *
- *   1. Here, signed in to PersonalOS, the owner asks for a code (links:start). Only a digest is kept;
+ *   1. Here, signed in to Anywhere Aide, the owner asks for a code (links:start). Only a digest is kept;
  *      the code is shown once and expires in 10 minutes.
- *   2. On the surface, signed in there, the owner sends `link XXXX-XXXX` to PersonalOS in a direct
+ *   2. On the surface, signed in there, the owner sends `link XXXX-XXXX` to Anywhere Aide in a direct
  *      message. The surface's bridge delivers it with the sender's authenticated source identity;
  *      interactions:receive uses the code up and records which surface account presented it.
  *   3. Here again, the owner sees that account and confirms it is theirs (links:confirm). A code
@@ -16,7 +16,7 @@
  * bridge's session can call the Resolver integrations' capabilities (which FeltKit also serves on
  * /appport), because none holds that permission.
  *
- * A code is accepted only in a direct conversation with PersonalOS, so nobody else can read and
+ * A code is accepted only in a direct conversation with Anywhere Aide, so nobody else can read and
  * redeem it first. The verified link is recorded in Resolver (feltkit/_resolver.ts), which is what
  * every request resolves through; a source identity resolves to one account at a time, and several
  * source identities may resolve to the same account. Revoking revokes the Resolver reference, so the
@@ -117,7 +117,7 @@ export const confirm = app.mutation({
     // at commit (unique), so two owners confirming the same account at once cannot both proceed.
     const claim = await claimOf({ adapter: link.adapter, instance: link.sourceInstance, principalId: link.sourcePrincipalId });
     const [holder] = await ctx.db.find(identityLinks, { claim });
-    if (holder) fail("FAILED_PRECONDITION", holder.owner === link.owner ? "That account is already connected to your PersonalOS account." : "That account is already connected, or being connected, to a different PersonalOS account.");
+    if (holder) fail("FAILED_PRECONDITION", holder.owner === link.owner ? "That account is already connected to your Anywhere Aide account." : "That account is already connected, or being connected, to a different Anywhere Aide account.");
     await ctx.db.patch(identityLinks, id, { status: "confirming", confirmedAt: Date.now(), claim, error: undefined });
     ctx.afterCommit.agent("identity", { linkId: id });
     return view((await ctx.db.get(identityLinks, id))!);
@@ -130,7 +130,7 @@ export const confirm = app.mutation({
  * record's state, which only the owner's own mutations set.
  */
 export const identityAgent = app.agent("identity", {
-  principal: { id: "personalos-identity", displayName: "PersonalOS identity links" },
+  principal: { id: "personalos-identity", displayName: "Anywhere Aide identity links" },
   roles: ["identitylinker"],
   access: "identity.link",
   description: "Records the owner's identity-link decisions in Resolver.",
@@ -140,8 +140,8 @@ export const identityAgent = app.agent("identity", {
     if (link.status === "confirming") {
       const external = { adapter: link.adapter, instance: link.sourceInstance!, principalId: link.sourcePrincipalId! };
       const current = await resolveExternal(ctx, external);
-      const problem = current.status === "ambiguous" ? "That account resolves to more than one PersonalOS link. Disconnect the others first."
-        : current.status === "resolved" && current.owner !== link.owner ? "That account is already connected to a different PersonalOS account."
+      const problem = current.status === "ambiguous" ? "That account resolves to more than one Anywhere Aide link. Disconnect the others first."
+        : current.status === "resolved" && current.owner !== link.owner ? "That account is already connected to a different Anywhere Aide account."
         : null;
       if (problem) { await ctx.db.patch(identityLinks, link.id, { status: "presented", error: problem, claim: undefined }); return; }
       const now = Date.now();

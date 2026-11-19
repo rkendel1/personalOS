@@ -1,26 +1,26 @@
 /**
- * PersonalOS Anywhere: interactions from connected surfaces (contract: feltkit/_interaction.ts,
- * docs/INTERACTION-CONTRACT.md). A surface's bridge delivers an envelope; PersonalOS decides
+ * Anywhere Aide: interactions from connected surfaces (contract: feltkit/_interaction.ts,
+ * docs/INTERACTION-CONTRACT.md). A surface's bridge delivers an envelope; Anywhere Aide decides
  * everything else, in one transaction:
  *
  *   1. authenticate   the bridge's session (FeltKit) holds `interactions.receive`; the envelope
  *                     must name that same adapter
  *   2. idempotency    one interaction per (adapter, key): a repeated delivery returns the stored
  *                     outcome and executes nothing
- *   3. identity       the sender's source identity → the PersonalOS account of an *active* link
+ *   3. identity       the sender's source identity → the Anywhere Aide account of an *active* link
  *                     (links.ts), or a refusal. Names, handles and claims are never identity
- *   4. audience       a direct conversation with PersonalOS is private; anything else is shared, and
+ *   4. audience       a direct conversation with Anywhere Aide is private; anything else is shared, and
  *                     a shared reply never carries the owner's private data
  *   5. understand     a request about the conversation itself (summary, decisions, action items)
  *                     reads only the envelope's context; anything else is the deterministic assistant
  *                     (assistant.ts), unchanged, working for the linked owner
  *   6. execute        through the same operations as the chat (_ops.ts): verified, with evidence in
  *                     the action log; destructive changes become proposals the owner approves here
- *   7. record         the interaction, its PersonalOS conversation (the same thread on both
+ *   7. record         the interaction, its Anywhere Aide conversation (the same thread on both
  *                     surfaces), its actions, and the updates the surface posts back
  *
- * The surface never executes anything and never decides what PersonalOS may do. Approvals stay in
- * PersonalOS (actions:approve, a person's act); their outcome is appended here as an update.
+ * The surface never executes anything and never decides what Anywhere Aide may do. Approvals stay in
+ * Anywhere Aide (actions:approve, a person's act); their outcome is appended here as an update.
  */
 import { fail, s } from "@feltdb/feltkit";
 import type { MutationCtx } from "@feltdb/feltkit";
@@ -43,7 +43,7 @@ const label = (adapter: string) => LABELS[adapter] ?? adapter;
 
 /** Intents whose reply only repeats what the requester just said, or nothing private: safe in a shared conversation. */
 const SHAREABLE = new Set(["greet", "thanks", "help", "task.create", "remember", "project.create", "conversation.summary", "conversation.decisions", "conversation.actionItems", "unknown"]);
-/** Intents that read the owner's private PersonalOS data. */
+/** Intents that read the owner's private Anywhere Aide data. */
 const PRIVATE_READS = new Set(["recall", "task.list", "briefing", "forgetting", "plan.week", "project.status", "task.complete", "task.reschedule", "task.delete", "forget", "confirm"]);
 
 const Update = s.object({ seq: s.number(), state: s.string(), text: s.string(), at: s.number(), actionId: s.optional(s.string()) });
@@ -58,7 +58,7 @@ const Outcome = s.object({
   updateSeq: s.number(),
   approval: s.nullable(s.object({ actionId: s.string(), summary: s.string(), reason: s.string() })),
   refusal: s.nullable(s.object({ code: s.string(), message: s.string() })),
-  /** The PersonalOS conversation holding this interaction, for an "open in PersonalOS" link. */
+  /** The Anywhere Aide conversation holding this interaction, for an "open in Anywhere Aide" link. */
   conversationId: s.nullable(s.string()),
 });
 
@@ -83,7 +83,7 @@ const clean = (text: string) => text.replace(/(^|\s)@personalos\b[:,]?/gi, " ").
 
 export const receive = app.mutation({
   access: "interactions.receive",
-  description: "A connected surface hands PersonalOS a request (personalos.interaction/1).",
+  description: "A connected surface hands Anywhere Aide a request (personalos.interaction/1).",
   args: { envelope: Envelope },
   returns: Outcome,
   retry: { sequenceConflicts: 3 },
@@ -118,34 +118,34 @@ export const receive = app.mutation({
         const [exposed] = await ctx.db.find(identityLinks, { codeDigest: await digest(`${code[1]}${code[2]}`) });
         if (exposed?.status === "pending") await ctx.db.delete(identityLinks, exposed.id);
       }
-      if (audience !== "private") return refuse("LINK_NOT_PRIVATE", "Send link codes to me in a direct message, never in a shared conversation. That code is now unsafe: get a new one in PersonalOS → Settings → Connected surfaces.");
+      if (audience !== "private") return refuse("LINK_NOT_PRIVATE", "Send link codes to me in a direct message, never in a shared conversation. That code is now unsafe: get a new one in Anywhere Aide → Settings → Connected surfaces.");
       const digested = await digest(`${code[1]}${code[2]}`);
       const [pending] = await ctx.db.find(identityLinks, { codeDigest: digested });
-      if (!pending || pending.status !== "pending" || pending.adapter !== adapter || (pending.codeExpiresAt ?? 0) < now) return refuse("LINK_CODE_INVALID", "That code isn't valid (it may have expired or been used). Get a new one in PersonalOS → Settings → Connected surfaces.");
+      if (!pending || pending.status !== "pending" || pending.adapter !== adapter || (pending.codeExpiresAt ?? 0) < now) return refuse("LINK_CODE_INVALID", "That code isn't valid (it may have expired or been used). Get a new one in Anywhere Aide → Settings → Connected surfaces.");
       const external = { adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId };
       const current = await resolveExternal(ctx, external);
-      if (current.status === "resolved" && current.owner !== pending.owner) return refuse("ALREADY_LINKED", "This account is already connected to a different PersonalOS account. Disconnect it there first.");
-      if (current.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "This account resolves to more than one PersonalOS link, so I won't act until that is fixed. Disconnect it in PersonalOS → Settings → Connected surfaces.");
+      if (current.status === "resolved" && current.owner !== pending.owner) return refuse("ALREADY_LINKED", "This account is already connected to a different Anywhere Aide account. Disconnect it there first.");
+      if (current.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "This account resolves to more than one Anywhere Aide link, so I won't act until that is fixed. Disconnect it in Anywhere Aide → Settings → Connected surfaces.");
       // The code is used up here (one presentation per code), and nothing is linked yet: this records
-      // which surface account presented it. The owner, signed in to PersonalOS, sees that account and
+      // which surface account presented it. The owner, signed in to Anywhere Aide, sees that account and
       // confirms it (links:confirm), which is what writes the link to Resolver. So a code someone else
       // saw cannot link their account, and a surface's bridge never writes an identity binding.
       await ctx.db.patch(identityLinks, pending.id, { status: "presented", sourcePrincipalId: e.sender.sourcePrincipalId, sourceDisplayName: e.sender.displayName, sourceInstance: e.source.instance, presentedAt: now, codeDigest: undefined, codeExpiresAt: now + PRESENTED_TTL_MS });
-      const text = `Almost connected. Open PersonalOS → Settings → Connected surfaces and confirm that ${e.sender.displayName} on ${label(adapter)} is you. Until you do, I won't act for this account.`;
+      const text = `Almost connected. Open Anywhere Aide → Settings → Connected surfaces and confirm that ${e.sender.displayName} on ${label(adapter)} is you. Until you do, I won't act for this account.`;
       const id = await ctx.db.insert(interactions, { ...base, owner: pending.owner, identity: { ...who, resolution: "link_presented", linkId: pending.id }, state: "completed", intent: "link", updates: [{ seq: 1, state: "completed", text, at: now }] });
       return outcome((await ctx.db.get(interactions, id))!, false);
     }
 
     // ── Identity: Resolver maps the authenticated source identity to a canonical account ──
     const resolved = await resolveExternal(ctx, { adapter, instance: e.source.instance, principalId: e.sender.sourcePrincipalId });
-    if (resolved.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "Your account here resolves to more than one PersonalOS link, so I won't act for anyone until that is fixed in PersonalOS → Settings → Connected surfaces.");
+    if (resolved.status === "ambiguous") return refuse("AMBIGUOUS_IDENTITY", "Your account here resolves to more than one Anywhere Aide link, so I won't act for anyone until that is fixed in Anywhere Aide → Settings → Connected surfaces.");
     if (resolved.status !== "resolved") {
-      return refuse("NOT_LINKED", `I don't know which PersonalOS account is yours yet, so I can't act for you. To connect: in PersonalOS open Settings → Connected surfaces → Connect ${label(adapter)}, then send me the code in a direct message ("link XXXX-XXXX").`);
+      return refuse("NOT_LINKED", `I don't know which Anywhere Aide account is yours yet, so I can't act for you. To connect: in Anywhere Aide open Settings → Connected surfaces → Connect ${label(adapter)}, then send me the code in a direct message ("link XXXX-XXXX").`);
     }
     const owner = resolved.owner;
     const [index] = (await ctx.db.find(identityLinks, { owner })).filter((l) => l.resolverRef === resolved.ref);
     // The owner disconnected it here and the identity agent is revoking it in Resolver: already refused.
-    if (index && (index.status === "revoking" || index.status === "revoked")) return refuse("NOT_LINKED", `This account was disconnected from PersonalOS. To connect again: in PersonalOS open Settings → Connected surfaces → Connect ${label(adapter)}.`);
+    if (index && (index.status === "revoking" || index.status === "revoked")) return refuse("NOT_LINKED", `This account was disconnected from Anywhere Aide. To connect again: in Anywhere Aide open Settings → Connected surfaces → Connect ${label(adapter)}.`);
     if (index) await ctx.db.patch(identityLinks, index.id, { lastUsedAt: now });
     const octx = ops.actingFor(ctx, owner);
     const identity = { ...who, resolution: "linked" as const, ...(index ? { linkId: index.id } : {}), resolverRef: resolved.ref, resolverRevision: resolved.revision, canonical: resolved.canonical };
@@ -154,7 +154,7 @@ export const receive = app.mutation({
     const clock = clockFor(e.sender.timeZone ?? null);
     const text = clean(e.message.text) || e.message.text;
 
-    // ── Continuity: carry on one of your PersonalOS conversations here, or see its work ──
+    // ── Continuity: carry on one of your Anywhere Aide conversations here, or see its work ──
     const continuing = continuityIntent(text);
     if (continuing) {
       // The conversation this thread is on now (never a refused attempt's).
@@ -166,10 +166,10 @@ export const receive = app.mutation({
       };
       // Another person's work never crosses into a shared conversation: only a direct message with me.
       if (audience !== "private") return record("refused", "I only continue a conversation, or show its work, in a direct message with me, so nothing private lands in a shared conversation.", { error: { code: "CONTINUE_NOT_PRIVATE", message: "continuation needs a direct message" } });
-      if (!target) return record("completed", "This conversation isn't connected to a PersonalOS conversation yet. To carry one on here, send “continue <conversation id>” (PersonalOS shows it under “Where this came from” in that conversation).");
+      if (!target) return record("completed", "This conversation isn't connected to a Anywhere Aide conversation yet. To carry one on here, send “continue <conversation id>” (Anywhere Aide shows it under “Where this came from” in that conversation).");
       // Yours, or as good as nonexistent: another person's id says nothing about whether it exists.
       const conversation = await ctx.db.get(conversations, target);
-      if (!conversation || conversation.owner !== owner) return record("refused", `There's no conversation ${target.slice(0, 40)} in your PersonalOS.`, { error: { code: "NOT_FOUND", message: "no such conversation for this account" } });
+      if (!conversation || conversation.owner !== owner) return record("refused", `There's no conversation ${target.slice(0, 40)} in your Anywhere Aide.`, { error: { code: "NOT_FOUND", message: "no such conversation for this account" } });
       // Continuing is not permission to reuse what was allowed before: AuthBoundry decides now.
       const capability = capabilityFor(continuing.kind);
       const decision = await ctx.authority.decide({ capability, onBehalfOf: authorityPrincipal(owner), context: { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) } });
@@ -181,7 +181,7 @@ export const receive = app.mutation({
       if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); nothing was done.`);
       if (!decision.allowed) {
         // The denial is evidence of that conversation's history; the thread is not moved by it.
-        return record("refused", `You aren't allowed to continue PersonalOS conversations through ${label(adapter)} (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was shown or changed.`, { authority, conversationId: target, error: { code: "FORBIDDEN", message: `${capability} was not allowed${decision.reason ? `: ${decision.reason}` : ""}` } });
+        return record("refused", `You aren't allowed to continue Anywhere Aide conversations through ${label(adapter)} (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was shown or changed.`, { authority, conversationId: target, error: { code: "FORBIDDEN", message: `${capability} was not allowed${decision.reason ? `: ${decision.reason}` : ""}` } });
       }
       const work = describeWork(await workIn(ctx.db, owner, target));
       const lead = continuing.kind === "conversation.continue"
@@ -207,14 +207,14 @@ export const receive = app.mutation({
       };
       if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); nothing was done.`);
       if (!decision.allowed) {
-        const message = `You haven't allowed PersonalOS to take requests from ${label(adapter)} for you (${HANDOFF_CAPABILITY}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
+        const message = `You haven't allowed Anywhere Aide to take requests from ${label(adapter)} for you (${HANDOFF_CAPABILITY}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
         const refused = await ctx.db.insert(interactions, { ...base, owner, identity, authority, state: "refused", intent: "agent", error: { code: "FORBIDDEN", message }, updates: [{ seq: 1, state: "refused", text: message, at: now }] });
         return outcome((await ctx.db.get(interactions, refused))!, false);
       }
       let conversationId = await threadConversation(ctx, tk, owner);
       conversationId ??= await ctx.db.insert(conversations, { owner, title: conversationTitle(label(adapter), e), createdAt: now, updatedAt: now, messageCount: 0 });
       const messageId = await appendMessage(octx, conversationId, { role: "user", text: `${text}\n\n(from ${label(adapter)}, ${e.conversation.kind === "dm" ? "a direct message" : "a conversation"}; handed to the connected agent)` });
-      const working = audience === "private" ? "Working on it." : "Working on it. What happens will be in your PersonalOS, since this conversation is shared.";
+      const working = audience === "private" ? "Working on it." : "Working on it. What happens will be in your Anywhere Aide, since this conversation is shared.";
       const agent = agentWork(key, text, {
         surface: adapter, instance: e.source.instance, eventId: e.source.eventId, messageId: e.message.id, sourcePrincipalId: e.sender.sourcePrincipalId,
         resolverRef: resolved.ref, resolverRevision: resolved.revision, canonical: resolved.canonical, audience, conversationKind: e.conversation.kind, interactionKey: key,
@@ -230,8 +230,8 @@ export const receive = app.mutation({
 
     // ── Authority: AuthBoundry decides on the exact capability, before anything runs ──
     const capability = capabilityFor(about?.kind ?? understood!.kind, { reminder: understood?.kind === "task.create" ? understood.reminder : false });
-    // PersonalOS's executor asks to act on behalf of the resolved account: AuthBoundry decides from
-    // that person's delegation to PersonalOS for exactly this capability, or denies.
+    // Anywhere Aide's executor asks to act on behalf of the resolved account: AuthBoundry decides from
+    // that person's delegation to Anywhere Aide for exactly this capability, or denies.
     const decision = await ctx.authority.decide({ capability, onBehalfOf: authorityPrincipal(owner), context: { surface: adapter, audience, conversation: e.conversation.kind, interaction: key.slice(0, 200) } });
     const authority = {
       capability, outcome: decision.outcome, principal: decision.executor,
@@ -247,7 +247,7 @@ export const receive = app.mutation({
       return outcome((await ctx.db.get(interactions, id))!, false);
     }
 
-    // ── The PersonalOS conversation for this source thread (one history across surfaces) ──
+    // ── The Anywhere Aide conversation for this source thread (one history across surfaces) ──
     let conversationId = await threadConversation(ctx, tk, owner);
     conversationId ??= await ctx.db.insert(conversations, { owner, title: conversationTitle(label(adapter), e), createdAt: now, updatedAt: now, messageCount: 0 });
     if (!about && said.completes) await ctx.db.patch(interactions, said.completes, { state: "completed", updatedAt: now });
@@ -279,7 +279,7 @@ export const receive = app.mutation({
 });
 
 /**
- * The PersonalOS conversation a source thread is on: its latest interaction's, if that conversation is
+ * The Anywhere Aide conversation a source thread is on: its latest interaction's, if that conversation is
  * still the owner's. A refused interaction never moves a thread (a denied "continue" leaves it where it was).
  */
 async function threadConversation(ctx: MutationCtx, tk: string, owner: string): Promise<string | undefined> {
@@ -303,7 +303,7 @@ export function continuityIntent(text: string): { kind: "conversation.continue";
 interface Result {
   state: InteractionState;
   intent: string;
-  /** The full reply, in PersonalOS. */
+  /** The full reply, in Anywhere Aide. */
   reply: string;
   /** What the surface may post (the reply, or less in a shared conversation). */
   surface: string;
@@ -335,7 +335,7 @@ async function aboutConversation(ctx: MutationCtx, intent: ConversationIntent, e
       actionIds.push(actionId);
     }
     reply = items.length
-      ? [`Added ${items.length} task${items.length === 1 ? "" : "s"} to your PersonalOS from this conversation:`, ...items.map((i) => `• ${i.title}${i.owner ? ` — ${i.owner}` : ""}${i.due ? ` (${i.due})` : ""}`)].join("\n")
+      ? [`Added ${items.length} task${items.length === 1 ? "" : "s"} to your Anywhere Aide from this conversation:`, ...items.map((i) => `• ${i.title}${i.owner ? ` — ${i.owner}` : ""}${i.due ? ` (${i.due})` : ""}`)].join("\n")
       : "I didn't find any action items here (nobody wrote \"I'll…\", \"we need to…\", \"can you…\"). Nothing was added.";
   }
   const replyId = await appendMessage(ctx, conversationId, { role: "assistant", text: reply, interpretation: { intent: intent.kind, source: "rules" }, actionIds });
@@ -371,18 +371,18 @@ async function personal(octx: MutationCtx, ctx: MutationCtx, e: EnvelopeT, conve
   let approval: Result["approval"];
   if (proposed) {
     const reason = proposed.kind === "task.delete" ? "Deleting a task is permanent." : proposed.kind === "memory.forget" ? "Forgetting a memory is permanent." : "It changes something that can't be undone.";
-    approval = { actionId: proposed.id, summary: audience === "private" ? proposed.summary : `${proposed.kind === "task.delete" ? "Delete a task" : proposed.kind === "memory.forget" ? "Forget a memory" : "A change"} in your PersonalOS`, reason };
+    approval = { actionId: proposed.id, summary: audience === "private" ? proposed.summary : `${proposed.kind === "task.delete" ? "Delete a task" : proposed.kind === "memory.forget" ? "Forget a memory" : "A change"} in your Anywhere Aide`, reason };
     surface = audience === "private"
-      ? `${r.reply.text}\n\nApprove or decline it in PersonalOS (Activity, or this conversation there). Nothing changes until you do.`
-      : `That needs your approval: ${approval.summary.charAt(0).toLowerCase()}${approval.summary.slice(1)}. ${reason} Approve or decline it in PersonalOS; nothing changes until you do, and I'll post the result here.`;
+      ? `${r.reply.text}\n\nApprove or decline it in Anywhere Aide (Activity, or this conversation there). Nothing changes until you do.`
+      : `That needs your approval: ${approval.summary.charAt(0).toLowerCase()}${approval.summary.slice(1)}. ${reason} Approve or decline it in Anywhere Aide; nothing changes until you do, and I'll post the result here.`;
   } else if (audience === "shared" && kind === "unknown") {
-    surface = `I can't do that from here: I have no integration or model for it, and I won't pretend otherwise. In a conversation I can summarize it, say what was decided, turn its action items into tasks in your PersonalOS, set reminders, and remember things for you.`;
+    surface = `I can't do that from here: I have no integration or model for it, and I won't pretend otherwise. In a conversation I can summarize it, say what was decided, turn its action items into tasks in your Anywhere Aide, set reminders, and remember things for you.`;
   } else if (audience === "shared" && !SHAREABLE.has(kind)) {
     surface = state === "needs_clarification"
-      ? `I need a detail to do that, and the question involves your private PersonalOS data, so I asked you in PersonalOS (or ask me in a direct message here).`
+      ? `I need a detail to do that, and the question involves your private Anywhere Aide data, so I asked you in Anywhere Aide (or ask me in a direct message here).`
       : (r.reply.actionIds ?? []).length
-        ? `Done in your PersonalOS. The details are there, since this conversation is shared.`
-        : `That's about your private PersonalOS data, so I answered in PersonalOS instead of here. Ask me in a direct message to see it in ${where}.`;
+        ? `Done in your Anywhere Aide. The details are there, since this conversation is shared.`
+        : `That's about your private Anywhere Aide data, so I answered in Anywhere Aide instead of here. Ask me in a direct message to see it in ${where}.`;
   }
   return { state, intent: kind, reply: r.reply.text, surface, actionIds: r.reply.actionIds ?? [], sources: [], privateDataUsed, messageId: r.messageId, replyId: r.replyId, ...(approval ? { approval } : {}) };
 }
@@ -465,9 +465,9 @@ export async function settle(ctx: MutationCtx, proposal: { id: string; messageId
   const state: InteractionState = stillWaiting ? "awaiting_approval" : decision === "approved" ? "completed" : decision === "rejected" ? "cancelled" : "failed";
   const shared = i.audience === "shared";
   const text = decision === "approved"
-    ? shared ? "Approved in PersonalOS and done." : `Approved in PersonalOS and done: ${detail}.`
+    ? shared ? "Approved in Anywhere Aide and done." : `Approved in Anywhere Aide and done: ${detail}.`
     : decision === "rejected"
-      ? shared ? "Declined in PersonalOS. Nothing was changed." : `Declined in PersonalOS: ${proposal.summary}. Nothing was changed.`
+      ? shared ? "Declined in Anywhere Aide. Nothing was changed." : `Declined in Anywhere Aide: ${proposal.summary}. Nothing was changed.`
       : shared ? "Approved, but it couldn't be done (what it referred to no longer exists). Nothing was changed." : `Approved, but it couldn't be done: ${detail}. Nothing was changed.`;
   const update = { seq: (i.updates.at(-1)?.seq ?? 0) + 1, state, text, at: Date.now(), actionId: proposal.id };
   await ctx.db.patch(interactions, i.id, { state, updates: [...i.updates, update], updatedAt: Date.now() });

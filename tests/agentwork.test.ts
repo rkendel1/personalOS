@@ -1,6 +1,6 @@
 /**
- * Handing work from a PersonalOS conversation to the person's agent (feltkit/agentwork.ts, _route.ts,
- * anywhere.ts), against a stand-in agent work channel that records what PersonalOS sends: routing by
+ * Handing work from a Anywhere Aide conversation to the person's agent (feltkit/agentwork.ts, _route.ts,
+ * anywhere.ts), against a stand-in agent work channel that records what Anywhere Aide sends: routing by
  * rules, the explicit "Work on this", no agent connected, questions and answers, stopping, and owner
  * scoping. The real eve agent runs the same flow end to end in agent/test/anywhere.test.mjs.
  */
@@ -16,7 +16,7 @@ const stand = {
   url: "",
   submissions: [] as Array<{ key: string; body: any }>,
   answers: [] as Array<{ workId: string; answers: any[] }>,
-  /** Every answer delivery PersonalOS attempted, refused or not. */
+  /** Every answer delivery Anywhere Aide attempted, refused or not. */
   answerAttempts: [] as string[],
   cancels: [] as string[],
   work: new Map<string, Work>(),
@@ -142,16 +142,16 @@ test("with an agent connected, multi-step work from chat is handed over once (th
   }
 });
 
-test("without an agent PersonalOS works as before: multi-step requests are answered here, and Work on this keeps the request and says nothing was started", async () => {
+test("without an agent Anywhere Aide works as before: multi-step requests are answered here, and Work on this keeps the request and says nothing was started", async () => {
   disconnect();
   const t = await createTestApp();
   try {
     const before = stand.submissions.length;
     const out = await turn(t, "ada", "Organize my move, research movers, and prepare a plan.", "client-noagent-1");
-    assert.equal(out.mode, "rules", "PersonalOS's own assistant answers");
+    assert.equal(out.mode, "rules", "Anywhere Aide's own assistant answers");
     const started = await t.as("ada").mutation(api.agentwork.start, { messageId: out.messageId });
     assert.deepEqual([started.started, started.work.agent.state], [false, "unavailable"]);
-    assert.match((await texts(t, "ada", out.conversationId)).join("\n"), /No agent is connected to this PersonalOS, so nothing was started\. Your request is kept here/);
+    assert.match((await texts(t, "ada", out.conversationId)).join("\n"), /No agent is connected to this Anywhere Aide, so nothing was started\. Your request is kept here/);
     await settle(t);
     assert.equal(stand.submissions.length, before, "nothing was sent anywhere");
     // Ordinary work is unaffected.

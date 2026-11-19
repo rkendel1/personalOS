@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { initThemePreference, setThemePreference, THEME_STORAGE_KEY, type ThemePreference } from "@stack-ui/core/theme";
 
-/** The key PersonalOS used before it adopted stack-ui: read once, then moved. */
+/** The key Anywhere Aide used before it adopted stack-ui: read once, then moved. */
 const LEGACY_KEY = "app:theme";
 
 function migrate() {

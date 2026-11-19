@@ -1,12 +1,12 @@
 /**
- * What PersonalOS Anywhere needs around it in tests:
+ * What Anywhere Aide needs around it in tests:
  *
  * - a real Resolver (@appport/resolver, the published server installed apart in tests/resolver, in a child process with its own state),
- *   initialised with an admin key, and PersonalOS's two least-privilege keys on
+ *   initialised with an admin key, and Anywhere Aide's two least-privilege keys on
  *   ref://identity/personalos/*: `read` only (credential resolver-resolve) and `write` only
  *   (credential resolver-link), given to FeltKit as FELTKIT_CREDENTIAL_RESOLVER_RESOLVE / _LINK;
  * - an authority speaking AuthBoundry's check contract (POST /_authboundry/authorize/check, with
- *   on_behalf_of) from a delegation table the test controls. It establishes PersonalOS's behavior
+ *   on_behalf_of) from a delegation table the test controls. It establishes Anywhere Aide's behavior
  *   *given* a decision, nothing about AuthBoundry: the real AuthBoundry's delegation decisions are
  *   tested against the real server in tests/authboundry-real.test.ts (built from source in CI).
  */
@@ -41,7 +41,7 @@ function run(args: string[]): Promise<string> {
 
 export interface TestResolver {
   url: string; admin: ResolverClient; adminKey: string;
-  /** PersonalOS's keys (the tests use them directly to show what Resolver itself refuses). */
+  /** Anywhere Aide's keys (the tests use them directly to show what Resolver itself refuses). */
   keys: { read: { secret: string; id: string }; write: { secret: string; id: string } };
   /** Issue a new key for a credential and make it the one FeltKit uses (rotation); returns the old one. */
   rotate(which: "read" | "write"): Promise<{ secret: string; id: string }>;
@@ -71,7 +71,7 @@ export async function startResolver(): Promise<TestResolver> {
   let child = await serve();
   const url = `http://127.0.0.1:${port}`;
   const admin = await ResolverClient.connect({ url, apiKey: adminKey, live: false, maxStaleSeconds: 0 });
-  // PersonalOS's keys, identity references only: one that can only read, one that can only write.
+  // Anywhere Aide's keys, identity references only: one that can only read, one that can only write.
   const issue = async (which: "read" | "write") => {
     const k = await admin.createKey(`personalos-${which === "read" ? "resolve" : "link"}`);
     await admin.grant(k.principal, [which], "ref://identity/personalos/*");
@@ -191,8 +191,8 @@ export function authboundryVersion(): string | null {
 }
 
 /**
- * The real AuthBoundry server, fresh, bootstrapped through its own control API: the PersonalOS
- * application and capability contract, people as principals with their own policies, PersonalOS's
+ * The real AuthBoundry server, fresh, bootstrapped through its own control API: the Anywhere Aide
+ * application and capability contract, people as principals with their own policies, Anywhere Aide's
  * executor as an agent principal, and an application check credential. Delegations are created by
  * the test as each case needs them.
  */
@@ -228,14 +228,14 @@ export async function startRealAuthority(people: Record<string, string[]>, capab
     if (r.status >= 400) throw new Error(`${init.method ?? "GET"} ${path}: ${r.status} ${JSON.stringify(r.body)}`);
     return r;
   };
-  await control("/_authboundry/control-plane/organizations", { method: "POST", body: { id: "personalos", name: "PersonalOS", authority_tenant_id: "reference" } });
-  await control("/_authboundry/control-plane/applications", { method: "POST", body: { id: "personalos", project_id: "personalos", name: "PersonalOS", production_url: "http://localhost", environment: "production" } });
+  await control("/_authboundry/control-plane/organizations", { method: "POST", body: { id: "personalos", name: "Anywhere Aide", authority_tenant_id: "reference" } });
+  await control("/_authboundry/control-plane/applications", { method: "POST", body: { id: "personalos", project_id: "personalos", name: "Anywhere Aide", production_url: "http://localhost", environment: "production" } });
   await control("/_authboundry/control-plane/applications/personalos/contracts", { method: "POST", body: { authority_source: "external", version: "1.0.0", capabilities } });
   for (const [owner, caps] of Object.entries(people)) {
     await control("/_authboundry/control-plane/applications/personalos/principals", { method: "POST", body: { id: `user:${owner}`, kind: "human", claims: { role: "member" } } });
     await control("/_authboundry/policies", { method: "POST", body: { application: "personalos", principal_id: `user:${owner}`, capabilities: caps } });
   }
-  await control("/_authboundry/agents", { method: "POST", body: { id: "agent:personalos", name: "PersonalOS", application: "personalos" } });
+  await control("/_authboundry/agents", { method: "POST", body: { id: "agent:personalos", name: "Anywhere Aide", application: "personalos" } });
   const issued = await control("/_authboundry/control-plane/applications/personalos/check-credentials", { method: "POST", body: { label: "personalos tests" } });
   const checkCredential = issued.body.secret as string;
   process.env.AUTHBOUNDRY_URL = url;

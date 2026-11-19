@@ -1,7 +1,7 @@
 /**
  * LOCAL STAND-IN FOR THE X API. NOT X.
  *
- * A loopback HTTP server that answers the three X API v2 requests PersonalOS's `x` integration makes,
+ * A loopback HTTP server that answers the three X API v2 requests Anywhere Aide's `x` integration makes,
  * in the shapes docs.x.com documents for them:
  *   GET  /2/users/me                       the account the token belongs to (the bot)
  *   GET  /2/users/:id/mentions             posts mentioning it: data, includes.users/tweets, meta
@@ -12,7 +12,7 @@
  * response fields and refresh-token rotation are NOT documented by X: here they follow RFC 6749, with
  * rotation, which is one possibility, not X's established behavior.
  *
- * It establishes how PersonalOS behaves GIVEN those responses (and given failures the test chooses).
+ * It establishes how Anywhere Aide behaves GIVEN those responses (and given failures the test chooses).
  * It says nothing about X itself: rate limits, pricing, field availability, token scopes and
  * delivery latency are X's, and are not simulated. A test passing here is not real-X acceptance.
  */

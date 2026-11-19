@@ -1,5 +1,5 @@
 /**
- * Shared-to-PersonalOS invocations against the REAL AuthBoundry server (the published @authboundry/core
+ * Shared-to-Anywhere Aide invocations against the REAL AuthBoundry server (the published @authboundry/core
  * pinned in tests/authboundry). The person's delegation to agent:personalos decides, when the work runs
  * and before every research step; revoking it in AuthBoundry stops the next step.
  */

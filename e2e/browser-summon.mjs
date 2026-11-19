@@ -3,13 +3,13 @@
  *
  *   npm run extension:build && node --import tsx e2e/browser-summon.mjs <evidenceDir> [pageUrl]
  *
- * Real: Chromium with the PersonalOS extension loaded unpacked; a real web page (default
+ * Real: Chromium with the Anywhere Aide extension loaded unpacked; a real web page (default
  * https://www.thoughtworks.com/); `feltkit dev` (its own state); the real AuthBoundry (tests/authboundry)
- * with Ada's delegation; PersonalOS's page reader on the open web; and, with AI_GATEWAY_API_KEY set, the
+ * with Ada's delegation; Anywhere Aide's page reader on the open web; and, with AI_GATEWAY_API_KEY set, the
  * model (gpt-4.1-mini via Vercel AI Gateway).
  *
- * The flow: open the page and select a paragraph · open the PersonalOS panel and connect (dev sign-in:
- * a FeltKit bearer session in the extension's locked storage) · Summon PersonalOS with the selection and
+ * The flow: open the page and select a paragraph · open the Anywhere Aide panel and connect (dev sign-in:
+ * a FeltKit bearer session in the extension's locked storage) · Summon Anywhere Aide with the selection and
  * "Research this company…" · the receipt shows · close the page · kill the server (SIGKILL) while the
  * work runs and start it again · the panel shows the outcome · open the conversation: the result is
  * there · "Back to the page" reopens it · a second summon from the page continues the same conversation.
@@ -46,7 +46,7 @@ async function until(check, what, ms = 120_000) {
   for (;;) { const v = await check().catch(() => null); if (v) return v; if (Date.now() > end) throw new Error(`timed out: ${what}`); await sleep(500); }
 }
 
-// ── The platform: AuthBoundry with Ada's delegation, and PersonalOS ───────────────────────────
+// ── The platform: AuthBoundry with Ada's delegation, and Anywhere Aide ───────────────────────────
 const ab = await startRealAuthority({ ada: [...CAPABILITIES] }, CAPABILITIES);
 await ab.delegate("browser-summon", "ada", ["personalos.research.run", "personalos.memory.write"]);
 const state = mkdtempSync(join(tmpdir(), "pos-browser-summon-"));
@@ -115,20 +115,20 @@ try {
   await panel.getByRole("button", { name: "Connect" }).click();
   await panel.getByLabel("Message").waitFor({ timeout: 60_000 });
   note("panel connected and signed in", { session: "bearer, in chrome.storage.local (trusted contexts only)" });
-  // What Ada has told PersonalOS about her product (as she would in chat): what research compares against.
+  // What Ada has told Anywhere Aide about her product (as she would in chat): what research compares against.
   const sessionToken = (await panel.evaluate(() => chrome.storage.local.get("personalos:token")))["personalos:token"];
   await fetch(`${ORIGIN}/api/mutation/memory:add`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` }, body: JSON.stringify({ args: { kind: "project", subject: "feltkit", content: "FeltKit is my product: a TypeScript framework for building internal tools and agent-ready applications on an embedded database, with auth, background jobs and integrations." } }) });
   await panel.screenshot({ path: join(out, "1-panel.png") });
 
-  // 3. Summon PersonalOS with this page.
-  await panel.getByRole("button", { name: "Summon PersonalOS" }).click();
+  // 3. Summon Anywhere Aide with this page.
+  await panel.getByRole("button", { name: "Summon Anywhere Aide" }).click();
   const form = panel.getByTestId("summon");
   await form.waitFor();
   const include = form.getByText(/Include the text you selected \(/);
   await include.waitFor({ timeout: 20_000 });
   note("summon form", { reads: await form.innerText().then((t) => t.split("\n").slice(0, 3).join(" | ")) });
   const instruction = "Research this company and tell me whether it could be a customer for FeltKit.";
-  await form.getByLabel("What should PersonalOS do?").fill(instruction);
+  await form.getByLabel("What should Anywhere Aide do?").fill(instruction);
   await panel.screenshot({ path: join(out, "2-summon-form.png") });
   await form.getByRole("button", { name: "Send" }).click();
   const status = panel.getByTestId("summon-status");
@@ -184,11 +184,11 @@ try {
   // 8. Summon again from the page: the same conversation continues.
   await panel.bringToFront();
   await panel.getByRole("button", { name: "Close" }).click().catch(() => {});
-  await panel.getByRole("button", { name: "Summon PersonalOS" }).click();
+  await panel.getByRole("button", { name: "Summon Anywhere Aide" }).click();
   const again = panel.getByTestId("summon");
   // Continuing: the conversation open in the panel (just opened), or the last summon from this page.
   await again.getByText(/Continue the open conversation: |Continue the conversation from your last summon on this page/).waitFor({ timeout: 20_000 });
-  await again.getByLabel("What should PersonalOS do?").fill("Remember this");
+  await again.getByLabel("What should Anywhere Aide do?").fill("Remember this");
   await again.getByRole("button", { name: "Send" }).click();
   await panel.getByTestId("summon-status").waitFor();
   const second = await until(async () => { const rows = await api("invocationstate:list", { limit: 2 }); return rows.length === 2 && rows[0].state === "completed" ? rows : null; }, "the second summon to finish", 60_000);

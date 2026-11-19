@@ -12,7 +12,7 @@
  *                        then declared as the capability named below
  *   missing              nothing provides it and nothing can be connected for it
  *
- * The capability names are PersonalOS's declared integrations (feltkit/app.ts): the boundary where a
+ * The capability names are Anywhere Aide's declared integrations (feltkit/app.ts): the boundary where a
  * provider is chosen by configuration (base URL, credential), not by code.
  */
 
@@ -26,10 +26,10 @@ export interface Need {
   required: boolean;
   /**
    * The capabilities that can provide it, in order of preference: any one of them will do (web search
-   * from Brave, or from OpenAI's web search). Empty when PersonalOS declares no provider for it.
+   * from Brave, or from OpenAI's web search). Empty when Anywhere Aide declares no provider for it.
    */
   capabilities: string[];
-  /** Provided by PersonalOS itself (no provider, no credential): always available. */
+  /** Provided by Anywhere Aide itself (no provider, no credential): always available. */
   builtin?: string;
 }
 
@@ -56,10 +56,10 @@ export interface Discovery {
   complete: boolean;
 }
 
-/** What finding prospects needs. Storage is PersonalOS's own (research runs, sources, prospects). */
+/** What finding prospects needs. Storage is Anywhere Aide's own (research runs, sources, prospects). */
 export const PROSPECT_NEEDS: Need[] = [
   { need: "web search", purpose: "find companies in the product's space, with the pages that say so", required: true, capabilities: ["websearch.search", "openaisearch.search"] },
-  { need: "page retrieval", purpose: "read a company's own pages to verify what search results say", required: false, capabilities: [], builtin: "PersonalOS page reader (public pages only; honours robots.txt)" },
+  { need: "page retrieval", purpose: "read a company's own pages to verify what search results say", required: false, capabilities: [], builtin: "Anywhere Aide page reader (public pages only; honours robots.txt)" },
   { need: "contact research", purpose: "identify who decides; not needed to find prospects, and outreach always waits for your approval", required: false, capabilities: [] },
 ];
 
@@ -97,7 +97,7 @@ export async function discover(agent: AgentLike, needs: Need[], options: { decla
     }
     if (entry.allowed === false) return { state: "needs-authorization", problems: [`Your account may not use ${capability}.`], howToEnable: "Ask an administrator to grant your role the research permission (research.search)." };
     if (entry.readiness && !entry.readiness.ready) return { state: "needs-configuration", problems: entry.readiness.problems.map((p) => p.message), howToEnable: entry.readiness.problems.map((p) => p.fix).join(" ") };
-    if ((entry as { declaredOnly?: boolean }).declaredOnly) return { state: "available", problems: [`Declared by this PersonalOS; this FeltKit does not report whether it is configured or permitted, so the first call will tell.`], howToEnable: null };
+    if ((entry as { declaredOnly?: boolean }).declaredOnly) return { state: "available", problems: [`Declared by this Anywhere Aide; this FeltKit does not report whether it is configured or permitted, so the first call will tell.`], howToEnable: null };
     return { state: "available", problems: [], howToEnable: null };
   };
   // A fully verified alternative beats one only declared, which beats any that is not available.
@@ -105,7 +105,7 @@ export async function discover(agent: AgentLike, needs: Need[], options: { decla
   const reports = needs.map((n): NeedReport => {
     if (n.builtin) return { ...n, capability: null, state: "available", problems: [], howToEnable: null };
     if (!n.capabilities.length) {
-      return { ...n, capability: null, state: "connectable", problems: [], howToEnable: `No ${n.need} provider is declared in this PersonalOS. An HTTP API that provides it can be connected (Studio → Integrations → Connect an API) and declared as a capability.` };
+      return { ...n, capability: null, state: "connectable", problems: [], howToEnable: `No ${n.need} provider is declared in this Anywhere Aide. An HTTP API that provides it can be connected (Studio → Integrations → Connect an API) and declared as a capability.` };
     }
     const found = n.capabilities.map((capability) => ({ capability, ...one(n, capability) }));
     const best = [...found].sort((a, b) => rank(a) - rank(b))[0]!;
@@ -150,7 +150,7 @@ export function describeDiscovery(d: Discovery): string {
     .join("\n");
 }
 
-/** The integration capabilities this PersonalOS declares (feltkit/app.ts): what exists, by declaration. */
+/** The integration capabilities this Anywhere Aide declares (feltkit/app.ts): what exists, by declaration. */
 export function declaredCapabilities(): string[] {
   return [...app.integrations.values()].flatMap((i) => Object.values(i.operations).map((op) => op.capability));
 }

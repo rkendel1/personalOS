@@ -13,7 +13,7 @@ export interface ProspectOutcome {
   kind: "prospects";
   /** What the customers are for, as the person named it ("FeltKit"). */
   product: string;
-  /** The outcome, in PersonalOS's words: what done looks like. */
+  /** The outcome, in Anywhere Aide's words: what done looks like. */
   objective: string;
 }
 
@@ -50,7 +50,7 @@ export interface ProductKnowledge {
   keywords: string[];
 }
 
-/** What PersonalOS knows about the product, from the person's own memories that mention it. */
+/** What Anywhere Aide knows about the product, from the person's own memories that mention it. */
 export function productKnowledge(product: string, memories: Array<{ id: string; content: string; status?: string }>): ProductKnowledge {
   const name = product.toLowerCase();
   const statements = memories.filter((m) => m.content.toLowerCase().includes(name)).map((m) => ({ id: m.id, text: m.content }));
