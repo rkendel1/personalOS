@@ -366,7 +366,7 @@ function Provenance({ conversationId }: { conversationId: string }) {
       </ul>
       {problem && <p className="small" role="alert">{problem}</p>}
       <p className="small muted">
-        Carry this on in Multiplayer: send <code>{data.continueWith}</code> to PersonalOS in a direct message.{" "}
+        Carry this on in Multiplayer: send <code>{data.continueWith}</code> to Anywhere Aide in a direct message.{" "}
         <button className="link small" onClick={() => void navigator.clipboard?.writeText(data.continueWith).then(() => setCopied(true))}>{copied ? "Copied" : "Copy"}</button>
       </p>
     </details>
@@ -375,7 +375,7 @@ function Provenance({ conversationId }: { conversationId: string }) {
 
 /**
  * Replying on X, as the bot, to a post you mentioned it in: only what you type here, only when you
- * press Publish, and only if you've allowed PersonalOS to publish for you (AuthBoundry). Nothing from
+ * press Publish, and only if you've allowed Anywhere Aide to publish for you (AuthBoundry). Nothing from
  * this conversation is ever published by itself.
  */
 function PublishOnX({ postId }: { postId: string }) {

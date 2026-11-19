@@ -510,7 +510,7 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
       {location.protocol.startsWith("http") && (
         <section>
           <h2>Browser extension</h2>
-          <p className="muted small">The PersonalOS Chrome extension puts this assistant beside any page, signed in as you, with the same chats, tasks, memory and files. When it asks for your address, enter:</p>
+          <p className="muted small">The Anywhere Aide Chrome extension puts this assistant beside any page, signed in as you, with the same chats, tasks, memory and files. When it asks for your address, enter:</p>
           <div className="row">
             <code className="kindcode">{location.origin}</code>
             <button className="ghost tiny" onClick={() => void navigator.clipboard?.writeText(location.origin)}>Copy</button>
@@ -557,19 +557,96 @@ export function Settings({ onError, dashboard, principal, onSignOut, children }:
           Which model is used is the environment's setting, not the app's: {dashboard ? <a href={dashboard} target="_blank" rel="noreferrer">Studio → Models</a> : "Studio → Models"}, or a Resolver reference (<code>ref://prod/personalos/model</code> in production), changeable without a restart. Changing it never touches your conversations, memory or tasks.
         </p>
       </section>
-      <section>
-        <h2>What I can't do yet</h2>
-        <ul className="muted small">
-          <li>Email, calendar or messaging: no integration is configured, so I won't pretend to send or schedule anything.</li>
-        </ul>
-      </section>
+      <Connections onError={onError} />
       {children && <section>{children}</section>}
     </div>
   );
 }
 
+type ConnectionView = { id: "mail" | "calendar"; name: string; provider: string; state: "not_connected" | "connected" | "reconnect_required"; connectedAt: string | null; problem: string | null; capabilities: Array<{ id: string; label: string; granted: boolean }> };
+
 /**
- * Connected surfaces (PersonalOS Anywhere): link your account on another app so PersonalOS works for
+ * Your own email and calendar (feltkit/connections.ts): connect your Google account, choose what Anywhere
+ * Aide may do with it, see what was sent or added. Every send and every new event is still proposed in
+ * the chat and waits for your approval; it then goes out as you, and lands in Activity.
+ */
+function Connections({ onError }: Err) {
+  const list = useAction(api.connections.list);
+  const connect = useAction(api.connections.connect);
+  const disconnect = useAction(api.connections.disconnect);
+  const allow = useAction(api.connections.allow);
+  const sent = useQuery(api.outbox.list, { limit: 5 }) ?? [];
+  const [state, setState] = useState<{ grantsAvailable: boolean; grantsReason: string | null; connections: ConnectionView[] } | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => list.run({}).then(setState).catch(onError);
+  useEffect(() => {
+    void load();
+    // Google's page opens beside the app; when you come back, show what changed.
+    const again = () => document.visibilityState === "visible" && void load();
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+    return () => { document.removeEventListener("visibilitychange", again); window.removeEventListener("focus", again); };
+  }, []);
+  const begin = (id: ConnectionView["id"]) => {
+    // Opened now, in the tap, so a phone's popup blocker allows it; pointed at Google once the URL is back.
+    const tab = window.open("", "_blank");
+    setBusy(true);
+    setNote(null);
+    void connect.run({ id }).then((r) => {
+      if (!r.url) {
+        tab?.close();
+        setNote(r.reason);
+        return;
+      }
+      if (tab) tab.location.href = r.url;
+      else location.assign(r.url);
+      setNote(r.grant ? `Connecting. ${r.grant}` : "Finish connecting on Google's page, then come back here.");
+    }).catch((e) => { tab?.close(); onError(e); }).finally(() => { setBusy(false); void load(); });
+  };
+  const run = (p: Promise<unknown>) => { setBusy(true); void p.then(load).catch(onError).finally(() => setBusy(false)); };
+  return (
+    <section data-testid="connections">
+      <h2>Connections</h2>
+      <p className="muted small">Connect your own Google account and I can read your inbox and calendar, and draft emails and events for you. Nothing is sent or added until you approve it in the chat; then it goes out as you, and you'll see it in Activity.</p>
+      {!state ? <p className="muted small">Loading…</p> : state.connections.map((c) => (
+        <div key={c.id} className="connection" data-testid={`connection-${c.id}`}>
+          <div className="row">
+            <span>
+              <strong>{c.name}</strong> <span className="muted small">{c.provider} · {c.state === "connected" ? `connected${c.connectedAt ? ` ${new Date(c.connectedAt).toLocaleDateString()}` : ""}` : c.state === "reconnect_required" ? "needs reconnecting" : "not connected"}</span>
+            </span>
+            {c.state === "connected"
+              ? <button className="ghost tiny" disabled={busy} onClick={() => run(disconnect.run({ id: c.id }))}>Disconnect</button>
+              : <button className="secondary tiny" disabled={busy} data-testid={`connect-${c.id}`} onClick={() => begin(c.id)}>{c.state === "reconnect_required" ? "Reconnect" : "Connect"}</button>}
+          </div>
+          {c.problem && c.state !== "connected" && <p className="muted small">{c.problem}</p>}
+          {c.state === "connected" && state.grantsAvailable && c.capabilities.map((p) => (
+            <label className="toggle" key={p.id}>
+              <input type="checkbox" checked={p.granted} disabled={busy} data-testid={`allow-${p.id}`} onChange={(e) => run(allow.run({ capability: p.id, allowed: e.target.checked }))} />
+              <span className="small">{p.label}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+      {state && !state.grantsAvailable && state.grantsReason && <p className="muted small">{state.grantsReason}</p>}
+      {note && <p className="small" data-testid="connections-note">{note}</p>}
+      {sent.length > 0 && (
+        <>
+          <h3 className="small">Recently sent or added</h3>
+          <ul className="muted small">
+            {sent.map((o) => (
+              <li key={o.id}>{o.summary} · <strong>{o.status === "sent" ? "done" : o.status === "unknown" ? "no answer from Google (check before sending again)" : o.status}</strong>{o.error && o.status !== "sent" ? `: ${o.error.message}` : ""}{o.link ? <> · <a href={o.link} target="_blank" rel="noreferrer">open</a></> : null}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="muted small">Web search works in the chat too ("search the web for …") when the server has a search provider configured; I'll say so if it doesn't. Messaging apps (Slack, Teams, SMS) aren't connected yet.</p>
+    </section>
+  );
+}
+
+/**
+ * Connected surfaces (Anywhere Aide): link your account on another app so Anywhere Aide works for
  * you there, as you. A one-time code proves this side; sending it from that app proves the other; you
  * then confirm here that the account which sent it is yours. The link lives in Resolver.
  *
@@ -588,7 +665,7 @@ type Permission = { id: string; label: string; granted: boolean; expiresAt: numb
 const DAY = 86_400_000;
 
 /**
- * What PersonalOS may do for you when you ask from Multiplayer, X, the browser or the share sheet: your
+ * What Anywhere Aide may do for you when you ask from Multiplayer, X, the browser or the share sheet: your
  * grants, kept by AuthBoundry (feltkit/delegation.ts). What you do here in the app needs none.
  */
 function Permissions({ onError }: Err) {
@@ -599,7 +676,7 @@ function Permissions({ onError }: Err) {
   const [busy, setBusy] = useState(false);
   const load = () => list.run({}).then(setState).catch(onError);
   useEffect(() => void load(), []);
-  if (!state) return <section><h2>What PersonalOS may do for you</h2><p className="muted small">Loading…</p></section>;
+  if (!state) return <section><h2>What Anywhere Aide may do for you</h2><p className="muted small">Loading…</p></section>;
   const granted = state.capabilities.filter((c) => c.granted).map((c) => c.id);
   const expiresAt = state.capabilities.find((c) => c.granted)?.expiresAt ?? null;
   const apply = (next: string[]) => {
@@ -608,8 +685,8 @@ function Permissions({ onError }: Err) {
   };
   return (
     <section data-testid="permissions">
-      <h2>What PersonalOS may do for you</h2>
-      <p className="muted small">When you ask from Multiplayer, X, the browser or the share sheet, PersonalOS does only what you allow here. What you do in this app yourself needs nothing. Anything destructive still waits for your approval.</p>
+      <h2>What Anywhere Aide may do for you</h2>
+      <p className="muted small">When you ask from Multiplayer, X, the browser or the share sheet, Anywhere Aide does only what you allow here. What you do in this app yourself needs nothing. Anything destructive still waits for your approval.</p>
       {!state.available ? (
         <p className="small" data-testid="permissions-unavailable">{state.reason}</p>
       ) : (
@@ -629,7 +706,7 @@ function Permissions({ onError }: Err) {
             </select>
             {granted.length > 0 && <button className="ghost tiny" disabled={busy} onClick={() => apply([])}>Turn all off</button>}
           </div>
-          <p className="muted small">{granted.length === 0 ? "Nothing is allowed: PersonalOS refuses every request from elsewhere." : expiresAt ? `Allowed until ${new Date(expiresAt).toLocaleString()}.` : "Allowed until you turn it off."}</p>
+          <p className="muted small">{granted.length === 0 ? "Nothing is allowed: Anywhere Aide refuses every request from elsewhere." : expiresAt ? `Allowed until ${new Date(expiresAt).toLocaleString()}.` : "Allowed until you turn it off."}</p>
         </>
       )}
     </section>
@@ -651,7 +728,7 @@ function ConnectedSurfaces({ onError }: Err) {
   return (
     <section data-testid="connected-surfaces">
       <h2>Connected surfaces</h2>
-      <p className="muted small">Mention @personalos in Multiplayer, or {bot?.username ? `@${bot.username}` : "the PersonalOS bot"} on X, and I'll work here, in your account. In shared or public places I keep your private details out of my replies; anything destructive still waits for your approval here.</p>
+      <p className="muted small">Mention @personalos in Multiplayer, or {bot?.username ? `@${bot.username}` : "the Anywhere Aide bot"} on X, and I'll work here, in your account. In shared or public places I keep your private details out of my replies; anything destructive still waits for your approval here.</p>
       {active.map((l) => (
         <div key={l.id} className="row" data-testid={`link-active-${l.adapter}`}>
           <span><strong>{surfaceName(l.adapter)}</strong> <span className="muted small">as {l.sourceDisplayName ?? l.sourcePrincipalId}{l.status === "confirming" ? " · connecting…" : l.status === "revoking" ? " · disconnecting…" : l.lastUsedAt ? ` · last used ${new Date(l.lastUsedAt).toLocaleString()}` : ""}</span></span>

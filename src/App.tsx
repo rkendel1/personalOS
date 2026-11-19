@@ -163,7 +163,7 @@ function Workspace(props: {
   return (
     <Shell
       className="app-shell"
-      product={{ name: "PersonalOS", homeHref: "#/chat", mark: "P" }}
+      product={{ name: "Anywhere Aide", homeHref: "#/chat", mark: "A" }}
       mainId="main"
       navigation={navigation}
       onNavigate={onNavigate}

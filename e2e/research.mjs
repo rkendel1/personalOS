@@ -4,7 +4,7 @@
  *
  * Starts a local web search provider that answers the Brave Search API's request and response shape
  * (the stand-in for the external provider only), runs `feltkit dev --port 0` configured to use it
- * (WEBSEARCH_URL, FELTKIT_CREDENTIAL_WEBSEARCH), and drives the UI: tell PersonalOS what FeltKit is,
+ * (WEBSEARCH_URL, FELTKIT_CREDENTIAL_WEBSEARCH), and drives the UI: tell Anywhere Aide what FeltKit is,
  * ask for customers, wait for the research steps (jobs), review the evidence on the Research tab. The
  * stand-in pages are fictional domains, so the real page reader finds them unavailable, and says so.
  */
@@ -70,7 +70,7 @@ try {
   await page.goto(url);
   await page.getByLabel("Message").waitFor();
   await say("Remember that FeltKit is a TypeScript framework for building internal tools and agent-ready applications", /FeltKit/);
-  log("told PersonalOS what FeltKit is");
+  log("told Anywhere Aide what FeltKit is");
   await say("Are you sure you can't search the web?", /Web search is available to me here/);
   log("asked whether it can search: answered from discovery");
   await say("Find me some new customers for FeltKit.", /finding qualified prospects for FeltKit/);

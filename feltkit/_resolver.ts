@@ -1,6 +1,6 @@
 /**
  * Identity resolution through Resolver (@appport/resolver): an external identity (a sender on a
- * connected surface) → the canonical PersonalOS identity it was verifiably linked to.
+ * connected surface) → the canonical Anywhere Aide identity it was verifiably linked to.
  *
  * Resolver has no identity kind, so a link is what Resolver already models well: a typed `value`
  * reference with a fixed schema, revisions (actor, reason, time), total revocation and per-key grants.

@@ -1,6 +1,6 @@
 /**
- * What PersonalOS may do for a person, granted in Settings (feltkit/delegation.ts), decided by the
- * REAL private AuthBoundry FeltKit runs for PersonalOS (`authority.local`, @authboundry/local): no
+ * What Anywhere Aide may do for a person, granted in Settings (feltkit/delegation.ts), decided by the
+ * REAL private AuthBoundry FeltKit runs for Anywhere Aide (`authority.local`, @authboundry/local): no
  * AUTHBOUNDRY_URL, nothing set up by hand. Requests arrive from Multiplayer for a person resolved by a
  * real Resolver, as in production.
  *
@@ -62,7 +62,7 @@ async function link(t: TestApp, owner: string) {
 }
 const granted = async (t: TestApp, who: string) => (await t.as(who).action(api.delegation.list, {})).capabilities.filter((c) => c.granted).map((c) => c.id);
 
-test("local authority: what Ada allows in Settings decides what PersonalOS does for her from Multiplayer, and nothing for Grace", { skip: SKIP }, async () => {
+test("local authority: what Ada allows in Settings decides what Anywhere Aide does for her from Multiplayer, and nothing for Grace", { skip: SKIP }, async () => {
   INSTANCE = `local-${Math.random().toString(36).slice(2, 10)}`;
   const t = await createTestApp();
   try {
@@ -94,9 +94,9 @@ test("local authority: what Ada allows in Settings decides what PersonalOS does 
     assert.equal((await deliver(t, "@personalos add call mum to my list", "ada")).state, "refused");
     assert.equal((await deliver(t, "@personalos remind me to call the bank tomorrow at 9am", "ada")).state, "completed");
 
-    // A guest can't grant; nobody grants what PersonalOS never asks for.
+    // A guest can't grant; nobody grants what Anywhere Aide never asks for.
     await assert.rejects(t.as("guest").action(api.delegation.set, { capabilities: ["personalos.tasks.create"] }), /delegation\.write|permission/i);
-    await assert.rejects(t.as("ada").action(api.delegation.set, { capabilities: ["personalos.everything"] }), /Not something PersonalOS asks for/);
+    await assert.rejects(t.as("ada").action(api.delegation.set, { capabilities: ["personalos.everything"] }), /Not something Anywhere Aide asks for/);
 
     // All off.
     await t.as("ada").action(api.delegation.set, { capabilities: [] });

@@ -1,5 +1,5 @@
 /**
- * Summoning PersonalOS from outside (`personalos.invocation/1`): the iOS share extension's submission,
+ * Summoning Anywhere Aide from outside (`personalos.invocation/1`): the iOS share extension's submission,
  * through to durable work and its outcome. The envelope arrives as a mutation with the person's own
  * session, exactly as the extension sends it (tests/../e2e/share-invocation.mjs does it over HTTP with
  * a real sign-in). AuthBoundry here is a stand-in answering its on-behalf-of check
@@ -70,7 +70,7 @@ test("the envelope: each kind of context is checked against its rules, and the d
   refused([{ kind: "url" }], /no address/, "INVALID_CONTEXT");
   refused([{ kind: "text", text: "   " }], /empty/, "INVALID_CONTEXT");
   refused([{ kind: "text", text: "x".repeat(20_001) }], /limited to 20,000 characters/, "TOO_LARGE");
-  refused([{ kind: "document", name: "deck.pdf", mediaType: "application/pdf", text: "…", size: 10 }], /can't be shared with PersonalOS yet\. Supported: web links, text, and text documents/, "UNSUPPORTED_CONTEXT");
+  refused([{ kind: "document", name: "deck.pdf", mediaType: "application/pdf", text: "…", size: 10 }], /can't be shared with Anywhere Aide yet\. Supported: web links, text, and text documents/, "UNSUPPORTED_CONTEXT");
   refused([{ kind: "document", name: "photo.jpg", mediaType: "image/jpeg", size: 10 }], /can't be shared/, "UNSUPPORTED_CONTEXT");
   refused([{ kind: "document", name: "big.txt", mediaType: "text/plain", text: "x", size: 300 * 1024 }], /limited to 256 KB/, "TOO_LARGE");
   assert.match(describeContext(a.context), /^Acme \(https:\/\/www\.acme-ops\.com\/\); selected text from https:\/\/www\.acme-ops\.com\/careers/);
@@ -99,7 +99,7 @@ test("ACCEPTANCE: a shared page + \"could it be a customer for FeltKit?\" is acc
     // 1-4. The share sheet submits and gets a receipt; nothing has run yet.
     const receipt = await t.as("ada").mutation(api.invocations.submit, { envelope: e });
     assert.deepEqual([receipt.contract, receipt.state, receipt.replayed], [INVOCATION_CONTRACT, "accepted", false]);
-    assert.match(receipt.message, /PersonalOS has it: Acme Ops \| Internal tools for operations teams \(https:\/\/www\.acme-ops\.com\/\), "Research this company/);
+    assert.match(receipt.message, /Anywhere Aide has it: Acme Ops \| Internal tools for operations teams \(https:\/\/www\.acme-ops\.com\/\), "Research this company/);
     assert.match(receipt.message, /You can close this/);
     assert.equal(authority.decisions.length, 0, "nothing is decided or done before the surface has its receipt");
 
@@ -240,7 +240,7 @@ test("no delegation, no work: refused when the job runs, with AuthBoundry's deci
     await settle(t);
     const { invocation } = await get(t, "ada", e.invocationId);
     assert.deepEqual([invocation.state, invocation.error.code, invocation.authority.outcome], ["failed", "FORBIDDEN", "deny"]);
-    assert.match(invocation.updates.at(-1).text, /You haven't allowed PersonalOS to do this for you \(personalos\.research\.run/);
+    assert.match(invocation.updates.at(-1).text, /You haven't allowed Anywhere Aide to do this for you \(personalos\.research\.run/);
     assert.equal((await t.as("ada").query(api.research.list, {})).length, 0);
   } finally { await t.close(); }
 });
@@ -307,7 +307,7 @@ test("other instructions go to the assistant that already does them: a reminder 
     const d = (await get(t, "ada", del.invocationId)).invocation;
     assert.deepEqual([d.state, d.authority.capability], ["needs_approval", "personalos.tasks.delete"]);
     assert.equal(d.work.actionIds.length, 1);
-    assert.match(d.updates.at(-1).text, /needs your approval in PersonalOS/);
+    assert.match(d.updates.at(-1).text, /needs your approval in Anywhere Aide/);
     assert.ok((await t.as("ada").query(api.tasks.list, { status: "open" })).some((x: any) => x.id === task!.id), "nothing deleted before approval");
   } finally { await t.close(); }
 });

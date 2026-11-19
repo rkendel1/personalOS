@@ -1,13 +1,13 @@
 /**
- * X as a surface for PersonalOS: mention the bot account (@anywhereaide) and PersonalOS works for
- * you, in your own PersonalOS, with nothing private posted publicly. Not another agent and not another
+ * X as a surface for Anywhere Aide: mention the bot account (@anywhereaide) and Anywhere Aide works for
+ * you, in your own Anywhere Aide, with nothing private posted publicly. Not another agent and not another
  * store: a mention becomes a `personalos.invocation/1` record (surface `x`) in your conversation,
  * handled by the same assistant, the same AuthBoundry decisions and the same research as every surface.
  *
  * Two identities, never confused (feltkit/_x.ts):
- *   the bot     the `x` integration's token: PersonalOS may read the bot's mentions and post as the bot.
+ *   the bot     the `x` integration's token: Anywhere Aide may read the bot's mentions and post as the bot.
  *   a person    the mention's author as X's API reports it (`author_id`), resolved through a link that
- *               person confirmed in PersonalOS (Resolver, adapter `x`, links.ts). Unlinked, revoked or
+ *               person confirmed in Anywhere Aide (Resolver, adapter `x`, links.ts). Unlinked, revoked or
  *               ambiguous: nothing is done for anyone. Text in a post is never identity or authority.
  *
  * Lifecycle (durable at every step; each step idempotent):
@@ -25,13 +25,13 @@
  *                                  points it at another of their conversations (AuthBoundry decides)
  *                  Notes, tasks and reminders run now for the owner after AuthBoundry allows them (as
  *                  for Multiplayer). Research and model answers wait for the owner to run them in
- *                  PersonalOS: FeltKit runs work as the principal that queued it, and only the owner's
+ *                  Anywhere Aide: FeltKit runs work as the principal that queued it, and only the owner's
  *                  own session may run research for them.
  *   replies        a generic acknowledgement, never a result. Each reply is posted at most once:
  *                  claimed before sending, sent with an idempotency key (FeltKit refuses to resend a
  *                  call whose outcome it could not see), and an unclear outcome is left `unknown` for a
  *                  person to check, never retried.
- *   publish        the owner's explicit act in PersonalOS, decided by AuthBoundry
+ *   publish        the owner's explicit act in Anywhere Aide, decided by AuthBoundry
  *                  (personalos.x.publish), with the exact text they wrote. Nothing is published
  *                  because a post asked for it.
  */
@@ -243,7 +243,7 @@ async function zoneOf(ctx: MutationCtx, owner: string): Promise<string | null> {
 }
 
 /**
- * Hand PersonalOS one mention of the bot account (from `poll`). Idempotent per post id. Throws only
+ * Hand Anywhere Aide one mention of the bot account (from `poll`). Idempotent per post id. Throws only
  * when it cannot decide now (identity or authority unreachable): then nothing is recorded, and the
  * same mention is handled on the next poll.
  */
@@ -275,7 +275,7 @@ export const receive = app.mutation({
     // The author as X's API reported it: the only identity used.
     const external = { adapter: X_ADAPTER, instance: X_INSTANCE, principalId: m.authorId };
 
-    // ── Linking: the author proves control of this X account by posting the code PersonalOS showed ──
+    // ── Linking: the author proves control of this X account by posting the code Anywhere Aide showed ──
     if (command.kind === "link") {
       const [pending] = await ctx.db.find(identityLinks, { codeDigest: await digest(command.code) });
       if (!pending || pending.status !== "pending" || pending.adapter !== X_ADAPTER || (pending.codeExpiresAt ?? 0) < now) {
@@ -284,25 +284,25 @@ export const receive = app.mutation({
       const current = await resolveExternal(ctx, external);
       if (current.status === "ambiguous" || (current.status === "resolved" && current.owner !== pending.owner)) {
         // A posted code is public: it is used up whatever happens.
-        await ctx.db.patch(identityLinks, pending.id, { status: "revoked", revokedAt: now, codeDigest: undefined, codeExpiresAt: undefined, error: "That X account is already connected to a different PersonalOS account." });
+        await ctx.db.patch(identityLinks, pending.id, { status: "revoked", revokedAt: now, codeDigest: undefined, codeExpiresAt: undefined, error: "That X account is already connected to a different Anywhere Aide account." });
         return record("refused", { refusal: { code: current.status === "ambiguous" ? "AMBIGUOUS_IDENTITY" : "ALREADY_LINKED", message: "This X account is already connected elsewhere." } });
       }
       // Used up now (one presentation per code). Nothing is linked yet: the owner sees this X account in
-      // PersonalOS and confirms it is theirs (links:confirm), which is what writes the link to Resolver.
+      // Anywhere Aide and confirms it is theirs (links:confirm), which is what writes the link to Resolver.
       // The code is public once posted, but it was already used by the first post that carried it, and
       // a post by someone else would show *their* account, which the owner does not confirm.
       await ctx.db.patch(identityLinks, pending.id, { status: "presented", sourcePrincipalId: m.authorId, sourceDisplayName: handle, sourceInstance: X_INSTANCE, presentedAt: now, codeDigest: undefined, codeExpiresAt: now + PRESENTED_TTL_MS, error: undefined });
       return record("linking", { owner: pending.owner, replies: [reply("acknowledgement", acknowledgement("link", m.id))] });
     }
 
-    // ── Identity: the author's X account → the PersonalOS account it was verifiably linked to ──
+    // ── Identity: the author's X account → the Anywhere Aide account it was verifiably linked to ──
     const resolved = await resolveExternal(ctx, external);
-    if (resolved.status === "ambiguous") return record("refused", { refusal: { code: "AMBIGUOUS_IDENTITY", message: "This X account resolves to more than one PersonalOS link." } });
+    if (resolved.status === "ambiguous") return record("refused", { refusal: { code: "AMBIGUOUS_IDENTITY", message: "This X account resolves to more than one Anywhere Aide link." } });
     // Strangers get nothing: no work, no reply (the bot does not engage with accounts it doesn't know).
-    if (resolved.status !== "resolved") return record("refused", { refusal: { code: "NOT_LINKED", message: `${handle} is not connected to a PersonalOS account.` } });
+    if (resolved.status !== "resolved") return record("refused", { refusal: { code: "NOT_LINKED", message: `${handle} is not connected to a Anywhere Aide account.` } });
     const owner = resolved.owner;
     const [index] = (await ctx.db.find(identityLinks, { owner })).filter((l) => l.resolverRef === resolved.ref);
-    if (index && (index.status === "revoking" || index.status === "revoked")) return record("refused", { owner, refusal: { code: "NOT_LINKED", message: "This X account was disconnected from PersonalOS." } });
+    if (index && (index.status === "revoking" || index.status === "revoked")) return record("refused", { owner, refusal: { code: "NOT_LINKED", message: "This X account was disconnected from Anywhere Aide." } });
     if (index) await ctx.db.patch(identityLinks, index.id, { lastUsedAt: now });
     const octx = ops.actingFor(ctx, owner);
     const identity = { resolverRef: resolved.ref, resolverRevision: resolved.revision };
@@ -340,7 +340,7 @@ export const receive = app.mutation({
     const invId = await ctx.db.insert(invocations, {
       owner, invocationId: n.invocationId, contract: INVOCATION_CONTRACT, surface: n.surface, instruction: n.instruction, context: n.context,
       submittedAt: n.submittedAt, receivedAt: now, ...(timeZone ? { timeZone } : {}), digest: n.digest, conversationId, returnTo: "personalos", state: "accepted",
-      updates: [{ seq: 1, state: "accepted", text: `PersonalOS has it, from ${handle} on X: ${n.instruction ? `"${n.instruction.slice(0, 200)}"` : "(no request)"}.`, at: now }],
+      updates: [{ seq: 1, state: "accepted", text: `Anywhere Aide has it, from ${handle} on X: ${n.instruction ? `"${n.instruction.slice(0, 200)}"` : "(no request)"}.`, at: now }],
       createdAt: now, updatedAt: now,
     });
     const inv = () => ctx.db.get(invocations, invId);
@@ -351,12 +351,12 @@ export const receive = app.mutation({
     };
 
     if (missing) {
-      const t = `There's no conversation ${command.kind === "continue" ? command.conversationId.slice(0, 40) : ""} in your PersonalOS, so nothing was continued or done.`;
+      const t = `There's no conversation ${command.kind === "continue" ? command.conversationId.slice(0, 40) : ""} in your Anywhere Aide, so nothing was continued or done.`;
       await moveInvocation(ctx, (await inv())!, "failed", t, { work: { replyId: await say(t) }, error: { code: "NOT_FOUND", message: "no such conversation for this account" } });
       return finish();
     }
     if (continued && !continued.allowed) {
-      const t = `You haven't allowed PersonalOS to continue conversations from X (personalos.conversation.continue${continued.decision.reason ? `: ${continued.decision.reason}` : ""}). Nothing was done.`;
+      const t = `You haven't allowed Anywhere Aide to continue conversations from X (personalos.conversation.continue${continued.decision.reason ? `: ${continued.decision.reason}` : ""}). Nothing was done.`;
       await moveInvocation(ctx, (await inv())!, "failed", t, { authority: continued.decision, work: { replyId: await say(t) }, error: { code: "FORBIDDEN", message: "personalos.conversation.continue was not allowed" } });
       return finish();
     }
@@ -366,14 +366,14 @@ export const receive = app.mutation({
       return finish();
     }
 
-    // ── The connected agent (feltkit/anywhere.ts): the result goes to the person's PersonalOS
+    // ── The connected agent (feltkit/anywhere.ts): the result goes to the person's Anywhere Aide
     //    conversation; X only ever gets the generic acknowledgement queued by finish() ──
     if (agentConnected()) {
       const decision = await ctx.authority.decide({ capability: HANDOFF_CAPABILITY, onBehalfOf: authorityPrincipal(owner), context: { surface: X_ADAPTER, post: m.id } });
       if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); this mention is read again on the next poll.`);
       const authority = authorityOf(HANDOFF_CAPABILITY, decision);
       if (!decision.allowed) {
-        const t = `You haven't allowed PersonalOS to take requests from X for you (${HANDOFF_CAPABILITY}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
+        const t = `You haven't allowed Anywhere Aide to take requests from X for you (${HANDOFF_CAPABILITY}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
         await moveInvocation(ctx, (await inv())!, "failed", t, { authority, work: { replyId: await say(t) }, error: { code: "FORBIDDEN", message: `${HANDOFF_CAPABILITY} was not allowed` } });
         return finish();
       }
@@ -392,7 +392,7 @@ export const receive = app.mutation({
     if (rules.intent === "research" || rules.intent === "answer") {
       // Only the owner's own session may run this for them (research and model work run as whoever
       // queued them). It waits, with the conversation saying so; invocations:run starts it.
-      const t = `This came from X and needs ${rules.intent === "research" ? "research" : "a model to answer"}, which runs only from your own PersonalOS session. Choose “Run it” under “Where this came from” in this conversation. Nothing is posted on X either way.`;
+      const t = `This came from X and needs ${rules.intent === "research" ? "research" : "a model to answer"}, which runs only from your own Anywhere Aide session. Choose “Run it” under “Where this came from” in this conversation. Nothing is posted on X either way.`;
       // (No replyId: processing treats one as work already done.)
       await say(t);
       await moveInvocation(ctx, (await inv())!, "needs_approval", t, { interpretation, work: { waitingFor: "owner" } });
@@ -406,7 +406,7 @@ export const receive = app.mutation({
     if (decision.outcome === "unavailable" || decision.outcome === "invalid") fail("UNAVAILABLE", `The authority could not decide (${decision.reason ?? decision.outcome}); this mention is read again on the next poll.`);
     const authority = authorityOf(capability, decision);
     if (!decision.allowed) {
-      const t = `You haven't allowed PersonalOS to do this for you from X (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
+      const t = `You haven't allowed Anywhere Aide to do this for you from X (${capability}${decision.reason ? `: ${decision.reason}` : ""}). Nothing was done.`;
       await moveInvocation(ctx, (await inv())!, "failed", t, { interpretation, authority, work: { replyId: await say(t) }, error: { code: "FORBIDDEN", message: `${capability} was not allowed${decision.reason ? `: ${decision.reason}` : ""}` } });
       return finish();
     }
@@ -417,7 +417,7 @@ export const receive = app.mutation({
     }
     const r = await respond(octx, conversationId, shaped!, clock.today as any, clock.tzOffset);
     const pending = (await Promise.all((r.reply.actionIds ?? []).map((id: string) => ctx.db.get(actions, id)))).filter((a) => a?.status === "proposed").map((a) => a!.id);
-    await moveInvocation(ctx, (await inv())!, pending.length ? "needs_approval" : "completed", pending.length ? `${r.reply.text.slice(0, 1500)}\n\nIt needs your approval in PersonalOS.` : r.reply.text.slice(0, 2000), {
+    await moveInvocation(ctx, (await inv())!, pending.length ? "needs_approval" : "completed", pending.length ? `${r.reply.text.slice(0, 1500)}\n\nIt needs your approval in Anywhere Aide.` : r.reply.text.slice(0, 2000), {
       interpretation, authority, work: { replyId: r.replyId, ...(pending.length ? { actionIds: pending } : {}) },
     });
     return finish();
@@ -432,7 +432,7 @@ function authorityOf(capability: string, d: { outcome: string; executor?: string
 }
 
 /**
- * The PersonalOS conversation an X thread is on, for THIS author: their latest handled mention in it.
+ * The Anywhere Aide conversation an X thread is on, for THIS author: their latest handled mention in it.
  * Another person replying in the same public thread is never taken to be them (each author resolves
  * on their own, and their mentions go to their own conversations).
  */
@@ -517,7 +517,7 @@ export const deliver = app.action({
   handler: async (ctx, { postId, index }) => { await sendReply(ctx, postId, index); },
 });
 
-// ── The owner's side, in PersonalOS ──────────────────────────────────────────────────────────
+// ── The owner's side, in Anywhere Aide ──────────────────────────────────────────────────────────
 
 const OwnPost = s.object({
   postId: s.string(), url: s.string(), author: s.string(), state: s.string(), invocationId: s.nullable(s.string()), conversationId: s.nullable(s.string()),
@@ -536,7 +536,7 @@ export const mine = app.query({
   handler: async (ctx, { limit }) => (await ctx.db.find(xPosts, { owner: ops.me(ctx) }, { orderBy: [{ field: "receivedAt", direction: "desc" }], limit: limit ?? 20 })).map(ownView),
 });
 
-/** One of your mentions, by its post id (PersonalOS's #/x/<post id> opens its conversation). Another person's does not exist. */
+/** One of your mentions, by its post id (Anywhere Aide's #/x/<post id> opens its conversation). Another person's does not exist. */
 export const post = app.query({
   access: "invocations.read",
   args: { postId: ID },
@@ -560,7 +560,7 @@ export const bot = app.query({
 
 /**
  * Publish text on X, as the bot, in reply to one of your mentions: only by your explicit act here, with
- * the exact text you wrote, and only if AuthBoundry allows PersonalOS to publish for you
+ * the exact text you wrote, and only if AuthBoundry allows Anywhere Aide to publish for you
  * (personalos.x.publish). A refusal is recorded with the decision. The X adapter posts it on its next poll.
  */
 export const publish = app.mutation({
@@ -581,7 +581,7 @@ export const publish = app.mutation({
       : { ...reply("publication", body, { requestedBy: owner, authority }), status: "failed" as const, error: `Not allowed: personalos.x.publish${decision.reason ? ` (${decision.reason})` : ""}` };
     await ctx.db.patch(xPosts, p.id, { replies: [...(p.replies as any[]), entry], updatedAt: Date.now() });
     if (p.conversationId) {
-      await appendMessage(ctx, p.conversationId, { role: "assistant", text: decision.allowed ? `Publishing on X, as the bot, in reply to ${postUrl(postId)}: “${body}”` : `Not published on X: you haven't allowed PersonalOS to publish for you (personalos.x.publish${decision.reason ? `: ${decision.reason}` : ""}).` });
+      await appendMessage(ctx, p.conversationId, { role: "assistant", text: decision.allowed ? `Publishing on X, as the bot, in reply to ${postUrl(postId)}: “${body}”` : `Not published on X: you haven't allowed Anywhere Aide to publish for you (personalos.x.publish${decision.reason ? `: ${decision.reason}` : ""}).` });
     }
     return { status: decision.allowed ? "pending" : "denied", reason: decision.allowed ? null : (decision.reason ?? "not allowed") };
   },

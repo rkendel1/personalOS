@@ -1,5 +1,5 @@
 /**
- * What PersonalOS may do for you: your grants to its executor (`agent:personalos`), which AuthBoundry
+ * What Anywhere Aide may do for you: your grants to its executor (`agent:personalos`), which AuthBoundry
  * decides every request from a connected surface by (Multiplayer, X, the browser, the share sheet;
  * feltkit/interactions.ts, invocations.ts, xsurface.ts). Work you do in the app yourself needs no grant.
  *
@@ -12,14 +12,23 @@ import { app, researchBudgets } from "./app.js";
 import { AGENT_CAPABILITIES, AGENT_CAPABILITY_LABELS, CAPABILITIES, CAPABILITY_LABELS } from "./_authority.js";
 import { agentPrincipal, setGrants } from "./_delegation.js";
 import { delegationOf } from "./_ops.js";
+import { CONNECTION_CAPABILITIES } from "./connections.js";
 
 const KNOWN = new Set<string>(CAPABILITIES);
 const AGENT_KNOWN = new Set<string>(AGENT_CAPABILITIES);
 
-/** Why grants can't be managed here (a hosted AuthBoundry, or the local one isn't running), else null. */
+/**
+ * Why grants can't be managed here, else null: a hosted AuthBoundry, the local one isn't running, or it
+ * refused this deployment's own administrator (SETUP_FAILED, e.g. "delegations: 403 authorization_denied":
+ * the local authority's saved state no longer accepts the administrator FeltKit signs in as). Settings then
+ * says so and what to do, instead of failing the whole page.
+ */
 function unavailable(error: unknown): string | null {
   const code = (error as { code?: string })?.code;
-  return code === "UNAVAILABLE" || code === "FAILED_PRECONDITION" ? (error as Error).message : null;
+  if (code === "UNAVAILABLE" || code === "FAILED_PRECONDITION") return (error as Error).message;
+  if (code === "SETUP_FAILED" || /\b40[13]\b.*(authoriz|denied|unauthor)/i.test(String((error as Error)?.message ?? "")))
+    return `This server's permission service refused to list your grants (${String((error as Error).message).slice(0, 200)}). Nothing was changed. An operator can check the local AuthBoundry's state (npx feltkit readiness), or restart it with fresh state.`;
+  return null;
 }
 
 async function current(ctx: { authority: { grants: { list(): Promise<Array<{ id: string; agent?: string | null; capabilities: string[]; expiresAt: number | null }>> } } }, agent: string | null) {
@@ -28,7 +37,7 @@ async function current(ctx: { authority: { grants: { list(): Promise<Array<{ id:
 }
 
 /**
- * Without `agent`: what PersonalOS may do for you (grants to its executor). With `agent`: what that agent,
+ * Without `agent`: what Anywhere Aide may do for you (grants to its executor). With `agent`: what that agent,
  * registered by an operator (`registerAgent`), may do for you over /appport, one capability at a time.
  */
 export const list = app.action({
@@ -56,7 +65,7 @@ export const list = app.action({
 });
 
 /**
- * Make what PersonalOS (or, with `agent`, that agent) may do for you exactly `capabilities` (until
+ * Make what Anywhere Aide (or, with `agent`, that agent) may do for you exactly `capabilities` (until
  * `expiresAt`, or until you change it): one new grant of them, then your earlier grants to the same one
  * revoked. In between, the two overlap; nothing outside either is ever allowed. Grants to the executor
  * and to each agent are separate: changing one never revokes another.
@@ -65,17 +74,23 @@ export const set = app.action({
   access: "delegation.write",
   args: { capabilities: s.array(s.string({ maxLength: 100 }), { maxItems: 50 }), expiresAt: s.optional(s.nullable(s.number())), agent: s.optional(s.string({ maxLength: 100 })) },
   handler: async (ctx, { capabilities, expiresAt, agent }) => {
-    const want = [...new Set(capabilities)];
+    let want = [...new Set(capabilities)];
     const known = agent === undefined ? KNOWN : AGENT_KNOWN;
     const unknown = want.filter((c) => !known.has(c));
-    if (unknown.length) throw new Error(agent === undefined ? `Not something PersonalOS asks for: ${unknown.join(", ")}` : `Not something an agent can be given: ${unknown.join(", ")}`);
+    if (unknown.length) throw new Error(agent === undefined ? `Not something Anywhere Aide asks for: ${unknown.join(", ")}` : `Not something an agent can be given: ${unknown.join(", ")}`);
+    // What the person allowed for their connected accounts (Settings → Connections) is kept as it is:
+    // this list is only what connected surfaces may ask for (feltkit/connections.ts changes the rest).
+    if (agent === undefined) {
+      const kept = (await current(ctx, null)).flatMap((g) => g.capabilities).filter((c) => CONNECTION_CAPABILITIES.includes(c));
+      want = [...new Set([...want, ...kept])];
+    }
     // Retry-safe: the grant now in force is never revoked (feltkit/_delegation.ts).
     const { granted, changed } = await setGrants(ctx.authority.grants, want, expiresAt ?? null, agent ?? null);
     return { granted, changed };
   },
 });
 
-/** An operator registers an agent outside PersonalOS with its authority. It may do nothing until a person grants it. */
+/** An operator registers an agent outside Anywhere Aide with its authority. It may do nothing until a person grants it. */
 export const registerAgent = app.action({
   access: "feltkit.authority.agents",
   args: { id: s.string({ minLength: 1, maxLength: 100 }), name: s.optional(s.string({ maxLength: 100 })) },

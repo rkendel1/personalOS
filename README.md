@@ -1,4 +1,6 @@
-# PersonalOS
+# Anywhere Aide
+
+*(formerly PersonalOS; the repository, app id and protocol identifiers such as `personalos.*` capabilities keep the old name so existing grants, links and data carry over.)*
 
 **An open-source personal assistant, and a starter for what you can build with
 [FeltKit](https://www.npmjs.com/package/@feltdb/feltkit).**
@@ -92,6 +94,8 @@ the chat. In production, point `ref://prod/personalos/model` at a model with
 | Your day | Today, "what am I forgetting?", an optional daily check-in and weekly review | `feltkit/_briefing.ts`, `checkins.ts`, `weekly.ts` |
 | Projects and files | Group tasks, ask "status of …", upload documents (10 MB) and get short-lived links | `feltkit/projects.ts`, `documents.ts` |
 | Activity | Every change made or proposed: how, by whom, and the record it was verified against | `feltkit/actions.ts` |
+| Email and calendar | Connect your own Gmail and Google Calendar in Settings → Connections. Read your inbox and agenda in chat; a send or new event is proposed, approved by you, queued, and delivered as you, with its result in Activity | `feltkit/connections.ts`, `email.ts`, `calendar.ts`, `outbox.ts` |
+| Web search | "search the web for …" in chat (with or without a model), and the model's `web.search` tool, through whichever search provider is configured | `feltkit/web.ts`, `_search.ts` |
 | Webhooks | `task.completed`, `reminder.fired` and `document.added`, signed and retried, to endpoints you register in Studio | `feltkit/_ops.ts` |
 | Chrome extension | The same app in the side panel: ask about the page, save it to Files, add a task from a selection | [`extension/`](extension/README.md) |
 | Agents | 13 capabilities published over AppPort and MCP, under the same permissions as the UI | `capability:` in `feltkit/*.ts` |
@@ -109,6 +113,32 @@ to do with it ("research this company: could it be a customer for FeltKit?"). Th
 with your own session and closes; PersonalOS does the work later, under your AuthBoundry delegation, and
 the result waits in the app. See [docs/IOS-SHARE.md](docs/IOS-SHARE.md) (the app is in `ios/`) and the
 contract, [docs/INVOCATION-CONTRACT.md](docs/INVOCATION-CONTRACT.md).
+
+## Email, calendar and web search
+
+Each person connects their **own** Google account (FeltKit person-owned connections: OAuth with PKCE, tokens
+kept and renewed by FeltKit, never seen by the app). Connecting grants Anywhere Aide `mail.read`/`mail.send` or
+`calendar.read`/`calendar.write` in AuthBoundry, which decides every call on the person's behalf; each can be
+switched off in Settings → Connections, and disconnecting revokes the tokens at Google and the grants here.
+
+To enable it on a server, create a Google OAuth client (Web application) with the redirect URIs
+`<FELTKIT_PUBLIC_URL>/api/integrations/mail/oauth/callback` and `…/calendar/oauth/callback`, enable the Gmail
+and Google Calendar APIs, then:
+
+```bash
+export GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+```
+
+```bash
+npx feltkit credential set credential-ref:google-client-secret
+```
+
+People's connections live in FeltKit's credential vault, which production must be able to write
+(`FELTKIT_CREDENTIAL_VAULT=1` with `FELTKIT_CREDENTIAL_VAULT_KEY`). Until Google verifies the OAuth app, only
+test users you list in Google Cloud can connect (the Gmail scopes are restricted).
+
+Web search uses the providers research already uses: `WEBSEARCH_URL` with the credential `websearch` (Brave
+Search API), or `OPENAISEARCH_URL` with `openaisearch`. Without one, the assistant says so.
 
 ## Tour of the code
 
@@ -172,8 +202,8 @@ menu on phones and in the side panel. Light and dark follow your system or your 
 
 ## Limitations
 
-Memory recall is keyword-based. No email or calendar integrations yet. Model features need a
-provider. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
+Memory recall is keyword-based. Email and calendar are Google only, and need a Google OAuth client
+configured (below). No messaging integration yet. Model features need a provider. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 ## Public demo deployment
 

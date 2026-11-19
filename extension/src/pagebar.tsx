@@ -70,7 +70,7 @@ export function PageBar({ url, onDisconnect }: { url: string; onDisconnect: () =
 
   /**
    * A request about this page, sent straight away as an invocation (personalos.invocation/1): the
-   * instruction is the button's, the page is context, and PersonalOS does it in the background under
+   * instruction is the button's, the page is context, and Anywhere Aide does it in the background under
    * your delegation. The result opens in a new conversation, as these actions always have.
    */
   const request = (instruction: string, how: { pageText?: boolean; page?: PageInfo | null; tab?: { url: string; title: string } }) =>
@@ -111,9 +111,9 @@ export function PageBar({ url, onDisconnect }: { url: string; onDisconnect: () =
       if (!pending) return;
       await chrome.storage.session.remove(PENDING_KEY);
       if (pending.kind === "summon") setSummon({ url: pending.url ?? "", title: pending.title ?? "", ...(pending.text ? { selection: pending.text } : {}) });
-      // "Ask PersonalOS about…": the Summon form with the selection; the person asks their question.
+      // "Ask Anywhere Aide about…": the Summon form with the selection; the person asks their question.
       else if (pending.kind === "ask") setSummon({ url: pending.url ?? "", title: pending.title ?? "", ...(pending.text ? { selection: pending.text } : {}), ask: true });
-      // "Add to my PersonalOS tasks": the selection (or link) as context, the request as the instruction.
+      // "Add to my Anywhere Aide tasks": the selection (or link) as context, the request as the instruction.
       else if (pending.kind === "task") {
         const page = { url: pending.url ?? "", title: pending.title ?? "", selection: pending.text ?? "", text: "" };
         void request(pending.text ? "Add this to my tasks" : "Add read this to my tasks", { page, tab: { url: page.url, title: page.title } });
@@ -134,7 +134,7 @@ export function PageBar({ url, onDisconnect }: { url: string; onDisconnect: () =
       </div>
       {signedIn && (
         <div className="row wrap">
-          <button className="tiny" disabled={busy || !tab} onClick={() => tab && setSummon({ url: tab.url, title: tab.title })}>Summon PersonalOS</button>
+          <button className="tiny" disabled={busy || !tab} onClick={() => tab && setSummon({ url: tab.url, title: tab.title })}>Summon Anywhere Aide</button>
           <button className="secondary tiny" disabled={busy || !tab} onClick={() => void request("Summarize this page for me, and tell me if anything in it needs action from me.", { pageText: true })}>Summarize</button>
           <button className="secondary tiny" disabled={busy || !tab} onClick={() => tab && setSummon({ url: tab.url, title: tab.title, ask: true })}>Ask about it</button>
           <button className="secondary tiny" disabled={busy} onClick={() => void run(async () => save(await readPage()))}>Save to Files</button>

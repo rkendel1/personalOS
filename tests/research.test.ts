@@ -1,5 +1,5 @@
 /**
- * "Find me some new customers for FeltKit." PersonalOS pursues the outcome with what the platform
+ * "Find me some new customers for FeltKit." Anywhere Aide pursues the outcome with what the platform
  * actually offers: it discovers its capabilities from FeltKit's catalog (not a model's tool list),
  * finds the web search integration, runs the research as durable steps, and keeps the evidence
  * (what search returned) apart from its assessment.
@@ -7,7 +7,7 @@
  * The search provider here is a local HTTP server answering the Brave Search API's request and
  * response shape (GET /res/v1/web/search, X-Subscription-Token, web.results[]): a stand-in for the
  * external provider only. Discovery, authorization, the integration call (FeltKit, credential
- * custody), the research agent, storage and the conversation are PersonalOS and FeltKit themselves.
+ * custody), the research agent, storage and the conversation are Anywhere Aide and FeltKit themselves.
  */
 import { after, before, test } from "node:test";
 import { readFileSync } from "node:fs";
@@ -25,7 +25,7 @@ import type { PageRead } from "../feltkit/_pages.js";
 const KEY = "brave_test_key_0123456789abcdef";
 /**
  * Whether the installed FeltKit gives application code its full catalog (ctx.agent.catalog, with
- * permission and readiness: discovery before any call). Without it, PersonalOS discovers from its own
+ * permission and readiness: discovery before any call). Without it, Anywhere Aide discovers from its own
  * declarations and the first call establishes configuration; the outcome assertions are the same.
  */
 const CATALOG = readFileSync(createRequire(import.meta.url).resolve("@feltdb/feltkit/package.json").replace(/package\.json$/, "dist/runtime/context.d.ts"), "utf8").includes("catalog(): Promise<");
@@ -370,7 +370,7 @@ test("with a model: the outcome still goes to research (not the model's tool lis
     await knowsFeltKit(t);
     const r = await say(t, "Find me some new customers for FeltKit.");
     assert.equal(r.reason, "research running");
-    assert.equal(model.requests.length, 0, "the model did not decide what PersonalOS can do");
+    assert.equal(model.requests.length, 0, "the model did not decide what Anywhere Aide can do");
     // The follow-up from the bug report, answered by the model: its context says what discovery found.
     model.scripts.push({ text: ["Yes: web search is available here, and the research is running."] });
     await say(t, "Are you sure you can't search the web?", r.conversationId);
@@ -403,7 +403,7 @@ test("without a model, \"are you sure you can't search the web?\" is answered fr
     const yes = await say(t, "Are you sure you can't search the web?");
     assert.equal(yes.reason, "capabilities");
     let text = await transcript(t, yes.conversationId);
-    assert.match(text, CATALOG ? /Yes\. Web search is available to me here/ : /Web search is set up in this PersonalOS; whether its provider is configured is checked when research first uses it/);
+    assert.match(text, CATALOG ? /Yes\. Web search is available to me here/ : /Web search is set up in this Anywhere Aide; whether its provider is configured is checked when research first uses it/);
     assert.match(text, /What I checked \(\d+ capabilities\)/);
     assert.doesNotMatch(text, /With the model off I handle tasks/);
     configure(false);

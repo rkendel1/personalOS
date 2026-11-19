@@ -1,12 +1,12 @@
 /**
- * X (formerly Twitter) as a PersonalOS surface: the pure parts (feltkit/xsurface.ts does the rest).
+ * X (formerly Twitter) as a Anywhere Aide surface: the pure parts (feltkit/xsurface.ts does the rest).
  *
  * Two identities, never confused:
  *   the bot     @anywhereaide, the account whose mentions are read and whose replies are posted.
- *               Its OAuth token (credential `x`) authorizes PersonalOS to act AS THE BOT. It proves
+ *               Its OAuth token (credential `x`) authorizes Anywhere Aide to act AS THE BOT. It proves
  *               nothing about anyone who mentions it.
- *   a person    the author of a mention, as X's API reports it (`author_id`). A person is a PersonalOS
- *               account only through a link they confirmed in PersonalOS (Resolver, adapter `x`).
+ *   a person    the author of a mention, as X's API reports it (`author_id`). A person is a Anywhere Aide
+ *               account only through a link they confirmed in Anywhere Aide (Resolver, adapter `x`).
  *               A username or id written in a post's text is never identity.
  *
  * Everything in a post is untrusted data: its text is what the person asked (when the author is linked),
@@ -124,10 +124,10 @@ export const refOf = (postId: string) => createHash("sha256").update(`x-post:${p
 export function acknowledgement(kind: "invoked" | "link", postId: string): string {
   const ref = refOf(postId);
   // No link: X prices a post containing a URL far above one without (docs.x.com pricing).
-  const where = " Open PersonalOS to see it.";
+  const where = " Open Anywhere Aide to see it.";
   const text = kind === "link"
-    ? `Received (ref ${ref}). If you sent a link code, finish connecting in PersonalOS → Settings → Connected surfaces. Nothing else happens until you confirm there.`
-    : `Received (ref ${ref}). It's in your PersonalOS, and the result stays private there; nothing about it is posted here.${where}`;
+    ? `Received (ref ${ref}). If you sent a link code, finish connecting in Anywhere Aide → Settings → Connected surfaces. Nothing else happens until you confirm there.`
+    : `Received (ref ${ref}). It's in your Anywhere Aide, and the result stays private there; nothing about it is posted here.${where}`;
   return text.slice(0, POST_CHARS);
 }
 

@@ -1,6 +1,6 @@
 /**
  * A model turn (FeltKit M1): the assistant answers in its own words, streamed, and acts only by
- * proposing PersonalOS capabilities.
+ * proposing Anywhere Aide capabilities.
  *
  *   user message ── recordUser (idempotent by the client's message id)
  *        │
@@ -12,7 +12,7 @@
  *        │              consequential: waits for the owner's approval (server-side), never runs here
  *   recordReply ── the reply cites its task, generations and proposals
  *
- * The model never writes PersonalOS state. With no model (or the owner turned it off) the turn is
+ * The model never writes Anywhere Aide state. With no model (or the owner turned it off) the turn is
  * the deterministic assistant (assistant:send), unchanged.
  */
 import { s } from "@feltdb/feltkit";
@@ -25,26 +25,80 @@ import { retryResearch, startResearch } from "./research.js";
 import { agentConnected } from "./anywhere.js";
 import { routeOf } from "./_route.js";
 import { declaredCapabilities, PROSPECT_NEEDS, describeDiscovery, discover } from "./_capabilities.js";
+import { recentMail } from "./email.js";
+import { upcomingEvents } from "./calendar.js";
+import { searchWeb } from "./web.js";
+import { describeEvent } from "./_google.js";
 
 /** The capabilities the model may use, as tools. Everything else stays with the person. */
-const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "memory.add", "memory.list", "briefing.today", "projects.list", "documents.list"];
+const TOOLS = ["tasks.create", "tasks.update", "tasks.complete", "tasks.list", "memory.add", "memory.list", "briefing.today", "projects.list", "documents.list", "email.send", "calendar.create"];
 /** Inputs the app fills in itself (from the caller's clock), so the model never guesses them. */
-const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset", "proposedBy"], "tasks.update": ["tzOffset", "proposedBy"], "tasks.complete": ["proposedBy"], "memory.add": ["proposedBy"], "briefing.today": ["today"] };
+const APP_FILLED: Record<string, string[]> = { "tasks.create": ["tzOffset", "proposedBy"], "tasks.update": ["tzOffset", "proposedBy"], "tasks.complete": ["proposedBy"], "memory.add": ["proposedBy"], "briefing.today": ["today"], "email.send": ["proposedBy"], "calendar.create": ["proposedBy", "timeZone"] };
 /** What the model may propose (not read): each carries which model proposed it, from which message. */
-const PROPOSES = new Set(["tasks.create", "tasks.update", "tasks.complete", "memory.add"]);
+const PROPOSES = new Set(["tasks.create", "tasks.update", "tasks.complete", "memory.add", "email.send", "calendar.create"]);
+/**
+ * Reads in the person's connected accounts and on the web. Not proposals: the turn runs them as the person
+ * (their own connection, decided by AuthBoundry on their behalf) and gives the model what came back.
+ * They change nothing anywhere.
+ */
+const READS = [
+  { name: "email.recent", description: "Read the user's recent email from their connected Gmail: sender, subject, date and Gmail's snippet (not full bodies). Optional Gmail search query (e.g. \"is:unread\", \"from:sam newer_than:7d\").", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 15 } } } as Record<string, unknown> },
+  { name: "calendar.upcoming", description: "The user's events from their connected Google Calendar, from a local date (YYYY-MM-DD, default today) for a number of days (default 1).", inputSchema: { type: "object", properties: { from: { type: "string" }, days: { type: "integer", minimum: 1, maximum: 14 } } } as Record<string, unknown> },
+  { name: "web.search", description: "Search the web now and get titles, URLs and snippets. Use it for quick current facts; cite the URLs you use. For finding many organizations (customers, competitors), use research.start instead.", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } as Record<string, unknown> },
+];
+const READ_NAMES = new Set(READS.map((r) => r.name));
+type Connected = { mail: string; calendar: string };
+
+/** Run one read for the person. An error comes back as the result, in words the model can relay. */
+async function runRead(ctx: Parameters<typeof upcomingEvents>[0], name: string, input: Record<string, unknown>, clock: Clock, connected: Connected): Promise<string> {
+  const notConnected = (what: "mail" | "calendar") => JSON.stringify({ error: `The user's ${what === "mail" ? "email" : "calendar"} is ${connected[what] === "reconnect_required" ? "disconnected (Google needs them to reconnect)" : "not connected"}. They connect it in Settings → Connections.` });
+  try {
+    if (name === "email.recent") {
+      if (connected.mail !== "connected") return notConnected("mail");
+      const limit = Math.min(15, Math.max(1, Number(input.limit) || 8));
+      return trim(await recentMail(ctx, typeof input.query === "string" && input.query ? input.query.slice(0, 300) : undefined, limit));
+    }
+    if (name === "calendar.upcoming") {
+      if (connected.calendar !== "connected") return notConnected("calendar");
+      const from = typeof input.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.from) ? input.from : clock.today;
+      const days = Math.min(14, Math.max(1, Number(input.days) || 1));
+      return trim((await upcomingEvents(ctx, from, days, clock.timeZone)).map((e) => describeEvent(e, clock.timeZone)));
+    }
+    if (name === "web.search") {
+      if (!ctx.auth.has("web.search")) return JSON.stringify({ error: "This account may not search the web." });
+      return trim(await searchWeb(ctx, String(input.query ?? "").slice(0, 400) || "news"));
+    }
+  } catch (error) {
+    const e = error as { code?: string; message?: string };
+    return JSON.stringify({ error: `${e.code ?? "ERROR"}: ${String(e.message ?? error).slice(0, 300)}` });
+  }
+  return JSON.stringify({ error: `${name} is not available.` });
+}
+
+async function connectionStates(ctx: { integrations: { connections: { list(): Promise<Array<{ integration: string; state: string }>> } } }): Promise<Connected> {
+  const list = await ctx.integrations.connections.list().catch(() => []);
+  const state = (id: string) => list.find((c) => c.integration === id)?.state ?? "not_connected";
+  return { mail: state("mail"), calendar: state("calendar") };
+}
+
+/** Plain requests the built-in assistant answers without a model, from the person's own accounts and the web. */
+const WEB_SEARCH = /^(?:please\s+)?(?:search(?:\s+the\s+web|\s+online)?(?:\s+for)?|look\s+up|google)\s+(.{2,300}?)[?.!]?$/i;
+const CALENDAR_ASK = /\b(?:what(?:'s| is)|anything|show(?: me)?|check)\b.*\b(?:calendar|schedule|agenda|meetings?)\b|\bmy (?:calendar|schedule|agenda)\b/i;
+const MAIL_ASK = /\b(?:check|any|show(?: me)?|read|what(?:'s| is))\b.*\b(?:e-?mails?|inbox|mail)\b/i;
 const MAX_ROUNDS = 3;
-/** Not a PersonalOS capability the model can call: a request that PersonalOS starts research (feltkit/research.ts). */
+/** Not a Anywhere Aide capability the model can call: a request that Anywhere Aide starts research (feltkit/research.ts). */
 const START_RESEARCH = {
   name: "research.start",
-  description: "Start web research for the user's request (find customers, competitors or other organizations; anything that needs current web sources). PersonalOS plans and runs it and reports back here. Reading only; contacts no one.",
+  description: "Start web research for the user's request (find customers, competitors or other organizations; anything that needs current web sources). Anywhere Aide plans and runs it and reports back here. Reading only; contacts no one.",
   inputSchema: { type: "object", properties: { goal: { type: "string", description: "What the user wants found, in one sentence." } }, required: ["goal"] } as Record<string, unknown>,
 };
-/** A question about whether PersonalOS can reach the web (search, browse, look things up online). */
+/** A question about whether Anywhere Aide can reach the web (search, browse, look things up online). */
 const CAPABILITY_QUESTION = /\b(can|could|are|do|don'?t|can'?t|cannot|able)\b.*\b(search|browse|google|look (?:things |it )?up|access|use)\b.*\b(web|internet|online)\b|\bweb access\b|\binternet access\b/i;
 
-function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[]; openTaskCount: number; memories: Array<{ content: string; status: string }> }, landscape: string): string {
+function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[]; openTaskCount: number; memories: Array<{ content: string; status: string }> }, landscape: string, connected: Connected): string {
+  const status = (s: string) => (s === "connected" ? "connected" : s === "reconnect_required" ? "needs reconnecting (Settings → Connections)" : "not connected (they can connect it in Settings → Connections)");
   return [
-    `You are PersonalOS, ${info.name ? `${info.name}'s` : "the user's"} personal assistant: warm, direct, occasionally dry-witted, never corporate. Keep replies short unless asked for more.`,
+    `You are Anywhere Aide, ${info.name ? `${info.name}'s` : "the user's"} personal assistant: warm, direct, occasionally dry-witted, never corporate. Keep replies short unless asked for more.`,
     `Now: ${clock.weekday} ${clock.today} ${clock.time} (${clock.timeZone}). Resolve "today", "tomorrow", weekdays and times in this time zone. Dates are YYYY-MM-DD, times HH:MM (24h).`,
     "",
     "How you act:",
@@ -53,9 +107,11 @@ function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[
     "- Reading tools (tasks.list, briefing.today, memory.list, projects.list, documents.list) run immediately; use them when you need facts you don't have below.",
     "- Never invent tasks, people, dates or facts. Unconfirmed memories are guesses; say so if you rely on one.",
     "- You can list the user's saved documents but cannot read their contents.",
-    "- What PersonalOS can do is not limited to the tools in this turn. When the user wants something researched on the web (finding customers, prospects, competitors, partners, vendors or other organizations, or facts that need current web sources), call research.start with their request: PersonalOS then plans and runs the research durably (searches, reads pages, assesses with evidence) and reports back in this conversation. Don't answer such requests from memory. What research can use right now, as discovered from the platform's catalog:",
+    `- The user's email (Gmail) is ${status(connected.mail)}; their calendar (Google Calendar) is ${status(connected.calendar)}. Use email.recent and calendar.upcoming to read them. To send an email call email.send, and to add an event call calendar.create: both only PROPOSE; the user approves the exact draft in the app. Never say an email was sent or an event was added. Ask for any recipient address you don't know rather than guessing it.`,
+    "- web.search searches the web right now; cite the URLs you rely on. Say plainly when it reports that no search provider is configured.",
+    "- What Anywhere Aide can do is not limited to the tools in this turn. When the user wants something researched on the web (finding customers, prospects, competitors, partners, vendors or other organizations, or facts that need current web sources), call research.start with their request: Anywhere Aide then plans and runs the research durably (searches, reads pages, assesses with evidence) and reports back in this conversation. Don't answer such requests from memory. What research can use right now, as discovered from the platform's catalog:",
     landscape,
-    "- Never say a capability does not exist, or that you have no web access, unless the list above says so; if it says something is not configured or not permitted, say exactly that and what would enable it. Never claim you searched, sent or did anything you did not do in this turn.",
+    "- Never say a capability does not exist, or that you have no web access, unless the list above says so (or a tool result in this turn does); if it says something is not configured or not permitted, say exactly that and what would enable it. Never claim you searched, sent or did anything you did not do in this turn.",
     "",
     `Open tasks (${info.openTaskCount}, soonest first): ${JSON.stringify(info.tasks)}`,
     `What you know about the user (status "confirmed" = they said so): ${JSON.stringify(info.memories)}`,
@@ -66,6 +122,7 @@ function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[
 function normalize(capability: string, input: Record<string, unknown>, clock: Clock): Record<string, unknown> {
   const out = { ...input };
   if (capability === "briefing.today") out.today = clock.today;
+  if (capability === "calendar.create") out.timeZone = clock.timeZone;
   if ((capability === "tasks.create" || capability === "tasks.update") && (out.due || out.time)) {
     const due = typeof out.due === "string" ? out.due : clock.today;
     const time = typeof out.time === "string" ? out.time : "09:00";
@@ -79,6 +136,35 @@ const trim = (value: unknown) => {
   const text = JSON.stringify(value ?? null);
   return text.length > 4000 ? `${text.slice(0, 4000)}…` : text;
 };
+
+/** The built-in assistant's reads: a web search, today's calendar, unread mail. Null: not one of these. */
+async function plainRead(ctx: Parameters<typeof upcomingEvents>[0], text: string, clock: Clock): Promise<{ reply: string; reason: string } | null> {
+  const t = text.trim();
+  const web = WEB_SEARCH.exec(t);
+  if (web && ctx.auth.has("web.search")) {
+    const r = await searchWeb(ctx, web[1]!);
+    if (!r.ok) return { reply: `I couldn't search the web: ${r.reason}`, reason: "web search unavailable" };
+    if (!r.results.length) return { reply: `Nothing came back for "${web[1]}".`, reason: "web search" };
+    const note = r.textKind === "provider-summary" ? "\n\n(Descriptions are the search provider's summaries, not quotes from the pages.)" : "";
+    return { reply: `Here's what the web says about "${web[1]}":\n\n${r.results.map((x, i) => `${i + 1}. [${x.title}](${x.url})${x.description ? ` — ${x.description.slice(0, 240)}` : ""}`).join("\n")}${note}`, reason: `web search via ${r.provider}` };
+  }
+  const connected = (CALENDAR_ASK.test(t) && ctx.auth.has("calendar.read")) || (MAIL_ASK.test(t) && ctx.auth.has("email.read")) ? await connectionStates(ctx) : null;
+  if (connected && CALENDAR_ASK.test(t) && ctx.auth.has("calendar.read")) {
+    if (connected.calendar !== "connected") return { reply: "Your calendar isn't connected, so I can't see it. Connect Google Calendar in Settings → Connections and ask again.", reason: "calendar not connected" };
+    const tomorrow = /\btomorrow\b/i.test(t);
+    const week = /\b(this|the|next) week\b/i.test(t);
+    const from = tomorrow ? new Date(Date.parse(`${clock.today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : clock.today;
+    const events = await upcomingEvents(ctx, from, week ? 7 : 1, clock.timeZone);
+    const when = tomorrow ? "tomorrow" : week ? "in the next 7 days" : "today";
+    return { reply: events.length ? `On your calendar ${when}:\n\n${events.map((e) => `- ${describeEvent(e, clock.timeZone)}`).join("\n")}` : `Nothing on your calendar ${when}.`, reason: "calendar" };
+  }
+  if (connected && MAIL_ASK.test(t) && ctx.auth.has("email.read")) {
+    if (connected.mail !== "connected") return { reply: "Your email isn't connected, so I can't read it. Connect Gmail in Settings → Connections and ask again.", reason: "email not connected" };
+    const mail = await recentMail(ctx, "is:unread in:inbox", 8);
+    return { reply: mail.length ? `Unread in your inbox (latest ${mail.length}):\n\n${mail.map((m) => `- **${m.subject}** — ${m.from}${m.snippet ? `\n  ${m.snippet.slice(0, 160)}` : ""}`).join("\n")}` : "No unread mail in your inbox.", reason: "email" };
+  }
+  return null;
+}
 
 const Result = s.object({
   /** model | rules: answered here. agent: handed to the person's agent (feltkit/agentwork.ts). */
@@ -129,7 +215,7 @@ export const turn = app.action({
       const search = d.needs[0]!;
       const reply = [
         search.state === "available" && search.problems.length
-          ? "Web search is set up in this PersonalOS; whether its provider is configured is checked when research first uses it. Ask for the outcome (for example, \"find me new customers for <product>\") and I'll run it, or tell you exactly what is missing."
+          ? "Web search is set up in this Anywhere Aide; whether its provider is configured is checked when research first uses it. Ask for the outcome (for example, \"find me new customers for <product>\") and I'll run it, or tell you exactly what is missing."
           : search.state === "available"
           ? "Yes. Web search is available to me here, so I can research things for you: ask for the outcome (for example, \"find me new customers for <product>\") and I'll run it."
           : `Not right now, and it isn't a fixed limit: ${search.need} is ${search.state === "needs-configuration" ? "set up but not configured" : search.state === "needs-authorization" ? "not permitted for your account" : "not connected"}.${search.howToEnable ? ` ${search.howToEnable}` : ""}`,
@@ -140,6 +226,12 @@ export const turn = app.action({
       return { mode: "rules" as const, ...r, replayed: false, reason: "capabilities" };
     }
     if (!useModel) {
+      // Reads the built-in assistant answers itself: the web, and the person's own connected accounts.
+      const answered = await plainRead(ctx, text, clock);
+      if (answered) {
+        const r = await ctx.runMutation(api.researchstate.answer, { text, reply: answered.reply, ...(conversationId ? { conversationId } : {}) });
+        return { mode: "rules" as const, ...r, replayed: false, reason: answered.reason };
+      }
       // The deterministic assistant: still fully working without a model.
       const reason = !prefs.modelAssist ? "model turned off in Settings" : !status.ready ? (status.problems[0]?.message ?? "no model is configured") : "this account may not use the model";
       const r = await ctx.runMutation(api.assistant.send, { ...(conversationId ? { conversationId } : {}), text, today: clock.today, tzOffset: clock.tzOffset });
@@ -154,6 +246,7 @@ export const turn = app.action({
 
     const info = await ctx.runQuery(api.turnstate.context, { conversationId: user.conversationId, before: user.messageId, query: text });
     const research = ctx.auth.has("research.run");
+    const connected = await connectionStates(ctx);
     const tools = [...(await ctx.agent.tools())
       .filter((t) => TOOLS.includes(t.name))
       .map((t) => {
@@ -164,9 +257,9 @@ export const turn = app.action({
           if (schema.required) schema.required = schema.required.filter((r) => r !== key);
         }
         return { ...t, inputSchema: schema as Record<string, unknown> };
-      }), ...(research ? [START_RESEARCH] : [])];
+      }), ...READS.filter((r) => ctx.auth.has(r.name === "email.recent" ? "email.read" : r.name === "calendar.upcoming" ? "calendar.read" : "web.search")), ...(research ? [START_RESEARCH] : [])];
     const conversation: GenerationMessage[] = [
-      { role: "system", content: systemPrompt(clock, info, landscape) },
+      { role: "system", content: systemPrompt(clock, info, landscape, connected) },
       ...info.history.map((m) => ({ role: m.role as "user" | "assistant", content: m.text })),
       { role: "user", content: text },
     ];
@@ -195,7 +288,7 @@ export const turn = app.action({
         }
         if (!g.toolCalls.length) break;
         const results: Array<{ call: ToolCall; content: string; observed?: boolean }> = [];
-        // Research: the model only proposes it. PersonalOS checks the permission and starts it with the
+        // Research: the model only proposes it. Anywhere Aide checks the permission and starts it with the
         // person's own words (not the model's paraphrase); its plan is this turn's reply.
         const asked = g.toolCalls.find((c) => c.name === START_RESEARCH.name);
         if (asked && research) {
@@ -206,6 +299,10 @@ export const turn = app.action({
           break;
         }
         for (const call of g.toolCalls) {
+          if (READ_NAMES.has(call.name)) {
+            results.push({ call, observed: true, content: await runRead(ctx, call.name, call.input, clock, connected) });
+            continue;
+          }
           if (!TOOLS.includes(call.name)) {
             results.push({ call, content: JSON.stringify({ error: `${call.name} is not available to you.` }) });
             continue;

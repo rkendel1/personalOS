@@ -4,7 +4,7 @@
  * component whose behavior it establishes:
  *
  *   requester  Ada, resolved by Resolver from her Multiplayer identity
- *   executor   agent:personalos, PersonalOS's own principal at AuthBoundry
+ *   executor   agent:personalos, Anywhere Aide's own principal at AuthBoundry
  *   authority  Ada's delegation to agent:personalos, decided by AuthBoundry on_behalf_of user:ada
  *
  * Without that install these tests are skipped and say so; CI installs it, so CI never skips them.
@@ -27,7 +27,7 @@ let ab: RealAuthority;
 before(async () => {
   if (SKIP) return;
   resolver = await startResolver();
-  // Both people hold every capability themselves; what PersonalOS may do for them is their delegation.
+  // Both people hold every capability themselves; what Anywhere Aide may do for them is their delegation.
   ab = await startRealAuthority({ ada: [...CAPABILITIES], grace: [...CAPABILITIES] }, CAPABILITIES);
 });
 after(async () => { await ab?.close(); await resolver?.close(); });
@@ -61,7 +61,7 @@ async function withApp(fn: (t: TestApp) => Promise<void>) {
 }
 const authorityOf = async (t: TestApp, owner: string, intent: string) => (await t.as(owner).query(api.interactions.list, {})).find((x) => x.intent === intent)?.authority;
 
-test("real AuthBoundry: Ada's delegation lets PersonalOS create her reminder; requester, executor and delegation are all recorded", { skip: SKIP }, () => withApp(async (t) => {
+test("real AuthBoundry: Ada's delegation lets Anywhere Aide create her reminder; requester, executor and delegation are all recorded", { skip: SKIP }, () => withApp(async (t) => {
   await ab.delegate("ada-reminders", "ada", ["personalos.reminders.create", "personalos.tasks.create"]);
   await link(t, "ada");
   const r = await deliver(t, "@personalos remind me to call the bank tomorrow at 9am", "ada");
@@ -73,7 +73,7 @@ test("real AuthBoundry: Ada's delegation lets PersonalOS create her reminder; re
   assert.deepEqual([task!.owner, task!.title], ["ada", "Call the bank"]);
 }));
 
-test("real AuthBoundry: a capability outside Ada's delegation is denied, though Ada holds it and PersonalOS was delegated others", { skip: SKIP }, () => withApp(async (t) => {
+test("real AuthBoundry: a capability outside Ada's delegation is denied, though Ada holds it and Anywhere Aide was delegated others", { skip: SKIP }, () => withApp(async (t) => {
   await link(t, "ada");
   const r = await deliver(t, "@personalos remember that my PIN is 1234", "ada", true);
   assert.equal(r.state, "refused");
@@ -81,7 +81,7 @@ test("real AuthBoundry: a capability outside Ada's delegation is denied, though 
   assert.equal((await t.as("ada").query(api.memory.list)).length, 0);
 }));
 
-test("real AuthBoundry: Grace without a delegation cannot have PersonalOS act for her, and Ada's delegation never serves her", { skip: SKIP }, () => withApp(async (t) => {
+test("real AuthBoundry: Grace without a delegation cannot have Anywhere Aide act for her, and Ada's delegation never serves her", { skip: SKIP }, () => withApp(async (t) => {
   await link(t, "grace");
   const r = await deliver(t, "@personalos add buy flowers to my list", "grace");
   assert.equal(r.state, "refused");

@@ -1,10 +1,10 @@
 /**
- * Reading a conversation PersonalOS was brought into (from an interaction's context), without a
+ * Reading a conversation Anywhere Aide was brought into (from an interaction's context), without a
  * model: summarize it, answer "what did we decide…", and pull out its action items. Pure. Every
  * answer cites the source messages it used (provenance), and says when its view is partial.
  *
  * It sees only what the envelope carries: messages the requester could already read in that
- * conversation. Nothing here reads the owner's private PersonalOS data, so its answers are safe to
+ * conversation. Nothing here reads the owner's private Anywhere Aide data, so its answers are safe to
  * post back into a shared conversation.
  */
 import { relevance } from "./_interpret.js";
@@ -43,7 +43,7 @@ export function conversationIntent(text: string): ConversationIntent | null {
 
 const clean = (text: string) => text.replace(/@[a-z0-9-]+/gi, "").replace(/\s+/g, " ").trim().replace(/[.!]+$/, "");
 
-/** What people said, without agents' replies or the requests addressed to PersonalOS. */
+/** What people said, without agents' replies or the requests addressed to Anywhere Aide. */
 function discussion(e: EnvelopeT): Msg[] {
   return e.context.messages.filter((m) => m.authorKind === "human" && m.id !== e.message.id && !/@personalos\b/i.test(m.text) && m.text.trim());
 }

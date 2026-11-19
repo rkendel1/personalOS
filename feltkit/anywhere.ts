@@ -2,23 +2,23 @@
  * Connected surfaces → the connected agent (an eve AppPort agent), for people who linked a surface.
  *
  * The surfaces stay what they are: Multiplayer's bridge and the X adapter deliver a message with the
- * sender's authenticated identity, and PersonalOS resolves that identity through Resolver to the
+ * sender's authenticated identity, and Anywhere Aide resolves that identity through Resolver to the
  * person a verified link names (interactions.ts, xsurface.ts). When PERSONALOS_AGENT_URL is set, the
- * request is not answered by PersonalOS's own assistant: after AuthBoundry allows
+ * request is not answered by Anywhere Aide's own assistant: after AuthBoundry allows
  * personalos.assistant.converse for that person, it is recorded on the surface's own record
  * (`agent`, below) and handed to the agent here.
  *
- *   who         PersonalOS asserts the resolved person to the agent with its own identity token
+ *   who         Anywhere Aide asserts the resolved person to the agent with its own identity token
  *               (integration `agent`, credential `agent-identity`). The agent accepts a person only
  *               from that token, and then acts only under that person's own grants to it, which
- *               AuthBoundry decides at every AppPort call on PersonalOS's delegated /appport. Resolver,
- *               its keys and the sender's surface identity never leave PersonalOS (the agent receives
+ *               AuthBoundry decides at every AppPort call on Anywhere Aide's delegated /appport. Resolver,
+ *               its keys and the sender's surface identity never leave Anywhere Aide (the agent receives
  *               them as provenance only, never as authority).
  *   once        The agent's idempotency key is derived from the surface's own event id (the
  *               interaction key, the X post id): a redelivered or retried event is the same work.
  *   where to    The reply goes where the request came from, because it is written to the surface's own
  *               record: an interaction update the bridge posts to that conversation, or (X) the
- *               person's PersonalOS conversation, with only the generic public acknowledgement on X.
+ *               person's Anywhere Aide conversation, with only the generic public acknowledgement on X.
  *               Nothing the agent returns names a recipient.
  *   outcome     Execution (the agent's record: completed, blocked as stalled, indeterminate, …) is kept
  *               here verbatim; delivery is the surface's (interaction updates and their events, X
@@ -34,9 +34,9 @@ import { moveInvocation } from "./invocationstate.js";
 import { announce } from "./interactions.js";
 import * as ops from "./_ops.js";
 
-/** The AuthBoundry capability a person grants PersonalOS for taking their requests from a surface. */
+/** The AuthBoundry capability a person grants Anywhere Aide for taking their requests from a surface. */
 export const HANDOFF_CAPABILITY = "personalos.assistant.converse";
-/** How long agent work is followed before PersonalOS stops and says so. */
+/** How long agent work is followed before Anywhere Aide stops and says so. */
 export const FOLLOW_FOR_MS = 24 * 60 * 60_000;
 /** Work handed over from a conversation (feltkit/agentwork.ts) may wait on the person for days. */
 export const WORK_FOLLOW_FOR_MS = 14 * 24 * 60 * 60_000;
@@ -107,7 +107,7 @@ async function later(ctx: MutationCtx, kind: Kind, id: string, agent: AgentRecor
 /**
  * Tell the surface record what became of the request. Multiplayer: an interaction update (the bridge
  * posts it to the conversation it came from; in a shared conversation only that it is done or not,
- * never the content). X: the invocation's state, and the reply in the person's own PersonalOS
+ * never the content). X: the invocation's state, and the reply in the person's own Anywhere Aide
  * conversation; X itself only ever got the generic acknowledgement.
  */
 async function report(ctx: MutationCtx, kind: Kind, rec: any, state: "working" | "completed" | "failed", full: string): Promise<void> {
@@ -123,9 +123,9 @@ async function report(ctx: MutationCtx, kind: Kind, rec: any, state: "working" |
   const shared = rec.audience !== "private";
   const text = !shared
     ? full
-    : state === "completed" ? "Done. The details are in your PersonalOS, since this conversation is shared."
-      : state === "failed" ? "It couldn't be finished. The details are in your PersonalOS, since this conversation is shared."
-        : "Not finished yet. The details are in your PersonalOS, since this conversation is shared.";
+    : state === "completed" ? "Done. The details are in your Anywhere Aide, since this conversation is shared."
+      : state === "failed" ? "It couldn't be finished. The details are in your Anywhere Aide, since this conversation is shared."
+        : "Not finished yet. The details are in your Anywhere Aide, since this conversation is shared.";
   const fresh = (await ctx.db.get(interactions, rec.id))!;
   const update = { seq: (fresh.updates.at(-1)?.seq ?? 0) + 1, state, text: text.slice(0, 8000), at: Date.now() };
   await ctx.db.patch(interactions, rec.id, { state, updates: [...fresh.updates, update], updatedAt: Date.now() });
@@ -164,7 +164,7 @@ export async function step(ctx: MutationCtx, kind: Kind, id: string, next?: stri
 
   if (now - rec.createdAt > followFor(kind)) {
     await save(ctx, kind, id, { ...agent, state: "expired" });
-    await report(ctx, kind, rec, "failed", `The connected agent's work${agent.workId ? ` ${agent.workId}` : ""} did not finish within ${kind === "work" ? "two weeks" : "a day"}${agent.decision ? `: ${why(agent.decision)}` : ""}. PersonalOS stopped following it; its own record is authoritative.`);
+    await report(ctx, kind, rec, "failed", `The connected agent's work${agent.workId ? ` ${agent.workId}` : ""} did not finish within ${kind === "work" ? "two weeks" : "a day"}${agent.decision ? `: ${why(agent.decision)}` : ""}. Anywhere Aide stopped following it; its own record is authoritative.`);
     return;
   }
 
@@ -272,7 +272,7 @@ export async function step(ctx: MutationCtx, kind: Kind, id: string, next?: stri
 }
 
 export const anywhereAgent = app.agent("anywhere", {
-  principal: { id: "personalos-anywhere", displayName: "PersonalOS connected agent" },
+  principal: { id: "personalos-anywhere", displayName: "Anywhere Aide connected agent" },
   roles: ["anywhere"],
   access: "anywhere.agent",
   description: "Hands a linked person's surface request to the connected agent and follows it to its outcome.",

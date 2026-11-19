@@ -1,7 +1,7 @@
 /**
- * Research: the outcomes PersonalOS is pursuing for you ("find me new customers for FeltKit"), what
+ * Research: the outcomes Anywhere Aide is pursuing for you ("find me new customers for FeltKit"), what
  * it checked it could do, what it searched, and what it found. Every prospect shows what its sources
- * said (with links) apart from PersonalOS's assessment of it, so you can see what was verified.
+ * said (with links) apart from Anywhere Aide's assessment of it, so you can see what was verified.
  */
 import { useState } from "react";
 import { useFeltKit, useMutation, useQuery } from "@feltdb/feltkit/react";

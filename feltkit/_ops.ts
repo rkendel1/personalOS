@@ -35,7 +35,7 @@ export async function originOf(ctx: MutationCtx, proposedBy: { model: string; me
 /**
  * The owner a call works for. Normally the caller. The one exception is an interaction from a
  * connected surface (feltkit/interactions.ts): the surface's bridge principal works for the
- * PersonalOS account that linked that sender, and only inside the handler that verified the link.
+ * Anywhere Aide account that linked that sender, and only inside the handler that verified the link.
  * FeltKit has no on-behalf-of identity (docs/ANYWHERE.md, platform gaps), so the link is the grant.
  */
 const ACTING_OWNER = Symbol("personalos.actingOwner");

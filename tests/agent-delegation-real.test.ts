@@ -1,7 +1,7 @@
 /**
- * An agent outside PersonalOS (an eve agent) manages a person's tasks over /appport under that person's
+ * An agent outside Anywhere Aide (an eve agent) manages a person's tasks over /appport under that person's
  * grants to it: FeltKit's delegated execution (`X-AppPort-On-Behalf-Of`, ctx.auth.delegation), the REAL
- * private AuthBoundry (@authboundry/local), real HTTP, real jobs. PersonalOS's own task, reminder and
+ * private AuthBoundry (@authboundry/local), real HTTP, real jobs. Anywhere Aide's own task, reminder and
  * briefing code does the work; nothing here replaces it.
  *
  * Skipped, saying why, unless the installed FeltKit has delegated /appport and @authboundry/local has
@@ -78,12 +78,12 @@ test("an agent manages Ada's tasks, reminders and briefing only as each capabili
   await t.as("ada").mutation(api.tasks.create, { title: "Ada's own task" });
   await t.as("grace").mutation(api.tasks.create, { title: "Grace's task" });
 
-  // Ada's grants to PersonalOS and to Eve are separate: changing one never revokes the other.
+  // Ada's grants to Anywhere Aide and to Eve are separate: changing one never revokes the other.
   await t.as("ada").action(api.delegation.set, { capabilities: ["personalos.tasks.read"] });
   await refused(appport("tasks.list", {}, "ada"), "ada", "nothing granted to Eve yet");
   await grantEve("ada", ["tasks.list", "tasks.create", "briefing.today"]);
   const executorGrants = (await t.as("ada").action(api.delegation.list, {})).capabilities.filter((c) => c.granted).map((c) => c.id);
-  assert.deepEqual(executorGrants, ["personalos.tasks.read"], "Ada's grant to PersonalOS is untouched");
+  assert.deepEqual(executorGrants, ["personalos.tasks.read"], "Ada's grant to Anywhere Aide is untouched");
   const eveGrants = (await t.as("ada").action(api.delegation.list, { agent: "eve" })).capabilities.filter((c) => c.granted).map((c) => c.id);
   assert.deepEqual(eveGrants.sort(), ["briefing.today", "tasks.create", "tasks.list"]);
   await assert.rejects(grantEve("ada", ["personalos.tasks.read"]), /Not something an agent can be given/);
@@ -94,13 +94,13 @@ test("an agent manages Ada's tasks, reminders and briefing only as each capabili
   assert.equal(listed.ok, true, JSON.stringify(listed));
   assert.deepEqual(listed.output.map((x: any) => [x.owner, x.title]), [["ada", "Ada's own task"]]);
 
-  // Creates a task with a reminder, in Ada's space, through PersonalOS's own createTask: evidence, action log, job.
+  // Creates a task with a reminder, in Ada's space, through Anywhere Aide's own createTask: evidence, action log, job.
   const tomorrow = day(1);
   const created = await appport("tasks.create", { title: "Call the dentist", due: tomorrow, time: "10:00", tzOffset: 0, reminder: true }, "ada", "eve-k1");
   assert.equal(created.ok, true, JSON.stringify(created));
   const task = created.output;
   assert.deepEqual([task.owner, task.title, task.due, task.remindTime, task.remindAt], ["ada", "Call the dentist", tomorrow, "10:00", Date.parse(`${tomorrow}T10:00:00Z`)]);
-  assert.ok((await tasksOf("ada")).some((x) => x.id === task.id), "visible through PersonalOS's normal read");
+  assert.ok((await tasksOf("ada")).some((x) => x.id === task.id), "visible through Anywhere Aide's normal read");
   const [action] = await actionsOf("ada");
   assert.deepEqual([action!.kind, action!.status, action!.via, action!.evidence?.id, action!.evidence?.verified], ["reminder.create", "succeeded", "agent", task.id, true]);
   assert.deepEqual([action!.delegation?.agent, action!.delegation?.agentAuthority, action!.delegation?.capability], ["eve", "agent:eve", "tasks.create"]);
@@ -108,7 +108,7 @@ test("an agent manages Ada's tasks, reminders and briefing only as each capabili
   assert.match(action!.delegation!.delegationId, /\S/);
   const audit = (await (t.runtime as any).auditTrail()).filter((r: any) => r.function === "tasks:create" && r.authority.delegation);
   assert.equal(audit.length, 1);
-  assert.equal(audit[0].authority.delegation.decisionId, action!.delegation!.decisionId, "PersonalOS's action and FeltKit's audit name the same decision");
+  assert.equal(audit[0].authority.delegation.decisionId, action!.delegation!.decisionId, "Anywhere Aide's action and FeltKit's audit name the same decision");
 
   // The same key again: the same task, no second task, no second reminder. Grace's same key is her own.
   const again = await appport("tasks.create", { title: "Call the dentist", due: tomorrow, time: "10:00", tzOffset: 0, reminder: true }, "ada", "eve-k1");
@@ -117,13 +117,13 @@ test("an agent manages Ada's tasks, reminders and briefing only as each capabili
   await (t.runtime as any).runServices();
   const reminderJobs = (await jobs().listJobs("personalos")).filter((j: any) => j.type === "reminder.fire" && j.payload.taskId === task.id);
   assert.equal(reminderJobs.length, 1, "one reminder job");
-  assert.deepEqual([reminderJobs[0].status, reminderJobs[0].principal.principalId, reminderJobs[0].runAt], ["scheduled", "ada", new Date(task.remindAt).toISOString()], "queued as Ada, owned by PersonalOS");
+  assert.deepEqual([reminderJobs[0].status, reminderJobs[0].principal.principalId, reminderJobs[0].runAt], ["scheduled", "ada", new Date(task.remindAt).toISOString()], "queued as Ada, owned by Anywhere Aide");
   await refused(appport("tasks.create", { title: "Call the dentist", due: tomorrow, time: "10:00", tzOffset: 0, reminder: true }, "grace", "eve-k1"), "grace", "Grace delegated nothing");
   await grantEve("grace", ["tasks.create"]);
   const graces = await appport("tasks.create", { title: "Call the dentist", due: tomorrow, time: "10:00", tzOffset: 0, reminder: true }, "grace", "eve-k1");
   assert.deepEqual([graces.output.owner, graces.output.id === task.id], ["grace", false], "the same key for Grace is Grace's own task");
 
-  // The reminder fires through PersonalOS's own job, with the agent nowhere involved.
+  // The reminder fires through Anywhere Aide's own job, with the agent nowhere involved.
   assert.equal(await jobs().executeJob("personalos", reminderJobs[0].id, "test-worker"), true);
   await (t.runtime as any).runServices();
   assert.deepEqual((await t.as("ada").query(api.inbox.list, {})).map((x) => [x.type, x.title]), [["reminder.due", "Call the dentist"]]);

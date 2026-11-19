@@ -1,9 +1,9 @@
 /**
- * Summoning PersonalOS from the browser: the page you're on (its address as Chrome reports it, its
+ * Summoning Anywhere Aide from the browser: the page you're on (its address as Chrome reports it, its
  * title), the text you selected, and what you want done, as a `personalos.invocation/1` envelope
  * (docs/INVOCATION-CONTRACT.md). Pure: no chrome.*, so it is tested in Node (tests/browser-summon.test.ts).
  *
- * The envelope names no one: PersonalOS takes who is asking from the panel's session. The page's text
+ * The envelope names no one: Anywhere Aide takes who is asking from the panel's session. The page's text
  * is context (data), never part of the instruction, and the page is where the result offers to return.
  */
 
@@ -21,7 +21,7 @@ export interface SummonInput {
   includeSelection: boolean;
   /** Send the page's visible text too (Summarize): the page's own content, as context. */
   includePageText?: boolean;
-  /** Continue this PersonalOS conversation (one of the person's own; the server checks). */
+  /** Continue this Anywhere Aide conversation (one of the person's own; the server checks). */
   conversationId?: string | null;
   now: number;
   timeZone: string;
@@ -46,10 +46,10 @@ export type Built = { envelope: Envelope; notes: string[] } | { error: string };
 export function buildEnvelope(input: SummonInput): Built {
   const address = input.tab.url;
   let url: URL;
-  try { url = new URL(address); } catch { return { error: "This tab has no web address PersonalOS can use." }; }
-  if (url.protocol !== "https:" && url.protocol !== "http:") return { error: "Open a web page first: PersonalOS can be summoned from http and https pages, not this one." };
-  if (url.username || url.password) return { error: "This page's address has a user name or password in it; PersonalOS won't take it." };
-  if (address.length > LIMITS.urlChars) return { error: `This page's address is longer than PersonalOS takes (${LIMITS.urlChars} characters).` };
+  try { url = new URL(address); } catch { return { error: "This tab has no web address Anywhere Aide can use." }; }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return { error: "Open a web page first: Anywhere Aide can be summoned from http and https pages, not this one." };
+  if (url.username || url.password) return { error: "This page's address has a user name or password in it; Anywhere Aide won't take it." };
+  if (address.length > LIMITS.urlChars) return { error: `This page's address is longer than Anywhere Aide takes (${LIMITS.urlChars} characters).` };
   const instruction = input.instruction.trim();
   if (instruction.length > LIMITS.instructionChars) return { error: `Say it in ${LIMITS.instructionChars.toLocaleString("en-US")} characters or fewer.` };
   const notes: string[] = [];
@@ -62,13 +62,13 @@ export function buildEnvelope(input: SummonInput): Built {
   const selection = (page?.selection ?? "").trim();
   if (input.includeSelection && selection) {
     if (selection.length > LIMITS.selectionChars) {
-      return { error: `Your selection is ${selection.length.toLocaleString("en-US")} characters; PersonalOS takes up to ${LIMITS.selectionChars.toLocaleString("en-US")}. Select less, or send without it.` };
+      return { error: `Your selection is ${selection.length.toLocaleString("en-US")} characters; Anywhere Aide takes up to ${LIMITS.selectionChars.toLocaleString("en-US")}. Select less, or send without it.` };
     }
     context.push({ kind: "selection", url: url.toString(), text: selection });
   }
   if (input.includePageText) {
     const text = (page?.text ?? "").trim();
-    if (!text) return { error: "This page has no text PersonalOS can read." };
+    if (!text) return { error: "This page has no text Anywhere Aide can read." };
     if (text.length > LIMITS.pageChars) notes.push(`Only the first ${LIMITS.pageChars.toLocaleString("en-US")} characters of the page were sent.`);
     context.push({ kind: "page", url: url.toString(), title, text: text.slice(0, LIMITS.pageChars) });
   }

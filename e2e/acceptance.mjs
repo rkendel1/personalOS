@@ -5,7 +5,7 @@
  *
  * Starts, as separate processes:
  *   - Resolver (its CLI: `resolver init` / `serve`; RESOLVER_BIN, default ../resolver/packages/server/dist/cli.js)
- *   - PersonalOS (`feltkit dev`), whose development model is the Resolver reference ref://dev/personalos/model
+ *   - Anywhere Aide (`feltkit dev`), whose development model is the Resolver reference ref://dev/personalos/model
  * The model is real: OpenAI models through Vercel AI Gateway (AI_GATEWAY_API_KEY, stored only in
  * Resolver's vault). Then, through the UI only:
  *   1. the acceptance conversation streams; the reminder is proposed (approval required); the reply names the priority
@@ -98,7 +98,7 @@ const appKey = lastLine(appKeyOut);
 assert.ok(appKey, "an application key was issued");
 log(`Resolver at ${RESOLVER_URL}: ${MODEL_REF} → ${MODEL_A} (r1); the gateway key lives only in Resolver's vault`);
 
-// ---- PersonalOS ------------------------------------------------------------------------------
+// ---- Anywhere Aide ------------------------------------------------------------------------------
 rmSync(join(root, ".feltkit/development/state"), { recursive: true, force: true });
 const appEnv = { ...cleanEnv, RESOLVER_URL, RESOLVER_API_KEY: appKey, PERSONALOS_MODEL_REF: MODEL_REF };
 const startApp = async () => {
@@ -113,7 +113,7 @@ const startApp = async () => {
 };
 let appProc = await startApp();
 const URL_ = `http://localhost:${APP_PORT}`;
-log(`PersonalOS (pid ${appProc.pid}) at ${URL_}`);
+log(`Anywhere Aide (pid ${appProc.pid}) at ${URL_}`);
 
 const browser = await chromium.launch();
 const failures = [];

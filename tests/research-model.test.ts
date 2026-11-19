@@ -3,7 +3,7 @@
  * server speaking OpenAI's chat completions (tests/fixtures/streaming-model.ts); OpenAI's web search is
  * a local server answering the Responses API's request and response shape; company pages come from a
  * stand-in page reader. Each stands in for an external service only: routing, planning acceptance,
- * search, selection, page reading, assessment validation, storage and the conversation are PersonalOS
+ * search, selection, page reading, assessment validation, storage and the conversation are Anywhere Aide
  * and FeltKit themselves. The real services are exercised by scripts/research-live.mjs (docs/RESEARCH.md).
  */
 import { after, before, test } from "node:test";
@@ -127,7 +127,7 @@ test("REAL-SHAPED: a differently phrased request, routed by the model, planned b
   const t = await createTestApp();
   try {
     await withModel(t, model.url);
-    // 1. The turn: the model judges this to be research and proposes it; PersonalOS starts it.
+    // 1. The turn: the model judges this to be research and proposes it; Anywhere Aide starts it.
     model.scripts.push({ toolCalls: [{ id: "call_1", name: "research_start", args: JSON.stringify({ goal: "competitors of Liveblocks" }) }] });
     // 2. Plan (one query is rejected by the rules: it contains a URL).
     model.scripts.push(json({ kind: "competitors", subject: "Liveblocks", subjectSummary: "Realtime collaboration infrastructure for web apps.", objective: "Identify companies offering realtime collaboration infrastructure that competes with Liveblocks.", criteria: ["Sells realtime collaboration SDKs or APIs to developers"], queries: ["liveblocks alternatives", "realtime collaboration SDK companies", "https://liveblocks.io competitors"] }));
@@ -145,7 +145,7 @@ test("REAL-SHAPED: a differently phrased request, routed by the model, planned b
     const runId = r.reason!.split(" ").at(-1)!;
     const messages = await t.as("ada").query(api.conversations.messagesOf, { conversationId: r.conversationId });
     assert.deepEqual(messages.map((m) => m.role), ["user", "assistant"], "one message from the person, one reply: the research starting");
-    assert.match(messages[1]!.text, /On it\. I checked what this PersonalOS can use/);
+    assert.match(messages[1]!.text, /On it\. I checked what this Anywhere Aide can use/);
     assert.match(messages[1]!.text, /web search: available \(openaisearch\.search\)/, "Brave is not configured; OpenAI's web search serves the need");
 
     await settle(t);

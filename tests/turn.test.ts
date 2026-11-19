@@ -1,5 +1,5 @@
 /**
- * FeltKit M1 acceptance, in PersonalOS: a model turn answers in its own words, proposes actions
+ * FeltKit M1 acceptance, in Anywhere Aide: a model turn answers in its own words, proposes actions
  * through AppPort, waits for the owner's approval (enforced server-side), and leaves evidence that
  * survives a restart. The provider is a scripted loopback server (deterministic); the real-provider
  * run is in tests/real-provider.test.ts and the browser run in e2e/.

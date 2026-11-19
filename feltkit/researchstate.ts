@@ -20,7 +20,7 @@ function blockerOf(d: Discovery) {
 }
 
 function startReply(product: string, queries: string[], d: Discovery, knowledge: { statements: unknown[] }): string {
-  const lines = [`On it: finding qualified prospects for ${product}. I checked what this PersonalOS can do for that (${d.capabilitiesSeen} capabilities):`, describeDiscovery(d), ""];
+  const lines = [`On it: finding qualified prospects for ${product}. I checked what this Anywhere Aide can do for that (${d.capabilitiesSeen} capabilities):`, describeDiscovery(d), ""];
   lines.push(knowledge.statements.length
     ? `I'm working from what you've told me about ${product} (${knowledge.statements.length} saved note${knowledge.statements.length === 1 ? "" : "s"}).`
     : `You haven't told me what ${product} does, so I'm starting from its name; tell me who it's for and I'll sharpen the search.`);
@@ -47,7 +47,7 @@ const enqueueStep = (ctx: { afterCommit: { jobs: { enqueue(type: string, payload
 
 function planningReply(d: Discovery): string {
   return [
-    `On it. I checked what this PersonalOS can use for research (${d.capabilitiesSeen} capabilities):`,
+    `On it. I checked what this Anywhere Aide can use for research (${d.capabilitiesSeen} capabilities):`,
     describeDiscovery(d),
     "",
     "Next I'll work out exactly what you're after and plan the searches; the plan will appear here, then the results with their sources. You can say \"stop research\" at any point; what's found is kept.",
@@ -72,7 +72,7 @@ export const create = app.mutation({
     planning: s.optional(s.enum(["rules", "model"] as const)),
     fromTurn: s.optional(s.object({ messageId: s.string() })),
     /**
-     * Started by an invocation from outside PersonalOS (feltkit/invocations.ts): its id (each step then
+     * Started by an invocation from outside Anywhere Aide (feltkit/invocations.ts): its id (each step then
      * re-checks the person's delegation), and what they shared: the page to look at, and any text.
      */
     fromInvocation: s.optional(s.object({
@@ -188,7 +188,7 @@ async function resumeRun(ctx: MutationCtx, run: any, d: Discovery, more = 0) {
 }
 
 
-/** Record a question about what PersonalOS can do, and the answer discovery gave (no model involved). */
+/** Record a question about what Anywhere Aide can do, and the answer discovery gave (no model involved). */
 export const answer = app.mutation({
   access: "assistant.send",
   args: { text: s.string({ minLength: 1, maxLength: 4000 }), reply: s.string({ minLength: 1, maxLength: 8000 }), conversationId: s.optional(s.string()) },

@@ -1,5 +1,5 @@
 /**
- * PersonalOS: a personal assistant whose durable state is the product.
+ * Anywhere Aide: a personal assistant whose durable state is the product.
  *
  * Everything the assistant knows or did lives in this app's FeltDB instance: conversations,
  * messages, memory, tasks, projects, and the action log (with evidence). The model is optional
@@ -22,7 +22,7 @@ const OWNER = [
   "feltkit.agent.*",
   // Documents: files the owner keeps, stored by AppPort Services Files (feltkit/documents.ts).
   "documents.*", "files.read", "files.write", "files.delete",
-  // What PersonalOS may do for them from connected surfaces: their own grants (feltkit/delegation.ts).
+  // What Anywhere Aide may do for them from connected surfaces: their own grants (feltkit/delegation.ts).
   "delegation.*",
   // Work they hand to their agent from a conversation (feltkit/agentwork.ts): start, answer, stop, follow.
   "agentwork.*",
@@ -38,18 +38,25 @@ const OWNER = [
   // Research (feltkit/research.ts): start, follow, cancel and retry research; read its sources and
   // prospects; and use the web search integration, which research steps (jobs, as the owner) call.
   "research.*",
-  // Invocations from outside PersonalOS (feltkit/invocations.ts): the iOS share extension submits with
+  // Invocations from outside Anywhere Aide (feltkit/invocations.ts): the iOS share extension submits with
   // the person's own session; its job processes it as them, under their AuthBoundry delegation.
   "invocations.*",
   // X (feltkit/xsurface.ts): publishing a result to X is the owner's explicit act, never automatic.
   "x.publish",
+  // Their own email and calendar (feltkit/connections.ts, email.ts, calendar.ts): connect, read, and send
+  // or add only what they approved. Each call is also decided by AuthBoundry on their behalf.
+  "connections.*", "email.*", "calendar.*",
+  // Approved sends and events wait in their outbox until a job delivers them as the person (feltkit/outbox.ts).
+  "outbox.*",
+  // Web search from the chat (feltkit/web.ts), with the same providers research uses.
+  "web.search",
 ];
 
 /**
  * A connected surface's bridge (Multiplayer today): an operator-issued session
- * (`feltkit session create --type service --id multiplayer --role bridge`). It may hand PersonalOS
+ * (`feltkit session create --type service --id multiplayer --role bridge`). It may hand Anywhere Aide
  * interactions and read their outcome, and nothing else: it holds no owner's data permissions.
- * Inside interactions:receive it works for the PersonalOS account an *active link* names
+ * Inside interactions:receive it works for the Anywhere Aide account an *active link* names
  * (feltkit/_ops.ts actingFor). It can never approve: actions:approve is `approval: "required"`.
  */
 const BRIDGE = ["interactions.receive", "identity.resolve", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver", "reminders.fire"];
@@ -83,7 +90,7 @@ export const app = feltkit({
     anywhere: ["anywhere.agent", "jobs.create", "jobs.execute", "notifications.send", "webhooks.emit", "webhooks.deliver"],
     // webhooks.*: registering endpoints (interaction.updated to a connected surface, Studio → Webhooks).
     xadapter: XADAPTER,
-    // An agent outside PersonalOS (docs/AGENTS.md): its session holds nothing of its own; it acts only for a
+    // An agent outside Anywhere Aide (docs/AGENTS.md): its session holds nothing of its own; it acts only for a
     // person, under that person's grants to it (FeltKit's delegated /appport).
     agent: [],
     admin: ["intelligence.*", "credential.*", "configuration.*", "jobs.*", "schedules.*", "webhooks.*", "feltkit.operations.*", "feltkit.authority.agents"],
@@ -97,11 +104,11 @@ export const app = feltkit({
     ],
   },
   // AuthBoundry decides delegated work from connected surfaces (ctx.authority, feltkit/interactions.ts):
-  // PersonalOS's executor `agent:personalos` acts on behalf of a person, under that person's
+  // Anywhere Aide's executor `agent:personalos` acts on behalf of a person, under that person's
   // delegation to it, never under its own rules.
-  // Without AUTHBOUNDRY_URL, FeltKit runs a private AuthBoundry for PersonalOS (`local`, through
+  // Without AUTHBOUNDRY_URL, FeltKit runs a private AuthBoundry for Anywhere Aide (`local`, through
   // @authboundry/local): nothing to set up, its secrets in FeltKit's custody, and each person grants
-  // what PersonalOS may do for them in Settings (feltkit/delegation.ts). With AUTHBOUNDRY_URL, a hosted
+  // what Anywhere Aide may do for them in Settings (feltkit/delegation.ts). With AUTHBOUNDRY_URL, a hosted
   // AuthBoundry decides, and people grant there; its check credential is a custody reference
   // (`feltkit credential set credential-ref:authboundry-check`, or FELTKIT_CREDENTIAL_AUTHBOUNDRY_CHECK).
   authority: {
@@ -117,9 +124,9 @@ export const app = feltkit({
   // Development may name one too (PERSONALOS_MODEL_REF, with RESOLVER_URL / RESOLVER_API_KEY), to switch models live.
   agent: { model: { production: "ref://prod/personalos/model", ...(process.env.PERSONALOS_MODEL_REF ? { development: process.env.PERSONALOS_MODEL_REF as `ref://${string}` } : {}) } },
   services: {
-    notifications: { types: ["reminder.due", "checkin.daily", "review.weekly"] },
+    notifications: { types: ["reminder.due", "checkin.daily", "review.weekly", "outbox.result"] },
     configuration: true,
-    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step", "invocation.process": "invocations:process", "x.poll": "xsurface:poll", "x.reply": "xsurface:deliver", "anywhere.follow": "anywhere:follow" } },
+    jobs: { handlers: { "reminder.fire": "reminders:fire", "checkin.fire": "checkins:fire", "review.fire": "weekly:fire", "research.step": "research:step", "invocation.process": "invocations:process", "x.poll": "xsurface:poll", "x.reply": "xsurface:deliver", "anywhere.follow": "anywhere:follow", "outbox.deliver": "outbox:deliver" } },
     // Recurring jobs an operator sets up in Studio. Per-person recurrence (reminders, check-ins) is a
     // job chain owned by the person, so it runs as them (feltkit/checkins.ts).
     schedules: true,
@@ -185,12 +192,12 @@ export const identityLinker = app.integration("identitylinks", {
 
 /**
  * The agent connected surfaces hand a linked person's requests to (feltkit/anywhere.ts): an eve AppPort
- * agent's durable work channel (`POST /work`, `GET /work/{workId}`). PersonalOS resolves who the sender
+ * agent's durable work channel (`POST /work`, `GET /work/{workId}`). Anywhere Aide resolves who the sender
  * is (Resolver) and asserts that person with its own identity token (credential `agent-identity`, an
- * ES256 token the agent verifies with PersonalOS's public key); the agent then acts only under that
- * person's own AuthBoundry grants to it, through PersonalOS's delegated /appport. The agent never sees
+ * ES256 token the agent verifies with Anywhere Aide's public key); the agent then acts only under that
+ * person's own AuthBoundry grants to it, through Anywhere Aide's delegated /appport. The agent never sees
  * Resolver, a key, or where the reply goes. Application code only (`expose: false`); the `anywhere`
- * agent alone holds `anywhere.agent`. Unset PERSONALOS_AGENT_URL: surfaces use PersonalOS's own assistant.
+ * agent alone holds `anywhere.agent`. Unset PERSONALOS_AGENT_URL: surfaces use Anywhere Aide's own assistant.
  */
 export const connectedAgent = app.integration("agent", {
   description: "The connected agent's durable work channel: hand it a linked person's surface request, and read what became of it.",
@@ -212,7 +219,7 @@ export const connectedAgent = app.integration("agent", {
       output: s.record(s.unknown()), effect: "consequential", access: "anywhere.agent", idempotencyHeader: "Idempotency-Key",
       // A submission with no definite answer is settled by looking the work up, never by sending again.
       verify: { operation: "lookup", input: { onBehalfOf: { $input: "onBehalfOf" }, key: { $input: "key" } }, expect: [{ at: "workId", exists: true }] },
-      description: "Hand the agent one request for the named person (who PersonalOS resolved). The same key returns the same work.",
+      description: "Hand the agent one request for the named person (who Anywhere Aide resolved). The same key returns the same work.",
     },
     lookup: {
       method: "GET", path: "/submissions/{onBehalfOf}/{key}",
@@ -221,12 +228,12 @@ export const connectedAgent = app.integration("agent", {
       // Verification runs its probe as an AppPort capability; anywhere.agent is held by no session, so
       // every caller on /appport is still refused.
       expose: true,
-      description: "The work the agent accepted from PersonalOS under this key, if any (404 if none).",
+      description: "The work the agent accepted from Anywhere Aide under this key, if any (404 if none).",
     },
     read: {
       method: "GET", path: "/work/{workId}", input: { workId: s.string({ pattern: "^work_[a-f0-9]{8,64}$" }) },
       output: s.record(s.unknown()), effect: "observation", access: "anywhere.agent",
-      description: "The agent's own record of one piece of work it accepted from PersonalOS.",
+      description: "The agent's own record of one piece of work it accepted from Anywhere Aide.",
     },
     answer: {
       method: "POST", path: "/work/{workId}/answers",
@@ -310,7 +317,7 @@ export const openaisearch = app.integration("openaisearch", {
  * X (feltkit/xsurface.ts): the bot account's mentions and its replies. The credential `x` is the BOT
  * account's OAuth 2.0 grant (authorization code with PKCE, as X documents it), which FeltKit keeps
  * current: renewed with the refresh token before it expires, rotated refresh tokens stored atomically,
- * revoked on disconnect (FeltKit docs/OAUTH-CREDENTIALS.md). PersonalOS never holds a token. It says
+ * revoked on disconnect (FeltKit docs/OAUTH-CREDENTIALS.md). Anywhere Aide never holds a token. It says
  * nothing about who mentions the bot: each author is linked separately (links.ts, Resolver).
  *
  * X's endpoints (docs.x.com, read 2026-11-13): authorize https://x.com/i/oauth2/authorize, token
@@ -329,7 +336,7 @@ const X_OAUTH = {
 } as const;
 const XPost = s.record(s.unknown());
 export const x = app.integration("x", {
-  description: "X API v2 for the PersonalOS bot account: who it is, its mentions, and its replies.",
+  description: "X API v2 for the Anywhere Aide bot account: who it is, its mentions, and its replies.",
   baseUrl: { env: "X_API_URL" },
   credential: { ref: "credential-ref:x", oauth2: { ...X_OAUTH, scopes: [...X_OAUTH.scopes] } },
   timeoutMs: 20000,
@@ -353,6 +360,87 @@ export const x = app.integration("x", {
       method: "POST", path: "/2/tweets",
       input: { text: s.string({ minLength: 1, maxLength: 280 }), reply: s.object({ in_reply_to_tweet_id: s.string({ pattern: "^[0-9]{1,19}$" }) }) },
       output: XPost, effect: "consequential", access: "x.post", description: "Reply, as the bot account, to one post.",
+    },
+  },
+});
+
+/**
+ * Email and calendar (feltkit/email.ts, calendar.ts, connections.ts): each person connects their OWN
+ * Google account (`owner: "person"`, FeltKit docs/CONNECTIONS.md). FeltKit keeps every grant apart, renews
+ * and revokes it, and asks AuthBoundry on that person's behalf at every call (the `authority` capability
+ * each operation names, granted in Settings → Connections). The app never holds a token.
+ *
+ * One OAuth client for both (GOOGLE_CLIENT_ID, credential `google-client-secret`); two connections, so a
+ * person can connect their calendar without their mail. `access_type=offline&prompt=consent` on the
+ * authorization URL is how Google issues a refresh token (FeltKit keeps the URL's own query).
+ * Endpoints are Google's documented ones by default; each is overridable (tests use a local stand-in).
+ * Application code only (`expose: false`): what the model may use is email.send / calendar.create (both
+ * proposals the person approves) and the reads turn.ts runs for them.
+ */
+const GOOGLE_OAUTH = {
+  tokenUrl: { env: "GOOGLE_TOKEN_URL", default: "https://oauth2.googleapis.com/token" },
+  authorizeUrl: { env: "GOOGLE_AUTHORIZE_URL", default: "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&prompt=consent" },
+  revokeUrl: { env: "GOOGLE_REVOKE_URL", default: "https://oauth2.googleapis.com/revoke" },
+  clientId: { env: "GOOGLE_CLIENT_ID" },
+  clientSecret: "credential-ref:google-client-secret",
+  clientAuthentication: "body",
+} as const;
+const Google = s.record(s.unknown());
+const GMAIL_ID = s.string({ pattern: "^[A-Za-z0-9_-]{1,64}$" });
+
+export const mail = app.integration("mail", {
+  description: "The person's own Gmail: search and read message headers, and send as them.",
+  baseUrl: { env: "GMAIL_API_URL", default: "https://gmail.googleapis.com" },
+  credential: { ref: "credential-ref:mail", owner: "person", oauth2: { ...GOOGLE_OAUTH, scopes: ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"] } },
+  timeoutMs: 15000,
+  expose: false,
+  operations: {
+    list: {
+      method: "GET", path: "/gmail/v1/users/me/messages",
+      input: { q: s.optional(s.string({ maxLength: 300 })), maxResults: s.integer({ minimum: 1, maximum: 20 }) },
+      output: Google, effect: "observation", access: "email.read", authority: "mail.read",
+      description: "Message ids matching a Gmail search (newest first).",
+    },
+    get: {
+      method: "GET", path: "/gmail/v1/users/me/messages/{id}",
+      input: { id: GMAIL_ID, format: s.literal("metadata") },
+      output: Google, effect: "observation", access: "email.read", authority: "mail.read",
+      description: "One message's headers and snippet (never its body).",
+    },
+    send: {
+      method: "POST", path: "/gmail/v1/users/me/messages/send",
+      input: { raw: s.string({ minLength: 1, maxLength: 200000 }) },
+      output: Google, effect: "consequential", access: "email.send", authority: "mail.send",
+      description: "Send one message as the person (RFC 2822, base64url).",
+    },
+  },
+});
+
+export const calendar = app.integration("calendar", {
+  description: "The person's own Google Calendar (primary): upcoming events, and adding one.",
+  baseUrl: { env: "GCAL_API_URL", default: "https://www.googleapis.com" },
+  credential: { ref: "credential-ref:calendar", owner: "person", oauth2: { ...GOOGLE_OAUTH, scopes: ["https://www.googleapis.com/auth/calendar.events"] } },
+  timeoutMs: 15000,
+  expose: false,
+  operations: {
+    events: {
+      method: "GET", path: "/calendar/v3/calendars/primary/events",
+      input: { timeMin: s.string({ maxLength: 40 }), timeMax: s.string({ maxLength: 40 }), singleEvents: s.literal("true"), orderBy: s.literal("startTime"), maxResults: s.integer({ minimum: 1, maximum: 50 }) },
+      output: Google, effect: "observation", access: "calendar.read", authority: "calendar.read",
+      description: "Events on the primary calendar between two instants, in start order.",
+    },
+    insert: {
+      method: "POST", path: "/calendar/v3/calendars/primary/events",
+      input: {
+        summary: s.string({ minLength: 1, maxLength: 300 }),
+        description: s.optional(s.string({ maxLength: 4000 })),
+        location: s.optional(s.string({ maxLength: 300 })),
+        start: s.object({ dateTime: s.string({ maxLength: 40 }), timeZone: s.string({ maxLength: 60 }) }),
+        end: s.object({ dateTime: s.string({ maxLength: 40 }), timeZone: s.string({ maxLength: 60 }) }),
+        attendees: s.optional(s.array(s.object({ email: s.string({ maxLength: 254 }) }), { maxItems: 20 })),
+      },
+      output: Google, effect: "consequential", access: "calendar.write", authority: "calendar.write",
+      description: "Add one event to the person's primary calendar.",
     },
   },
 });
@@ -440,7 +528,7 @@ export const memories = app.collection(
     /** confirmed: the user said it or confirmed it. inferred: the assistant concluded it; never used as fact. */
     status: s.enum(["confirmed", "inferred"] as const),
     source: s.object({
-      /** agent: proposed by an agent outside PersonalOS for the owner (always inferred until the owner confirms it). */
+      /** agent: proposed by an agent outside Anywhere Aide for the owner (always inferred until the owner confirms it). */
       kind: s.enum(["conversation", "manual", "model", "agent"] as const),
       /** The agent that proposed it (kind "agent"), as FeltKit verified it. */
       agent: s.optional(s.string()),
@@ -515,7 +603,7 @@ export const actions = app.collection(
     evidence: s.optional(s.object({ collection: s.string(), id: s.string(), version: s.number(), verified: s.boolean() })),
     error: s.optional(s.object({ code: s.string(), message: s.string() })),
     via: s.enum(["chat", "ui", "model", "job", "agent"] as const),
-    /** An agent outside PersonalOS acted for the owner (FeltKit's verified delegation): who, under which AuthBoundry decision. */
+    /** An agent outside Anywhere Aide acted for the owner (FeltKit's verified delegation): who, under which AuthBoundry decision. */
     delegation: s.optional(s.object({ agent: s.string(), agentAuthority: s.string(), capability: s.string(), decisionId: s.string(), delegationId: s.string() })),
     conversationId: s.optional(s.string()),
     messageId: s.optional(s.string()),
@@ -528,10 +616,36 @@ export const actions = app.collection(
 );
 
 /**
- * Set by PersonalOS's own turn (feltkit/turn.ts) on what a model proposes: the model and the message it
+ * Set by Anywhere Aide's own turn (feltkit/turn.ts) on what a model proposes: the model and the message it
  * answered. It is part of the proposal's input, so the owner's approval covers it; it can only attribute
  * a change to a model, never widen what the caller may do.
  */
+/**
+ * What the person approved to be sent or added in a connected account (feltkit/outbox.ts): the durable
+ * record of it, from approval to Google's answer. One delivery attempt; an answer that never came is
+ * `unknown`, never sent again on its own (Gmail has no idempotency key, so a resend could send twice).
+ */
+export const outbox = app.collection(
+  "outbox",
+  {
+    owner,
+    kind: s.enum(["email.send", "calendar.create"] as const),
+    summary: s.string({ maxLength: 500 }),
+    /** Exactly what was approved: the draft or the event, with the time zone it was approved in. */
+    payload: s.record(s.unknown()),
+    status: s.enum(["queued", "sending", "sent", "failed", "unknown"] as const),
+    /** Google's id for the message or event, once it answered. */
+    externalId: s.optional(s.string({ maxLength: 200 })),
+    link: s.optional(s.string({ maxLength: 1000 })),
+    error: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 500 }) })),
+    proposedBy: s.optional(s.object({ model: s.string({ maxLength: 200 }), messageId: s.string({ maxLength: 100 }) })),
+    actionId: s.optional(s.string()),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+  },
+  { indexes: [{ fields: ["owner"] }, { fields: ["owner", "status"] }] },
+);
+
 export const PROPOSED_BY = s.optional(s.object({ model: s.string({ minLength: 1, maxLength: 200 }), messageId: s.string({ minLength: 1, maxLength: 100 }) }));
 
 export const settings = app.collection(
@@ -601,13 +715,13 @@ const InteractionUpdate = s.object({ seq: s.number(), state: s.string(), text: s
 
 /**
  * One request from a connected surface (personalos.interaction/1, feltkit/_interaction.ts): the
- * envelope as delivered (provenance), who it resolved to, what PersonalOS did, and the updates the
+ * envelope as delivered (provenance), who it resolved to, what Anywhere Aide did, and the updates the
  * surface posts back. Exactly one per (adapter, idempotency key): a repeated delivery is answered
  * from here and never executed again. The conversation, actions and evidence it produced are the
- * ordinary PersonalOS records, so there is one history, not a copy per surface.
+ * ordinary Anywhere Aide records, so there is one history, not a copy per surface.
  */
 /**
- * An invocation from outside PersonalOS (`personalos.invocation/1`, feltkit/_invocation.ts): what the
+ * An invocation from outside Anywhere Aide (`personalos.invocation/1`, feltkit/_invocation.ts): what the
  * person asked and shared, from which surface, and what became of it. The owner is the session that
  * submitted it, never a field of the envelope. One per (owner, invocationId).
  */
@@ -667,7 +781,7 @@ export const AgentWork = s.object({
 });
 
 /**
- * Work the person handed to their agent from a PersonalOS conversation (feltkit/agentwork.ts): which
+ * Work the person handed to their agent from a Anywhere Aide conversation (feltkit/agentwork.ts): which
  * message asked, why it went to the agent, and the agent's own record of it. One per message. The person
  * owns it; the `anywhere` agent follows it, so it does not depend on the person staying signed in.
  */
@@ -678,7 +792,7 @@ export const agentwork = app.collection(
     conversationId: s.string(),
     /** The person's message it carries out. */
     messageId: s.string(),
-    /** explicit: the person chose "Work on this". rules: PersonalOS's routing rules (feltkit/_route.ts). */
+    /** explicit: the person chose "Work on this". rules: Anywhere Aide's routing rules (feltkit/_route.ts). */
     routedBy: s.enum(["explicit", "rules"] as const),
     reason: s.string({ maxLength: 300 }),
     agent: AgentWork,
@@ -715,7 +829,7 @@ export const invocations = app.collection(
     returnTo: s.string(),
     returnUrl: s.optional(s.string({ maxLength: 2000 })),
     state: s.enum(["accepted", "processing", "needs_approval", "completed", "failed"] as const),
-    /** What PersonalOS inferred the request to be, and how: never confused with what was asked. */
+    /** What Anywhere Aide inferred the request to be, and how: never confused with what was asked. */
     interpretation: s.optional(s.object({
       intent: s.enum(["research", "assistant", "save", "answer"] as const),
       basis: s.enum(["rules", "model"] as const),
@@ -731,14 +845,14 @@ export const invocations = app.collection(
     })),
     /** Where the work lives: the research run, the assistant's reply, the action awaiting approval. */
     // waitingFor "owner": work only the person's own session can run (research, answers from a model,
-    // asked from X): it waits until they run it in PersonalOS (invocations:run).
+    // asked from X): it waits until they run it in Anywhere Aide (invocations:run).
     work: s.optional(s.object({ researchRunId: s.optional(s.string()), replyId: s.optional(s.string()), actionIds: s.optional(s.array(s.string())), waitingFor: s.optional(s.enum(["owner"] as const)) })),
     /** What the person sees: one line per state change. */
     updates: s.array(s.object({ seq: s.number(), state: s.string(), text: s.string({ maxLength: 2000 }), at: s.number() })),
     error: s.optional(s.object({ code: s.string(), message: s.string({ maxLength: 1000 }) })),
     /** Times processing found the authority unreachable (it gives up after a few). */
     attempts: s.optional(s.number()),
-    /** Handed to the connected agent (feltkit/anywhere.ts) instead of PersonalOS's own assistant. */
+    /** Handed to the connected agent (feltkit/anywhere.ts) instead of Anywhere Aide's own assistant. */
     agent: s.optional(AgentWork),
     createdAt: s.number(),
     updatedAt: s.number(),
@@ -749,14 +863,14 @@ export const invocations = app.collection(
 export const interactions = app.collection(
   "interactions",
   {
-    /** The PersonalOS account it was done for; absent when the sender resolved to none (refused). */
+    /** The Anywhere Aide account it was done for; absent when the sender resolved to none (refused). */
     owner: s.optional(s.string()),
     adapter: s.string(),
     key: s.string(),
     envelope: s.record(s.unknown()),
     /**
      * Who asked. `sourcePrincipalId` is the adapter-authenticated source identity; `canonical` the
-     * PersonalOS identity Resolver resolved it to (`resolverRef` at `resolverRevision`); `displayName`
+     * Anywhere Aide identity Resolver resolved it to (`resolverRef` at `resolverRevision`); `displayName`
      * is presentation only.
      */
     identity: s.object({
@@ -770,7 +884,7 @@ export const interactions = app.collection(
     }),
     /** AuthBoundry's decision on the capability this request needed (feltkit/_authority.ts): the evidence it was allowed. */
     /**
-     * AuthBoundry's decision (feltkit/_authority.ts): the executor (`principal`, PersonalOS's agent),
+     * AuthBoundry's decision (feltkit/_authority.ts): the executor (`principal`, Anywhere Aide's agent),
      * the requester it acted for (`onBehalfOf`), the delegation that decided, and the decision id.
      */
     authority: s.optional(s.object({ capability: s.string(), outcome: s.string(), principal: s.string(), onBehalfOf: s.optional(s.string()), delegationId: s.optional(s.string()), decisionId: s.optional(s.string()), reason: s.optional(s.string()) })),
@@ -781,7 +895,7 @@ export const interactions = app.collection(
     sourceSequence: s.optional(s.number()),
     conversationId: s.optional(s.string()),
     /**
-     * Set when this interaction pointed its source thread at an existing PersonalOS conversation
+     * Set when this interaction pointed its source thread at an existing Anywhere Aide conversation
      * ("continue <id>"): later messages in the thread continue that conversation. Never set on a refusal.
      */
     continuation: s.optional(s.object({ conversationId: s.string(), at: s.number() })),
@@ -793,7 +907,7 @@ export const interactions = app.collection(
     provenance: s.object({ messageIds: s.array(s.string()), attachmentIds: s.array(s.string()), privateDataUsed: s.boolean() }),
     updates: s.array(InteractionUpdate),
     error: s.optional(s.object({ code: s.string(), message: s.string() })),
-    /** Handed to the connected agent (feltkit/anywhere.ts) instead of PersonalOS's own assistant. */
+    /** Handed to the connected agent (feltkit/anywhere.ts) instead of Anywhere Aide's own assistant. */
     agent: s.optional(AgentWork),
     createdAt: s.number(),
     updatedAt: s.number(),
@@ -803,7 +917,7 @@ export const interactions = app.collection(
 
 /**
  * A research run: one outcome the person asked for ("find me new customers for FeltKit"), how
- * PersonalOS pursues it, and where it stands. What the platform could do for it (discovery) is
+ * Anywhere Aide pursues it, and where it stands. What the platform could do for it (discovery) is
  * recorded when it starts, so "I couldn't" is always backed by what was looked for.
  */
 export const researchRuns = app.collection(
@@ -859,7 +973,7 @@ export const researchRuns = app.collection(
     selection: s.optional(s.object({ basis: s.enum(["rules", "model"] as const), generation: s.optional(s.object({ generationId: s.string(), memoryId: s.string(), model: s.string() })), rejected: s.optional(s.array(s.string({ maxLength: 300 }))) })),
     /** The FeltKit agent task holding this run's model generations. */
     taskId: s.optional(s.string()),
-    /** Started by an invocation from outside PersonalOS (feltkit/invocations.ts): each step re-checks its authority. */
+    /** Started by an invocation from outside Anywhere Aide (feltkit/invocations.ts): each step re-checks its authority. */
     invocationId: s.optional(s.string()),
     /** What the person shared to start it: the page to look at (its own source is in researchSources). */
     seed: s.optional(s.object({ url: s.string({ maxLength: 2000 }), title: s.optional(s.string({ maxLength: 300 })), sourceId: s.optional(s.string()) })),
