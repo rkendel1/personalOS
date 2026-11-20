@@ -31,7 +31,7 @@ export interface PageRead {
   ms: number;
 }
 
-const USER_AGENT = "Anywhere Aide-research/1.0 (reads public pages for its owner; honours robots.txt)";
+const USER_AGENT = "AnywhereAide-research/1.0 (reads public pages for its owner; honours robots.txt)";
 const MAX_BYTES = 1_500_000;
 const MAX_TEXT = 20_000;
 const MIN_TEXT = 200;
