@@ -27,7 +27,7 @@ import { routeOf } from "./_route.js";
 import { declaredCapabilities, PROSPECT_NEEDS, describeDiscovery, discover } from "./_capabilities.js";
 import { recentMail } from "./email.js";
 import { upcomingEvents } from "./calendar.js";
-import { searchWeb } from "./web.js";
+import { readWeb, searchWeb, type WebRead } from "./web.js";
 import { describeEvent } from "./_google.js";
 
 /** The capabilities the model may use, as tools. Everything else stays with the person. */
@@ -44,13 +44,22 @@ const PROPOSES = new Set(["tasks.create", "tasks.update", "tasks.complete", "mem
 const READS = [
   { name: "email.recent", description: "Read the user's recent email from their connected Gmail: sender, subject, date and Gmail's snippet (not full bodies). Optional Gmail search query (e.g. \"is:unread\", \"from:sam newer_than:7d\").", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 15 } } } as Record<string, unknown> },
   { name: "calendar.upcoming", description: "The user's events from their connected Google Calendar, from a local date (YYYY-MM-DD, default today) for a number of days (default 1).", inputSchema: { type: "object", properties: { from: { type: "string" }, days: { type: "integer", minimum: 1, maximum: 14 } } } as Record<string, unknown> },
+  { name: "web.read", description: "Read one public web page now: its title and extracted text, or exactly why it couldn't be read (not public, robots.txt asks automated readers to stay out, an HTTP error, or no readable text, e.g. a script-rendered page). Use it for a link the user gives you or a result from web.search; cite the URL. It cannot read the page the user has open in their browser: for that they use the Chrome extension or the share sheet.", inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } as Record<string, unknown> },
   { name: "web.search", description: "Search the web now and get titles, URLs and snippets. Use it for quick current facts; cite the URLs you use. For finding many organizations (customers, competitors), use research.start instead.", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } as Record<string, unknown> },
 ];
 const READ_NAMES = new Set(READS.map((r) => r.name));
 type Connected = { mail: string; calendar: string };
 
 /** Run one read for the person. An error comes back as the result, in words the model can relay. */
-async function runRead(ctx: Parameters<typeof upcomingEvents>[0], name: string, input: Record<string, unknown>, clock: Clock, connected: Connected): Promise<string> {
+/** A page read as the model gets it: the outcome and its provenance, and the text only when it was read. */
+function forModel(r: WebRead): string {
+  const meta = { url: r.url, finalUrl: r.finalUrl, status: r.status, httpStatus: r.httpStatus, detail: r.detail, title: r.title, readId: r.id };
+  if (r.status !== "read") return JSON.stringify({ ...meta, note: "The page was NOT read. Do not describe its contents; say why it couldn't be read." });
+  const text = r.text.length > 6000 ? `${r.text.slice(0, 6000)}…` : r.text;
+  return JSON.stringify({ ...meta, text, truncated: r.text.length > 6000 });
+}
+
+async function runRead(ctx: Parameters<typeof upcomingEvents>[0], name: string, input: Record<string, unknown>, clock: Clock, connected: Connected, conversationId?: string): Promise<string> {
   const notConnected = (what: "mail" | "calendar") => JSON.stringify({ error: `The user's ${what === "mail" ? "email" : "calendar"} is ${connected[what] === "reconnect_required" ? "disconnected (Google needs them to reconnect)" : "not connected"}. They connect it in Settings → Connections.` });
   try {
     if (name === "email.recent") {
@@ -63,6 +72,10 @@ async function runRead(ctx: Parameters<typeof upcomingEvents>[0], name: string, 
       const from = typeof input.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.from) ? input.from : clock.today;
       const days = Math.min(14, Math.max(1, Number(input.days) || 1));
       return trim((await upcomingEvents(ctx, from, days, clock.timeZone)).map((e) => describeEvent(e, clock.timeZone)));
+    }
+    if (name === "web.read") {
+      if (!ctx.auth.has("web.read")) return JSON.stringify({ error: "This account may not read web pages." });
+      return forModel(await readWeb(ctx, String(input.url ?? "").slice(0, 1000), "model", conversationId));
     }
     if (name === "web.search") {
       if (!ctx.auth.has("web.search")) return JSON.stringify({ error: "This account may not search the web." });
@@ -83,6 +96,8 @@ async function connectionStates(ctx: { integrations: { connections: { list(): Pr
 
 /** Plain requests the built-in assistant answers without a model, from the person's own accounts and the web. */
 const WEB_SEARCH = /^(?:please\s+)?(?:search(?:\s+the\s+web|\s+online)?(?:\s+for)?|look\s+up|google)\s+(.{2,300}?)[?.!]?$/i;
+/** "read https://…", "summarize https://…", or just a link: one public page. */
+const WEB_READ = /^(?:(?:please\s+)?(?:read|open|summari[sz]e|look at|what(?:'s| is) (?:on|at))\s+)?<?(https?:\/\/[^\s<>]+?)>?[\s.?!]*$/i;
 const CALENDAR_ASK = /\b(?:what(?:'s| is)|anything|show(?: me)?|check)\b.*\b(?:calendar|schedule|agenda|meetings?)\b|\bmy (?:calendar|schedule|agenda)\b/i;
 const MAIL_ASK = /\b(?:check|any|show(?: me)?|read|what(?:'s| is))\b.*\b(?:e-?mails?|inbox|mail)\b/i;
 const MAX_ROUNDS = 3;
@@ -108,7 +123,7 @@ function systemPrompt(clock: Clock, info: { name: string | null; tasks: unknown[
     "- Never invent tasks, people, dates or facts. Unconfirmed memories are guesses; say so if you rely on one.",
     "- You can list the user's saved documents but cannot read their contents.",
     `- The user's email (Gmail) is ${status(connected.mail)}; their calendar (Google Calendar) is ${status(connected.calendar)}. Use email.recent and calendar.upcoming to read them. To send an email call email.send, and to add an event call calendar.create: both only PROPOSE; the user approves the exact draft in the app. Never say an email was sent or an event was added. Ask for any recipient address you don't know rather than guessing it.`,
-    "- web.search searches the web right now; cite the URLs you rely on. Say plainly when it reports that no search provider is configured.",
+    "- web.search searches the web right now; web.read reads one public page (a link the user gives you, or a search result). Cite the URLs you rely on. When a page couldn't be read, say why (the result says) and never describe what it contains. Say plainly when web.search reports that no search provider is configured.",
     "- What Anywhere Aide can do is not limited to the tools in this turn. When the user wants something researched on the web (finding customers, prospects, competitors, partners, vendors or other organizations, or facts that need current web sources), call research.start with their request: Anywhere Aide then plans and runs the research durably (searches, reads pages, assesses with evidence) and reports back in this conversation. Don't answer such requests from memory. What research can use right now, as discovered from the platform's catalog:",
     landscape,
     "- Never say a capability does not exist, or that you have no web access, unless the list above says so (or a tool result in this turn does); if it says something is not configured or not permitted, say exactly that and what would enable it. Never claim you searched, sent or did anything you did not do in this turn.",
@@ -138,8 +153,15 @@ const trim = (value: unknown) => {
 };
 
 /** The built-in assistant's reads: a web search, today's calendar, unread mail. Null: not one of these. */
-async function plainRead(ctx: Parameters<typeof upcomingEvents>[0], text: string, clock: Clock): Promise<{ reply: string; reason: string } | null> {
+async function plainRead(ctx: Parameters<typeof upcomingEvents>[0], text: string, clock: Clock, conversationId?: string): Promise<{ reply: string; reason: string; readId?: string } | null> {
   const t = text.trim();
+  const link = WEB_READ.exec(t);
+  if (link && ctx.auth.has("web.read")) {
+    const r = await readWeb(ctx, link[1]!, "chat", conversationId);
+    if (r.status !== "read") return { readId: r.id, reply: `I couldn't read ${r.url}: ${r.detail}.${r.status === "extraction-failed" ? " If it's open in your browser, the Chrome extension or the share sheet can send me the page as you see it." : ""}`, reason: `web read ${r.status}` };
+    const extract = r.text.length > 1200 ? `${r.text.slice(0, 1200).replace(/\s+\S*$/, "")}…` : r.text;
+    return { reply: `**${r.title || r.finalUrl}** (${r.finalUrl})\n\n${extract}\n\n_The page's own text, as read (${r.text.length} characters). Without a model I can't summarize it; turn the model on in Settings for that._`, reason: "web read", readId: r.id };
+  }
   const web = WEB_SEARCH.exec(t);
   if (web && ctx.auth.has("web.search")) {
     const r = await searchWeb(ctx, web[1]!);
@@ -227,9 +249,10 @@ export const turn = app.action({
     }
     if (!useModel) {
       // Reads the built-in assistant answers itself: the web, and the person's own connected accounts.
-      const answered = await plainRead(ctx, text, clock);
+      const answered = await plainRead(ctx, text, clock, conversationId);
       if (answered) {
         const r = await ctx.runMutation(api.researchstate.answer, { text, reply: answered.reply, ...(conversationId ? { conversationId } : {}) });
+        if (answered.readId && !conversationId) await ctx.runMutation(api.web.attachRead, { id: answered.readId, conversationId: r.conversationId });
         return { mode: "rules" as const, ...r, replayed: false, reason: answered.reason };
       }
       // The deterministic assistant: still fully working without a model.
@@ -257,7 +280,7 @@ export const turn = app.action({
           if (schema.required) schema.required = schema.required.filter((r) => r !== key);
         }
         return { ...t, inputSchema: schema as Record<string, unknown> };
-      }), ...READS.filter((r) => ctx.auth.has(r.name === "email.recent" ? "email.read" : r.name === "calendar.upcoming" ? "calendar.read" : "web.search")), ...(research ? [START_RESEARCH] : [])];
+      }), ...READS.filter((r) => ctx.auth.has(r.name === "email.recent" ? "email.read" : r.name === "calendar.upcoming" ? "calendar.read" : r.name)), ...(research ? [START_RESEARCH] : [])];
     const conversation: GenerationMessage[] = [
       { role: "system", content: systemPrompt(clock, info, landscape, connected) },
       ...info.history.map((m) => ({ role: m.role as "user" | "assistant", content: m.text })),
@@ -300,7 +323,7 @@ export const turn = app.action({
         }
         for (const call of g.toolCalls) {
           if (READ_NAMES.has(call.name)) {
-            results.push({ call, observed: true, content: await runRead(ctx, call.name, call.input, clock, connected) });
+            results.push({ call, observed: true, content: await runRead(ctx, call.name, call.input, clock, connected, user.conversationId) });
             continue;
           }
           if (!TOOLS.includes(call.name)) {

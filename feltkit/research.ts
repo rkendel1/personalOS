@@ -33,7 +33,7 @@ import { releaseBudget } from "./researchstate.js";
 import { declaredCapabilities, describeDiscovery, PROSPECT_NEEDS, discover, type Discovery } from "./_capabilities.js";
 import { companyName, domainOf, outcomeOf, planQueries, productKnowledge, prospectsFrom, type StoredSource } from "./_research.js";
 import { providerOf } from "./_search.js";
-import { readPage, type PageRead } from "./_pages.js";
+import { pageReader, type PageRead } from "./_pages.js";
 import * as M from "./_researchmodel.js";
 import { appendMessage } from "./assistant.js";
 import * as ops from "./_ops.js";
@@ -50,13 +50,8 @@ export const RunView = s.object({
   replyId: s.string(),
 });
 
-type Reader = (url: string, options: { signal?: AbortSignal }) => Promise<PageRead>;
-/**
- * The page reader research uses: feltkit/_pages.ts, unless a test has put one in place (the test
- * runtime loads the application as its own module graph, so the seam is process-wide, by symbol).
- */
-export const PAGE_READER = Symbol.for("personalos.research.pageReader");
-const pageReader = { read: ((url, options) => ((globalThis as Record<symbol, Reader | undefined>)[PAGE_READER] ?? readPage)(url, options)) as Reader };
+/** The page reader (feltkit/_pages.ts), and its test seam, re-exported where tests already import it. */
+export { PAGE_READER } from "./_pages.js";
 
 /**
  * Start research for an outcome stated in words. Discovery runs here (an action reads the platform's

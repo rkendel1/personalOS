@@ -48,8 +48,8 @@ const OWNER = [
   "connections.*", "email.*", "calendar.*",
   // Approved sends and events wait in their outbox until a job delivers them as the person (feltkit/outbox.ts).
   "outbox.*",
-  // Web search from the chat (feltkit/web.ts), with the same providers research uses.
-  "web.search",
+  // The web from the chat (feltkit/web.ts): search with research's providers, read pages with its reader.
+  "web.*",
 ];
 
 /**
@@ -642,6 +642,33 @@ export const outbox = app.collection(
     actionId: s.optional(s.string()),
     createdAt: s.number(),
     updatedAt: s.number(),
+  },
+  { indexes: [{ fields: ["owner"] }, { fields: ["owner", "status"] }] },
+);
+
+/**
+ * Every page the person had read from the chat (feltkit/web.ts `read`): what happened to it, in the same
+ * terms research records its pages in (researchSources: status, httpStatus, detail), so the two together
+ * are the evidence of how well reading the web works in real use (web.outcomes).
+ */
+export const pageReads = app.collection(
+  "pageReads",
+  {
+    owner,
+    url: s.string({ maxLength: 1000 }),
+    finalUrl: s.string({ maxLength: 1000 }),
+    status: s.enum(["read", "unavailable", "extraction-failed", "not-allowed"] as const),
+    httpStatus: s.optional(s.number()),
+    detail: s.string({ maxLength: 500 }),
+    title: s.string({ maxLength: 300 }),
+    /** The text that was extracted, as it was given to the person or the model (provenance for what it says). */
+    text: s.string({ maxLength: 20000 }),
+    ms: s.number(),
+    reader: s.string({ maxLength: 60 }),
+    /** chat: the built-in assistant; model: a model's web.read; app: the app or extension called it directly. */
+    via: s.enum(["chat", "model", "app"] as const),
+    conversationId: s.optional(s.string()),
+    retrievedAt: s.number(),
   },
   { indexes: [{ fields: ["owner"] }, { fields: ["owner", "status"] }] },
 );

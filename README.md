@@ -95,7 +95,7 @@ the chat. In production, point `ref://prod/personalos/model` at a model with
 | Projects and files | Group tasks, ask "status of …", upload documents (10 MB) and get short-lived links | `feltkit/projects.ts`, `documents.ts` |
 | Activity | Every change made or proposed: how, by whom, and the record it was verified against | `feltkit/actions.ts` |
 | Email and calendar | Connect your own Gmail and Google Calendar in Settings → Connections. Read your inbox and agenda in chat; a send or new event is proposed, approved by you, queued, and delivered as you, with its result in Activity | `feltkit/connections.ts`, `email.ts`, `calendar.ts`, `outbox.ts` |
-| Web search | "search the web for …" in chat (with or without a model), and the model's `web.search` tool, through whichever search provider is configured | `feltkit/web.ts`, `_search.ts` |
+| The web | Search ("search the web for …") and read a page (a link, or "read <url>") in chat, with or without a model. Pages are read with plain HTTP under the reader's rules; every outcome is recorded. The page you're viewing comes from your own browser (extension, share sheet). See [docs/WEB.md](docs/WEB.md) | `feltkit/web.ts`, `_pages.ts`, `_search.ts` |
 | Webhooks | `task.completed`, `reminder.fired` and `document.added`, signed and retried, to endpoints you register in Studio | `feltkit/_ops.ts` |
 | Chrome extension | The same app in the side panel: ask about the page, save it to Files, add a task from a selection | [`extension/`](extension/README.md) |
 | Agents | 13 capabilities published over AppPort and MCP, under the same permissions as the UI | `capability:` in `feltkit/*.ts` |
