@@ -31,7 +31,7 @@ export interface PageRead {
   ms: number;
 }
 
-const USER_AGENT = "Anywhere Aide-research/1.0 (reads public pages for its owner; honours robots.txt)";
+const USER_AGENT = "AnywhereAide-research/1.0 (reads public pages for its owner; honours robots.txt)";
 const MAX_BYTES = 1_500_000;
 const MAX_TEXT = 20_000;
 const MIN_TEXT = 200;
@@ -184,3 +184,12 @@ export function quoted(quote: string, text: string): boolean {
   const q = norm(quote);
   return q.length >= 12 && norm(text).includes(q);
 }
+
+type Reader = (url: string, options: { signal?: AbortSignal }) => Promise<PageRead>;
+/**
+ * The one page reader every caller uses (research, the chat's web.read): readPage above, unless a test
+ * has put one in place (the test runtime loads the application as its own module graph, so the seam is
+ * process-wide, by symbol).
+ */
+export const PAGE_READER = Symbol.for("personalos.research.pageReader");
+export const pageReader = { read: ((url, options) => ((globalThis as Record<symbol, Reader | undefined>)[PAGE_READER] ?? readPage)(url, options)) as Reader };
